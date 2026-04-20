@@ -1,0 +1,7 @@
+TypeError: next is not a function
+    at model.<anonymous> (D:\Ganesha\Varahi amma\Unified-Portal\backend\modules\user\user.model.js:82:5)
+    at async Kareem.execPre (D:\Ganesha\Varahi amma\Unified-Portal\backend\node_modules\kareem\index.js:70:24)
+    at async model.$__save (D:\Ganesha\Varahi amma\Unified-Portal\backend\node_modules\mongoose\lib\model.js:397:5)
+    at async model.save (D:\Ganesha\Varahi amma\Unified-Portal\backend\node_modules\mongoose\lib\model.js:667:5)
+    at async model.create (D:\Ganesha\Varahi amma\Unified-Portal\backend\node_modules\mongoose\lib\model.js:2754:5)
+    at async registerUser (D:\Ganesha\Varahi amma\Unified-Portal\backend\modules\user\user.controller.js:115:22)
