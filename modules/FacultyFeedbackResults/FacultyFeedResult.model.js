@@ -18,6 +18,8 @@ const FacultyFeedResultSchema = new mongoose.Schema({
         ref: "Semester",
     },
 
+    phase: { type: Number, enum: [1, 2] },
+
     totalStudents: Number,
     givenStudents: Number,
     percentage: Number,

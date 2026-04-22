@@ -24,6 +24,7 @@ const uploadCSV = async (req, res) => {
             "subjectcode",
             "branch",
             "section",
+            "phase",
             "totalstudents",
             "givenstudents",
             "percentage",
@@ -50,6 +51,7 @@ const uploadCSV = async (req, res) => {
                 subjectcode,
                 branch,
                 section,
+                phase,
                 totalstudents,
                 givenstudents,
                 percentage,
@@ -82,30 +84,33 @@ const uploadCSV = async (req, res) => {
             }
 
             const facId = (facultyid || "").trim();
+            const phs = Number(phase);
             const total = Number(totalstudents);
             const given = Number(givenstudents);
             const perc = Number(percentage);
             const overallPerc = Number(overallpercentage);
 
             if (!facId) errors.push(`Row ${i + 2}: Faculty ID is missing.`);
+            if (isNaN(phs) || (phs !== 1 && phs !== 2)) errors.push(`Row ${i + 2}: Invalid phase '${phase}' (must be 1 or 2).`);
             if (isNaN(total)) errors.push(`Row ${i + 2}: Invalid totalStudents count '${totalstudents}' (must be a number).`);
             if (isNaN(given)) errors.push(`Row ${i + 2}: Invalid givenStudents count '${givenstudents}' (must be a number).`);
             if (isNaN(perc)) errors.push(`Row ${i + 2}: Invalid percentage '${percentage}' (must be a number).`);
             if (isNaN(overallPerc)) errors.push(`Row ${i + 2}: Invalid overallPercentage '${overallpercentage}' (must be a number).`);
 
-            if (!facId || isNaN(total) || isNaN(given) || isNaN(perc) || isNaN(overallPerc)) continue;
+            if (!facId || isNaN(phs) || (phs !== 1 && phs !== 2) || isNaN(total) || isNaN(given) || isNaN(perc) || isNaN(overallPerc)) continue;
 
             // 3. Duplicate Prevention
             const duplicate = await FacultyFeedResult.findOne({
                 facultyId: facId,
                 subjectCode: subjectcode,
                 section: section,
+                phase: phs,
                 semesterId: semId,
                 academicYearId: ayId
             });
 
             if (duplicate) {
-                errors.push(`Row ${i + 2}: Record already exists for Faculty ID ${facId}, Subject ${subjectcode}, and Section ${section}. Skipping.`);
+                errors.push(`Row ${i + 2}: Record already exists for Faculty ID ${facId}, Subject ${subjectcode}, Section ${section}, and Phase ${phs}. Skipping.`);
                 continue;
             }
 
@@ -116,6 +121,7 @@ const uploadCSV = async (req, res) => {
                 subjectCode: subjectcode,
                 branch: branch,
                 section: section,
+                phase: phs,
                 academicYearId: ayId,
                 semesterId: semId,
                 totalStudents: total,
@@ -216,10 +222,11 @@ const deleteSemesterData = async (req, res) => {
  */
 const getResults = async (req, res) => {
     try {
-        const { facultyId, academicYear, semester } = req.query;
+        const { facultyId, academicYear, semester, phase } = req.query;
         const query = {};
 
         if (facultyId) query.facultyId = facultyId.trim();
+        if (phase) query.phase = Number(phase);
 
         if (academicYear || semester) {
             const { academicYearId, semesterId } = await resolveAcademicIds({ academicYear, semester });
@@ -227,10 +234,13 @@ const getResults = async (req, res) => {
             if (semesterId) query.semesterId = semesterId;
         }
 
+        console.log("[DEBUG getResults] Query object:", query);
         const results = await FacultyFeedResult.find(query)
             .populate("academicYearId", "year")
             .populate("semesterId", "type")
             .sort({ createdAt: -1 });
+        
+        console.log("[DEBUG getResults] Found results count:", results.length);
 
         res.json(results);
     } catch (error) {
@@ -289,7 +299,7 @@ const deleteResult = async (req, res) => {
 const createResult = async (req, res) => {
     try {
         const {
-            facultyId, facultyName, subjectName, subjectCode, branch, section,
+            facultyId, facultyName, subjectName, subjectCode, branch, section, phase,
             academicYearId, semesterId, totalStudents, givenStudents, percentage, overallPercentage
         } = req.body;
 
@@ -304,6 +314,7 @@ const createResult = async (req, res) => {
             subjectCode,
             branch,
             section,
+            phase: phase ? Number(phase) : undefined,
             academicYearId,
             semesterId,
             totalStudents: Number(totalStudents) || 0,
