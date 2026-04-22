@@ -63,13 +63,20 @@ const uploadCSV = async (req, res) => {
                 ayCache[academicyear] = ayId;
             }
 
-            // 2. Resolve Semester - auto-create if not found for this academic year
-            const semKey = `${ayId}_${semester.toUpperCase()}`;
+            // 2. Resolve Semester - auto-calculate ODD/EVEN from semester number
+            const semNo = Number(semester);
+            if (isNaN(semNo)) {
+                errors.push(`Row ${i + 2}: Invalid Semester number '${semester}' (must be a number).`);
+                continue;
+            }
+            const calculatedSemType = semNo % 2 === 0 ? "EVEN" : "ODD";
+
+            const semKey = `${ayId}_${calculatedSemType}`;
             let semId = semCache[semKey];
             if (!semId) {
                 const sem = await Semester.findOneAndUpdate(
-                    { academicYear: ayId, type: semester.toUpperCase() },
-                    { academicYear: ayId, type: semester.toUpperCase() },
+                    { academicYear: ayId, type: calculatedSemType },
+                    { academicYear: ayId, type: calculatedSemType },
                     { upsert: true, new: true, setDefaultsOnInsert: true }
                 );
                 semId = sem._id;
@@ -87,11 +94,11 @@ const uploadCSV = async (req, res) => {
 
             if (!facId || isNaN(app) || isNaN(pas)) continue;
 
-            // 3. Duplicate Prevention (facultyId string + subjectCode + semId + ayId)
+            // 3. Duplicate Prevention (facultyId string + subjectCode + semester number + ayId)
             const duplicate = await FacultySubjectResult.findOne({
                 facultyId: facId,           // string comparison
                 subjectCode: subjectcode,
-                semesterId: semId,
+                semester: semNo,
                 academicYearId: ayId
             });
 
@@ -112,6 +119,8 @@ const uploadCSV = async (req, res) => {
                 branch: branch,
                 academicYearId: ayId,
                 semesterId: semId,
+                semester: semNo,
+                semType: calculatedSemType,
                 appeared: app,
                 passed: pas,
                 passPercentage: isNaN(finalPercentage) ? calculatedPercentage.toFixed(2) : finalPercentage.toFixed(2),

@@ -22,6 +22,12 @@ const FacultySubjectResultSchema = new mongoose.Schema({
     passed: Number,
     passPercentage: Number,
 
+    semester: Number,
+    semType: {
+        type: String,
+        enum: ["ODD", "EVEN"],
+    },
+
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
