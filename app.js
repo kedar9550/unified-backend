@@ -68,6 +68,7 @@ app.use('/api/users', require('./modules/user/user.route'));
 app.use('/api/academic-years', require('./modules/academicYear/academicYear.route'));
 app.use('/api/feedback', require('./modules/feedback/feedback.route'));
 app.use('/api/faculty-subject-results', require('./modules/FacultySubjectResult/FacultySubjectResult.route'));
+app.use('/api/faculty-feedback-results', require('./modules/FacultyFeedbackResults/FacultyFeedbackResult.route'));
 app.use('/api/discrepancies',           require('./modules/discrepancy/discrepancy.route'));
 app.use('/api/dept-proctor',           require('./modules/ProcterMaping/ProcterMaping.route'));
 app.use('/api/student-results',        require('./modules/StudentResult/StudentResult.route'));
