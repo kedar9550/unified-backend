@@ -234,13 +234,10 @@ const getResults = async (req, res) => {
             if (semesterId) query.semesterId = semesterId;
         }
 
-        console.log("[DEBUG getResults] Query object:", query);
         const results = await FacultyFeedResult.find(query)
             .populate("academicYearId", "year")
             .populate("semesterId", "type")
             .sort({ createdAt: -1 });
-        
-        console.log("[DEBUG getResults] Found results count:", results.length);
 
         res.json(results);
     } catch (error) {
