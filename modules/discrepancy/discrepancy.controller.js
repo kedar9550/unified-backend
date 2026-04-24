@@ -5,7 +5,7 @@ const path = require("path");
 const SECTION_ROLE_MAP = {
     TEACHING:   "EXAMSECTION",
     PROCTORING: "EXAMSECTION",
-    FEEDBACK:   "FEEDBACK",
+    FEEDBACK:   "FEEDBACK COORDINATOR",
     OTHER:      "ADMIN",
 };
 
@@ -62,7 +62,14 @@ const getDiscrepancies = async (req, res) => {
             if (resolverRoles.length === 0) {
                 return res.json([]);
             }
-            query.assignedRole = { $in: resolverRoles };
+            
+            // Backward compatibility for existing discrepancies that were saved with "FEEDBACK" role
+            const rolesToQuery = [...resolverRoles];
+            if (rolesToQuery.includes("FEEDBACK COORDINATOR")) {
+                rolesToQuery.push("FEEDBACK");
+            }
+
+            query.assignedRole = { $in: rolesToQuery };
         }
 
         const discrepancies = await Discrepancy.find(query)
@@ -110,7 +117,7 @@ const resolveDiscrepancy = async (req, res) => {
 
         // Check this user's role matches assignedRole
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
-        const isAdmin   = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME");
+        const isAdmin   = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME") || userRoles.includes("FEEDBACK COORDINATOR");
         const hasAccess = isAdmin || userRoles.includes(disc.assignedRole?.toUpperCase());
 
         if (!hasAccess) {
