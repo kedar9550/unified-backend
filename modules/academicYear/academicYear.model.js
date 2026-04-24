@@ -12,6 +12,10 @@ const AcademicYearSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: false
+    },
+    activeSemesterTypeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SemesterType'
     }
 }, { timestamps: true });
 

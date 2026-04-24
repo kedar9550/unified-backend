@@ -6,9 +6,8 @@ const {
     getAcademicYears,
     toggleAcademicYear,
     updateAcademicYear,
-    createSemester,
-    getSemesters,
-    toggleSemester
+    toggleSemesterType,
+    deleteAcademicYear
 } = require('./academicYear.controller');
 
 // Get all academic years — any authenticated user
@@ -23,9 +22,10 @@ router.put('/:id', protect, authorize('UNIPRIME'), updateAcademicYear);
 // Toggle active status of an academic year — SUPER_ADMIN only
 router.put('/:id/toggle-status', protect, authorize('UNIPRIME'), toggleAcademicYear);
 
-// Semester sub-routes
-router.get('/:id/semesters', protect, getSemesters);
-router.post('/:id/semesters', protect, authorize('UNIPRIME'), createSemester);
-router.put('/:id/semesters/:semesterId/toggle-status', protect, authorize('UNIPRIME'), toggleSemester);
+// Toggle active semester type for a year — SUPER_ADMIN only
+router.put('/:id/semester-type', protect, authorize('UNIPRIME'), toggleSemesterType);
+
+// Delete an academic year — SUPER_ADMIN only
+router.delete('/:id', protect, authorize('UNIPRIME'), deleteAcademicYear);
 
 module.exports = router;

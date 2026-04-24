@@ -61,9 +61,9 @@ const StudentResultSchema = new mongoose.Schema({
         trim: true
     },
 
-    semesterType: {
+    semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Semester",
+        ref: "SemesterType",
     },
 
     //  Exam Info

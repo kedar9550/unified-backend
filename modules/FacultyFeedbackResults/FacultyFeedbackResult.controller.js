@@ -1,6 +1,6 @@
 const FacultyFeedResult = require("./FacultyFeedResult.model");
 const AcademicYear = require("../academicYear/academicYear.model");
-const Semester = require("../semester/semester.model");
+const SemesterType = require("../semesterType/semesterType.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 
@@ -36,9 +36,9 @@ const uploadCSV = async (req, res) => {
         const results = [];
         const errors = [];
 
-        // Cache for academic years and semesters to avoid multiple queries
+        // Cache for academic years and semester types to avoid multiple queries
         const ayCache = {};
-        const semCache = {};
+        const semTypeCache = {};
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -70,17 +70,17 @@ const uploadCSV = async (req, res) => {
                 ayCache[academicyear] = ayId;
             }
 
-            // 2. Resolve Semester - auto-create if not found for this academic year
-            const semKey = `${ayId}_${semester.toUpperCase()}`;
-            let semId = semCache[semKey];
-            if (!semId) {
-                const sem = await Semester.findOneAndUpdate(
-                    { academicYear: ayId, type: semester.toUpperCase() },
-                    { academicYear: ayId, type: semester.toUpperCase() },
-                    { upsert: true, new: true, setDefaultsOnInsert: true }
-                );
-                semId = sem._id;
-                semCache[semKey] = semId;
+            // 2. Resolve Semester Type
+            const semesterName = semester.toUpperCase();
+            let semTypeId = semTypeCache[semesterName];
+            if (!semTypeId) {
+                const st = await SemesterType.findOne({ name: semesterName });
+                if (!st) {
+                    errors.push(`Row ${i + 2}: Global Semester Type '${semesterName}' not found.`);
+                    continue;
+                }
+                semTypeId = st._id;
+                semTypeCache[semesterName] = semTypeId;
             }
 
             const facId = (facultyid || "").trim();
@@ -105,7 +105,7 @@ const uploadCSV = async (req, res) => {
                 subjectCode: subjectcode,
                 section: section,
                 phase: phs,
-                semesterId: semId,
+                semesterTypeId: semTypeId,
                 academicYearId: ayId
             });
 
@@ -123,7 +123,7 @@ const uploadCSV = async (req, res) => {
                 section: section,
                 phase: phs,
                 academicYearId: ayId,
-                semesterId: semId,
+                semesterTypeId: semTypeId,
                 totalStudents: total,
                 givenStudents: given,
                 percentage: perc,
@@ -160,7 +160,7 @@ const uploadCSV = async (req, res) => {
  */
 const resolveAcademicIds = async ({ academicYear, semester }) => {
     let academicYearId = null;
-    let semesterId = null;
+    let semesterTypeId = null;
 
     if (academicYear) {
         const isObjectId = mongoose.Types.ObjectId.isValid(academicYear) && String(new mongoose.Types.ObjectId(academicYear)) === academicYear;
@@ -176,18 +176,15 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
     if (academicYearId && semester) {
         const isObjectId = mongoose.Types.ObjectId.isValid(semester) && String(new mongoose.Types.ObjectId(semester)) === semester;
         if (isObjectId) {
-            semesterId = semester;
+            semesterTypeId = semester;
         } else {
-            const sem = await Semester.findOne({
-                academicYear: academicYearId,
-                type: semester.toUpperCase()
-            });
-            if (!sem) throw new Error(`Semester '${semester}' not found for Academic Year '${academicYear}'`);
-            semesterId = sem._id;
+            const st = await SemesterType.findOne({ name: semester.toUpperCase() });
+            if (!st) throw new Error(`Semester Type '${semester}' not found`);
+            semesterTypeId = st._id;
         }
     }
-
-    return { academicYearId, semesterId };
+ 
+    return { academicYearId, semesterTypeId };
 };
 
 /**
@@ -201,11 +198,11 @@ const deleteSemesterData = async (req, res) => {
             return res.status(400).json({ message: "academicYear and semester are required" });
         }
 
-        const { academicYearId, semesterId } = await resolveAcademicIds({ academicYear, semester });
-
+        const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
+ 
         const result = await FacultyFeedResult.deleteMany({
             academicYearId,
-            semesterId
+            semesterTypeId
         });
 
         res.json({
@@ -229,14 +226,14 @@ const getResults = async (req, res) => {
         if (phase) query.phase = Number(phase);
 
         if (academicYear || semester) {
-            const { academicYearId, semesterId } = await resolveAcademicIds({ academicYear, semester });
+            const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
             if (academicYearId) query.academicYearId = academicYearId;
-            if (semesterId) query.semesterId = semesterId;
+            if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
-
+ 
         const results = await FacultyFeedResult.find(query)
             .populate("academicYearId", "year")
-            .populate("semesterId", "type")
+            .populate("semesterTypeId", "name")
             .sort({ createdAt: -1 });
 
         res.json(results);
@@ -297,11 +294,11 @@ const createResult = async (req, res) => {
     try {
         const {
             facultyId, facultyName, subjectName, subjectCode, branch, section, phase,
-            academicYearId, semesterId, totalStudents, givenStudents, percentage, overallPercentage
+            academicYearId, semesterTypeId, totalStudents, givenStudents, percentage, overallPercentage
         } = req.body;
-
-        if (!facultyId || !subjectName || !academicYearId || !semesterId) {
-            return res.status(400).json({ message: "facultyId, subjectName, academicYearId, and semesterId are required." });
+ 
+        if (!facultyId || !subjectName || !academicYearId || !semesterTypeId) {
+            return res.status(400).json({ message: "facultyId, subjectName, academicYearId, and semesterTypeId are required." });
         }
 
         const record = await FacultyFeedResult.create({
@@ -313,7 +310,7 @@ const createResult = async (req, res) => {
             section,
             phase: phase ? Number(phase) : undefined,
             academicYearId,
-            semesterId,
+            semesterTypeId,
             totalStudents: Number(totalStudents) || 0,
             givenStudents: Number(givenStudents) || 0,
             percentage: Number(percentage) || 0,

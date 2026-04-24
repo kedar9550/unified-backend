@@ -24,6 +24,9 @@ const programSchema = new mongoose.Schema({
         trim: true
     },
     status: {
+
+
+
         type: Boolean,
         default: true
     }

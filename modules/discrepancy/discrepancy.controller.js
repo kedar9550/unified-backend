@@ -15,10 +15,10 @@ const SECTION_ROLE_MAP = {
  */
 const raiseDiscrepancy = async (req, res) => {
     try {
-        const { academicYearId, semesterId, section, note, facultyInstitutionId, facultyName } = req.body;
+        const { academicYearId, semesterTypeId, section, note, facultyInstitutionId, facultyName } = req.body;
 
-        if (!academicYearId || !semesterId || !section || !note) {
-            return res.status(400).json({ message: "academicYearId, semesterId, section, and note are required." });
+        if (!academicYearId || !semesterTypeId || !section || !note) {
+            return res.status(400).json({ message: "academicYearId, semesterTypeId, section, and note are required." });
         }
 
         const assignedRole = SECTION_ROLE_MAP[section] || "ADMIN";
@@ -28,7 +28,7 @@ const raiseDiscrepancy = async (req, res) => {
             facultyInstitutionId: facultyInstitutionId || "",
             facultyName:          facultyName || "",
             academicYearId,
-            semesterId,
+            semesterTypeId,
             section,
             note,
             assignedRole,
@@ -74,7 +74,7 @@ const getDiscrepancies = async (req, res) => {
 
         const discrepancies = await Discrepancy.find(query)
             .populate("academicYearId", "year")
-            .populate("semesterId", "type")
+            .populate("semesterTypeId", "name")
             .populate("raisedBy", "name institutionId")
             .populate("resolvedBy", "name")
             .sort({ createdAt: -1 });
@@ -92,7 +92,7 @@ const getDiscrepancyById = async (req, res) => {
     try {
         const disc = await Discrepancy.findById(req.params.id)
             .populate("academicYearId", "year")
-            .populate("semesterId", "type")
+            .populate("semesterTypeId", "name")
             .populate("raisedBy", "name institutionId department")
             .populate("resolvedBy", "name");
 
@@ -110,7 +110,7 @@ const getDiscrepancyById = async (req, res) => {
 const resolveDiscrepancy = async (req, res) => {
     try {
         const { id } = req.params;
-        const { resolutionNote, status, rejectionNote, academicYearId, semesterId } = req.body;
+        const { resolutionNote, status, rejectionNote, academicYearId, semesterTypeId } = req.body;
 
         const disc = await Discrepancy.findById(id);
         if (!disc) return res.status(404).json({ message: "Discrepancy not found." });
@@ -143,7 +143,7 @@ const resolveDiscrepancy = async (req, res) => {
 
         // Allow updating academic year / semester if admin corrected the data
         if (academicYearId) disc.academicYearId = academicYearId;
-        if (semesterId)     disc.semesterId     = semesterId;
+        if (semesterTypeId) disc.semesterTypeId = semesterTypeId;
 
         disc.resolvedBy     = req.user.userId;
         disc.resolutionNote = resolutionNote || "";

@@ -20,15 +20,14 @@ const FeedbackSchema = new mongoose.Schema({
         required: true,
         trim: true  // e.g. "CSE-A"
     },
-    semester: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Semester',
-        required: true
-    },
     academicYear: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'AcademicYear',
         required: true
+    },
+    semesterTypeId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SemesterType'
     },
 
     // Feedback scores (scale 1-5 or percentage — configurable)

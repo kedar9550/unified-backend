@@ -16,9 +16,9 @@ const DiscrepancySchema = new mongoose.Schema({
         ref: "AcademicYear",
         required: true,
     },
-    semesterId: {
+    semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Semester",
+        ref: "SemesterType",
         required: true,
     },
     section: {

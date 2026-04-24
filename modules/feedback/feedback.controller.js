@@ -2,7 +2,6 @@ const { v4: uuidv4 } = require('uuid');
 const User = require('../user/user.model');
 const Feedback = require('./feedback.model');
 const AcademicYear = require('../academicYear/academicYear.model');
-const Semester = require('../semester/semester.model');
 const { parseCSV, validateHeaders } = require('../../utils/csvParser');
 
 const REQUIRED_HEADERS = [
@@ -15,15 +14,15 @@ const REQUIRED_HEADERS = [
 
 /* ===================================================
    UPLOAD FEEDBACK (FEEDBACK_COMMITTEE only)
-   POST /api/feedback/upload?semesterId=...&academicYearId=...
+   POST /api/feedback/upload?semesterTypeId=...&academicYearId=...
 =================================================== */
 const uploadFeedback = async (req, res) => {
     try {
-        const { semesterId, academicYearId } = req.query;
+        const { semesterTypeId, academicYearId } = req.query;
 
-        if (!semesterId || !academicYearId) {
+        if (!semesterTypeId || !academicYearId) {
             return res.status(400).json({
-                message: 'semesterId and academicYearId are required as query params'
+                message: 'semesterTypeId and academicYearId are required as query params'
             });
         }
 
@@ -31,12 +30,7 @@ const uploadFeedback = async (req, res) => {
             return res.status(400).json({ message: 'CSV file is required' });
         }
 
-        const [semester, academicYear] = await Promise.all([
-            Semester.findById(semesterId),
-            AcademicYear.findById(academicYearId)
-        ]);
-
-        if (!semester) return res.status(404).json({ message: 'Semester not found' });
+        const academicYear = await AcademicYear.findById(academicYearId);
         if (!academicYear) return res.status(404).json({ message: 'Academic year not found' });
 
         let rows;
@@ -79,7 +73,7 @@ const uploadFeedback = async (req, res) => {
                 facultyId: row.faculty_id,
                 subjectName: row.subject_name,
                 className: row.class_name,
-                semester: semesterId,
+                semesterTypeId: semesterTypeId,
                 academicYear: academicYearId,
                 rating,
                 totalResponses,
@@ -115,7 +109,7 @@ const uploadFeedback = async (req, res) => {
 =================================================== */
 const getFeedback = async (req, res) => {
     try {
-        const { facultyId, semesterId, academicYearId } = req.query;
+        const { facultyId, academicYearId, semesterTypeId } = req.query;
         const roles = req.user.roles?.map(r => r.role?.toUpperCase()) || [];
 
         const isAdmin = roles.some(r =>
@@ -131,11 +125,11 @@ const getFeedback = async (req, res) => {
             filter.facultyId = facultyId;
         }
 
-        if (semesterId) filter.semester = semesterId;
+        if (semesterTypeId) filter.semesterTypeId = semesterTypeId;
         if (academicYearId) filter.academicYear = academicYearId;
 
         const feedback = await Feedback.find(filter)
-            .populate('semester', 'type')
+            .populate('semesterTypeId', 'name')
             .populate('academicYear', 'year')
             .populate('faculty', 'name institutionId department designation')
             .populate('uploadedBy', 'name')

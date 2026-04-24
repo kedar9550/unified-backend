@@ -13,9 +13,9 @@ const FacultyFeedResultSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "AcademicYear",            
     },
-    semesterId: {
+    semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Semester",
+        ref: "SemesterType",
     },
 
     phase: { type: Number, enum: [1, 2] },

@@ -1,5 +1,5 @@
 const AcademicYear = require('./academicYear.model');
-const Semester = require('../semester/semester.model');
+const SemesterType = require('../semesterType/semesterType.model');
 
 /* ===================================================
    CREATE ACADEMIC YEAR
@@ -28,20 +28,24 @@ const createAcademicYear = async (req, res) => {
             return res.status(409).json({ message: `Academic year ${yearStr} already exists` });
         }
 
+        const oddType = await SemesterType.findOne({ name: 'ODD' });
+        if (!oddType) {
+            return res.status(500).json({ message: 'Semester type ODD not found. Please seed semester types.' });
+        }
+
         // Auto-activate the new year by deactivating others
         await AcademicYear.updateMany({}, { isActive: false });
-        await Semester.updateMany({}, { isActive: false }); // Reset semesters too
 
-        const academicYear = await AcademicYear.create({ year: yearStr, isActive: true });
-
-        // Auto-create ODD semester and activate it
-        const semester = await Semester.create({
-            academicYear: academicYear._id,
-            type: 'ODD',
-            isActive: true
+        const academicYear = await AcademicYear.create({ 
+            year: yearStr, 
+            isActive: true,
+            activeSemesterTypeId: oddType._id
         });
 
-        res.status(201).json({ message: 'Academic year and ODD semester created and activated.', academicYear, semester });
+        res.status(201).json({ 
+            message: 'Academic year created and ODD semester activated.', 
+            academicYear: await academicYear.populate('activeSemesterTypeId', 'name')
+        });
 
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -54,7 +58,9 @@ const createAcademicYear = async (req, res) => {
 =================================================== */
 const getAcademicYears = async (req, res) => {
     try {
-        const years = await AcademicYear.find().sort({ year: -1 });
+        const years = await AcademicYear.find()
+            .populate('activeSemesterTypeId', 'name')
+            .sort({ year: -1 });
         res.json({ count: years.length, years });
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -119,90 +125,47 @@ const updateAcademicYear = async (req, res) => {
 };
 
 /* ===================================================
-   CREATE SEMESTER UNDER ACADEMIC YEAR
-   POST /api/academic-years/:id/semesters
-=================================================== */
-const createSemester = async (req, res) => {
+   TOGGLE ACTIVE SEMESTER TYPE FOR A YEAR
+   PUT /api/academic-years/:id/semester-type
+ =================================================== */
+const toggleSemesterType = async (req, res) => {
     try {
-        const { type } = req.body;
-
-        if (!type) {
-            return res.status(400).json({ message: 'type is required (ODD | EVEN | SUMMER)' });
+        const { semesterTypeId } = req.body;
+        
+        if (!semesterTypeId) {
+            return res.status(400).json({ message: 'semesterTypeId is required' });
         }
 
-        const academicYear = await AcademicYear.findById(req.params.id);
+        const academicYear = await AcademicYear.findByIdAndUpdate(
+            req.params.id,
+            { activeSemesterTypeId: semesterTypeId },
+            { new: true }
+        ).populate('activeSemesterTypeId', 'name');
+
         if (!academicYear) return res.status(404).json({ message: 'Academic year not found' });
 
-        const existing = await Semester.findOne({
-            academicYear: req.params.id,
-            type: type.toUpperCase()
+        res.json({ 
+            message: `Active semester for ${academicYear.year} changed to ${academicYear.activeSemesterTypeId.name}`, 
+            academicYear 
         });
-
-        if (existing) {
-            return res.status(409).json({
-                message: `${type.toUpperCase()} semester already exists for ${academicYear.year}`
-            });
-        }
-        
-        const isActive = academicYear.isActive;
-        if (isActive) {
-            await Semester.updateMany({}, { isActive: false });
-        }
-
-        const semester = await Semester.create({
-            academicYear: req.params.id,
-            type: type.toUpperCase(),
-            isActive: isActive
-        });
-
-        res.status(201).json({ message: 'Semester created', semester });
-
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
 /* ===================================================
-   GET SEMESTERS BY ACADEMIC YEAR
-   GET /api/academic-years/:id/semesters
-=================================================== */
-const getSemesters = async (req, res) => {
+   DELETE ACADEMIC YEAR
+   DELETE /api/academic-years/:id
+ =================================================== */
+const deleteAcademicYear = async (req, res) => {
     try {
-        const semesters = await Semester.find({ academicYear: req.params.id })
-            .populate('academicYear', 'year');
+        const year = await AcademicYear.findById(req.params.id);
+        if (!year) return res.status(404).json({ message: 'Academic year not found' });
 
-        res.json({ count: semesters.length, semesters });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-};
+        // Delete the year
+        await year.deleteOne();
 
-/* ===================================================
-   TOGGLE ACTIVE SEMESTER
-   PUT /api/academic-years/:id/semesters/:semesterId/toggle-status
-=================================================== */
-const toggleSemester = async (req, res) => {
-    try {
-        const { isActive } = req.body;
-        
-        if (isActive) {
-            const parentYear = await AcademicYear.findById(req.params.id);
-            if (!parentYear) return res.status(404).json({ message: 'Academic year not found' });
-            if (!parentYear.isActive) {
-                return res.status(400).json({ message: 'Cannot activate semester: parent Academic Year is not active.' });
-            }
-            await Semester.updateMany({}, { isActive: false });
-        }
-        
-        const semester = await Semester.findByIdAndUpdate(
-            req.params.semesterId,
-            { isActive },
-            { new: true }
-        );
-
-        if (!semester) return res.status(404).json({ message: 'Semester not found' });
-
-        res.json({ message: `${semester.type} semester is now ${isActive ? 'active' : 'inactive'}`, semester });
+        res.json({ message: 'Academic year deleted successfully' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -213,7 +176,6 @@ module.exports = {
     getAcademicYears,
     toggleAcademicYear,
     updateAcademicYear,
-    createSemester,
-    getSemesters,
-    toggleSemester
+    toggleSemesterType,
+    deleteAcademicYear
 };

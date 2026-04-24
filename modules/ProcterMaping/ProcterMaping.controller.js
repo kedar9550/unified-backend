@@ -1,6 +1,6 @@
 const ProcterMaping = require("./ProcterMaping.model");
 const AcademicYear = require("../academicYear/academicYear.model");
-const Semester = require("../semester/semester.model");
+const SemesterType = require("../semesterType/semesterType.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 
@@ -29,9 +29,9 @@ const uploadCSV = async (req, res) => {
         const mappings = [];
         const errors = [];
 
-        // Cache for academic years and semesters to avoid multiple queries
+        // Cache for academic years and semester types to avoid multiple queries
         const ayCache = {};
-        const semCache = {};
+        const semTypeCache = {};
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -56,20 +56,17 @@ const uploadCSV = async (req, res) => {
                 ayCache[academicyear] = ayId;
             }
 
-            // 2. Resolve Semester
-            const semKey = `${ayId}_${semester.toUpperCase()}`;
-            let semId = semCache[semKey];
-            if (!semId) {
-                const sem = await Semester.findOne({
-                    academicYear: ayId,
-                    type: semester.toUpperCase()
-                });
-                if (!sem) {
-                    errors.push(`Row ${i + 2}: Semester '${semester}' not found for year '${academicyear}'.`);
+            // 2. Resolve Semester Type
+            const semesterName = semester.toUpperCase();
+            let semTypeId = semTypeCache[semesterName];
+            if (!semTypeId) {
+                const st = await SemesterType.findOne({ name: semesterName });
+                if (!st) {
+                    errors.push(`Row ${i + 2}: Global Semester Type '${semesterName}' not found.`);
                     continue;
                 }
-                semId = sem._id;
-                semCache[semKey] = semId;
+                semTypeId = st._id;
+                semTypeCache[semesterName] = semTypeId;
             }
 
             const pId = (proctorid || "").trim();
@@ -80,11 +77,11 @@ const uploadCSV = async (req, res) => {
                 continue;
             }
 
-            // 3. Duplicate Prevention (studentId + semId + ayId)
+            // 3. Duplicate Prevention (studentId + semTypeId + ayId)
             // A student can only have one proctor per semester
             const duplicate = await ProcterMaping.findOne({
                 studentId: sId,
-                semesterId: semId,
+                semesterTypeId: semTypeId,
                 academicYearId: ayId
             });
 
@@ -103,7 +100,7 @@ const uploadCSV = async (req, res) => {
                 studentId: sId,
                 studentName: studentname,
                 academicYearId: ayId,
-                semesterId: semId
+                semesterTypeId: semTypeId
             });
         }
 
@@ -130,10 +127,9 @@ const resolveActiveIds = async () => {
     const activeAy = await AcademicYear.findOne({ isActive: true });
     if (!activeAy) throw new Error("No active academic year found");
 
-    const activeSem = await Semester.findOne({ academicYear: activeAy._id, isActive: true });
-    if (!activeSem) throw new Error("No active semester found");
+    if (!activeAy.activeSemesterTypeId) throw new Error("No active semester type set for the current year");
 
-    return { academicYearId: activeAy._id, semesterId: activeSem._id };
+    return { academicYearId: activeAy._id, semesterTypeId: activeAy.activeSemesterTypeId };
 };
 
 /**
@@ -141,17 +137,17 @@ const resolveActiveIds = async () => {
  */
 const resolveTargetIds = async (queryAy, querySem) => {
     if (queryAy && querySem) {
-        let ayId, semId;
+        let ayId, semTypeId;
 
         const ay = await AcademicYear.findOne({ year: queryAy });
         if (!ay) throw new Error(`Academic Year '${queryAy}' not found`);
         ayId = ay._id;
 
-        const sem = await Semester.findOne({ academicYear: ayId, type: querySem.toUpperCase() });
-        if (!sem) throw new Error(`Semester '${querySem}' not found`);
-        semId = sem._id;
+        const st = await SemesterType.findOne({ name: querySem.toUpperCase() });
+        if (!st) throw new Error(`Semester Type '${querySem}' not found`);
+        semTypeId = st._id;
 
-        return { academicYearId: ayId, semesterId: semId };
+        return { academicYearId: ayId, semesterTypeId: semTypeId };
     }
     return await resolveActiveIds();
 };
@@ -168,19 +164,19 @@ const getMappings = async (req, res) => {
         if (studentId) query.studentId = studentId.trim();
 
         if (academicYear && semester) {
-            const { academicYearId, semesterId } = await resolveTargetIds(academicYear, semester);
+            const { academicYearId, semesterTypeId } = await resolveTargetIds(academicYear, semester);
             query.academicYearId = academicYearId;
-            query.semesterId = semesterId;
+            query.semesterTypeId = semesterTypeId;
         } else if (!proctorId && !studentId) {
             // If no specific proctor/student search, default to active
-            const { academicYearId, semesterId } = await resolveActiveIds();
+            const { academicYearId, semesterTypeId } = await resolveActiveIds();
             query.academicYearId = academicYearId;
-            query.semesterId = semesterId;
+            query.semesterTypeId = semesterTypeId;
         }
 
         const data = await ProcterMaping.find(query)
             .populate("academicYearId", "year")
-            .populate("semesterId", "type")
+            .populate("semesterTypeId", "name")
             .sort({ studentId: 1 });
 
         res.json(data);
@@ -226,8 +222,8 @@ const deleteSemesterData = async (req, res) => {
         if (!academicYear || !semester) {
             return res.status(400).json({ message: "academicYear and semester are required" });
         }
-        const { academicYearId, semesterId } = await resolveTargetIds(academicYear, semester);
-        const result = await ProcterMaping.deleteMany({ academicYearId, semesterId });
+        const { academicYearId, semesterTypeId } = await resolveTargetIds(academicYear, semester);
+        const result = await ProcterMaping.deleteMany({ academicYearId, semesterTypeId });
         res.json({ message: `Deleted ${result.deletedCount} mappings.`, deletedCount: result.deletedCount });
     } catch (error) {
         res.status(500).json({ message: error.message });

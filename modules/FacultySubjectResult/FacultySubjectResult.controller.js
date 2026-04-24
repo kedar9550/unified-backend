@@ -1,6 +1,6 @@
 const FacultySubjectResult = require("./FacultySubjectResult.model");
 const AcademicYear = require("../academicYear/academicYear.model");
-const Semester = require("../semester/semester.model");
+const SemesterType = require("../semesterType/semesterType.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 
@@ -32,9 +32,9 @@ const uploadCSV = async (req, res) => {
         const results = [];
         const errors = [];
 
-        // Cache for academic years and semesters to avoid multiple queries
+        // Cache for academic years and semester types to avoid multiple queries
         const ayCache = {};
-        const semCache = {};
+        const semTypeCache = {};
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -70,17 +70,16 @@ const uploadCSV = async (req, res) => {
                 continue;
             }
             const calculatedSemType = semNo % 2 === 0 ? "EVEN" : "ODD";
-
-            const semKey = `${ayId}_${calculatedSemType}`;
-            let semId = semCache[semKey];
-            if (!semId) {
-                const sem = await Semester.findOneAndUpdate(
-                    { academicYear: ayId, type: calculatedSemType },
-                    { academicYear: ayId, type: calculatedSemType },
-                    { upsert: true, new: true, setDefaultsOnInsert: true }
-                );
-                semId = sem._id;
-                semCache[semKey] = semId;
+ 
+            let semTypeId = semTypeCache[calculatedSemType];
+            if (!semTypeId) {
+                const st = await SemesterType.findOne({ name: calculatedSemType });
+                if (!st) {
+                    errors.push(`Row ${i + 2}: Global Semester Type '${calculatedSemType}' not found.`);
+                    continue;
+                }
+                semTypeId = st._id;
+                semTypeCache[calculatedSemType] = semTypeId;
             }
 
             // 2b. Validate Numerics (facultyId is a string — no Number conversion)
@@ -118,7 +117,7 @@ const uploadCSV = async (req, res) => {
                 subjectCode: subjectcode,
                 branch: branch,
                 academicYearId: ayId,
-                semesterId: semId,
+                semesterTypeId: semTypeId,
                 semester: semNo,
                 semType: calculatedSemType,
                 appeared: app,
@@ -158,7 +157,7 @@ const uploadCSV = async (req, res) => {
  */
 const resolveAcademicIds = async ({ academicYear, semester }) => {
     let academicYearId = null;
-    let semesterId = null;
+    let semesterTypeId = null;
 
     if (academicYear) {
         // If it looks like an ObjectId, use as-is; otherwise resolve by year string
@@ -175,18 +174,15 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
     if (academicYearId && semester) {
         const isObjectId = mongoose.Types.ObjectId.isValid(semester) && String(new mongoose.Types.ObjectId(semester)) === semester;
         if (isObjectId) {
-            semesterId = semester;
+            semesterTypeId = semester;
         } else {
-            const sem = await Semester.findOne({
-                academicYear: academicYearId,
-                type: semester.toUpperCase()
-            });
-            if (!sem) throw new Error(`Semester '${semester}' not found for Academic Year '${academicYear}'`);
-            semesterId = sem._id;
+            const st = await SemesterType.findOne({ name: semester.toUpperCase() });
+            if (!st) throw new Error(`Semester Type '${semester}' not found`);
+            semesterTypeId = st._id;
         }
     }
 
-    return { academicYearId, semesterId };
+    return { academicYearId, semesterTypeId };
 };
 
 /**
@@ -201,11 +197,11 @@ const deleteSemesterData = async (req, res) => {
             return res.status(400).json({ message: "academicYear and semester are required" });
         }
 
-        const { academicYearId, semesterId } = await resolveAcademicIds({ academicYear, semester });
+        const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
 
         const result = await FacultySubjectResult.deleteMany({
             academicYearId,
-            semesterId
+            semesterTypeId
         });
 
         res.json({
@@ -230,14 +226,14 @@ const getResults = async (req, res) => {
         if (facultyId) query.facultyId = facultyId.trim();
 
         if (academicYear || semester) {
-            const { academicYearId, semesterId } = await resolveAcademicIds({ academicYear, semester });
+            const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
             if (academicYearId) query.academicYearId = academicYearId;
-            if (semesterId) query.semesterId = semesterId;
+            if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
 
         const results = await FacultySubjectResult.find(query)
             .populate("academicYearId", "year")
-            .populate("semesterId", "type")
+            .populate("semesterTypeId", "name")
             .sort({ createdAt: -1 });
 
         res.json(results);
@@ -310,11 +306,11 @@ const createResult = async (req, res) => {
     try {
         const {
             facultyId, facultyName, subjectName, subjectCode, branch,
-            academicYearId, semesterId, appeared, passed
+            academicYearId, semesterTypeId, appeared, passed
         } = req.body;
 
-        if (!facultyId || !subjectName || !academicYearId || !semesterId) {
-            return res.status(400).json({ message: "facultyId, subjectName, academicYearId, and semesterId are required." });
+        if (!facultyId || !subjectName || !academicYearId || !semesterTypeId) {
+            return res.status(400).json({ message: "facultyId, subjectName, academicYearId, and semesterTypeId are required." });
         }
 
         const app = Number(appeared) || 0;
@@ -328,7 +324,7 @@ const createResult = async (req, res) => {
             subjectCode,
             branch,
             academicYearId,
-            semesterId,
+            semesterTypeId,
             appeared: app,
             passed: pas,
             passPercentage,

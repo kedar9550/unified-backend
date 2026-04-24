@@ -6,9 +6,9 @@ const ProctorSummarySchema = new mongoose.Schema({
         ref: "AcademicYear",
         required: true
     },
-    semesterId: {
+    semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Semester",
+        ref: "SemesterType",
         required: true
     },
     proctorId: {
@@ -41,7 +41,7 @@ const ProctorSummarySchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Compound index to ensure uniqueness per proctor per semester
-ProctorSummarySchema.index({ academicYearId: 1, semesterId: 1, proctorId: 1 }, { unique: true });
+// Compound index to ensure uniqueness per proctor per semester type per year
+ProctorSummarySchema.index({ academicYearId: 1, semesterTypeId: 1, proctorId: 1 }, { unique: true });
 
 module.exports = mongoose.model("ProctorSummary", ProctorSummarySchema);

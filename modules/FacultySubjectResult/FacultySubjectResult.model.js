@@ -13,9 +13,9 @@ const FacultySubjectResultSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "AcademicYear",
     },
-    semesterId: {
+    semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Semester",
+        ref: "SemesterType",
     },
 
     appeared: Number,
