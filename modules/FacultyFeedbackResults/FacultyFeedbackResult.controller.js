@@ -70,17 +70,23 @@ const uploadCSV = async (req, res) => {
                 ayCache[academicyear] = ayId;
             }
 
-            // 2. Resolve Semester Type
-            const semesterName = semester.toUpperCase();
-            let semTypeId = semTypeCache[semesterName];
+            // 2. Resolve Semester - auto-calculate ODD/EVEN from semester number
+            const semNo = Number(semester);
+            if (isNaN(semNo)) {
+                errors.push(`Row ${i + 2}: Invalid Semester number '${semester}' (must be a number).`);
+                continue;
+            }
+            const calculatedSemType = semNo % 2 === 0 ? "EVEN" : "ODD";
+ 
+            let semTypeId = semTypeCache[calculatedSemType];
             if (!semTypeId) {
-                const st = await SemesterType.findOne({ name: semesterName });
+                const st = await SemesterType.findOne({ name: calculatedSemType });
                 if (!st) {
-                    errors.push(`Row ${i + 2}: Global Semester Type '${semesterName}' not found.`);
+                    errors.push(`Row ${i + 2}: Global Semester Type '${calculatedSemType}' not found.`);
                     continue;
                 }
                 semTypeId = st._id;
-                semTypeCache[semesterName] = semTypeId;
+                semTypeCache[calculatedSemType] = semTypeId;
             }
 
             const facId = (facultyid || "").trim();
@@ -105,7 +111,7 @@ const uploadCSV = async (req, res) => {
                 subjectCode: subjectcode,
                 section: section,
                 phase: phs,
-                semesterTypeId: semTypeId,
+                semester: semNo,
                 academicYearId: ayId
             });
 
@@ -124,6 +130,8 @@ const uploadCSV = async (req, res) => {
                 phase: phs,
                 academicYearId: ayId,
                 semesterTypeId: semTypeId,
+                semester: semNo,
+                semType: calculatedSemType,
                 totalStudents: total,
                 givenStudents: given,
                 percentage: perc,
