@@ -75,6 +75,7 @@ app.use('/api/student-results',        require('./modules/StudentResult/StudentR
 app.use('/api/academics',               require('./modules/academics/academics.route'));
 app.use('/api/roles',                   require('./modules/role/role.route'));
 app.use('/api/student-data',          require('./modules/StudentData/Studentdata.route'));
+app.use('/api/semester-types',        require('./modules/semesterType/semesterType.route'));
 
 // --- Error Handling ---
 
