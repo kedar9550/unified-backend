@@ -66,7 +66,6 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/users', require('./modules/user/user.route'));
 app.use('/api/academic-years', require('./modules/academicYear/academicYear.route'));
-app.use('/api/semester-types', require('./modules/semesterType/semesterType.route'));
 app.use('/api/feedback', require('./modules/feedback/feedback.route'));
 app.use('/api/faculty-subject-results', require('./modules/FacultySubjectResult/FacultySubjectResult.route'));
 app.use('/api/faculty-feedback-results', require('./modules/FacultyFeedbackResults/FacultyFeedbackResult.route'));
@@ -75,6 +74,7 @@ app.use('/api/dept-proctor',           require('./modules/ProcterMaping/ProcterM
 app.use('/api/student-results',        require('./modules/StudentResult/StudentResult.route'));
 app.use('/api/academics',               require('./modules/academics/academics.route'));
 app.use('/api/roles',                   require('./modules/role/role.route'));
+app.use('/api/student-data',          require('./modules/StudentData/Studentdata.route'));
 
 // --- Error Handling ---
 
