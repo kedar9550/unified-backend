@@ -7,15 +7,10 @@ const loginUser = async (institutionId, password, appName) => {
     // Determine user type based on ID pattern
     // Employees have numeric IDs (e.g., 1, 2, 100)
     // Students have alphanumeric IDs (e.g., 24B11AE001)
-    const isNumeric = /^\d+$/.test(institutionId);
-    
-    let user;
-    let userType;
+    let user = await Employee.findOne({ institutionId });
+    let userType = 'Employee';
 
-    if (isNumeric) {
-        user = await Employee.findOne({ institutionId });
-        userType = 'Employee';
-    } else {
+    if (!user) {
         user = await Student.findOne({ rollNo: institutionId.toUpperCase() });
         userType = 'Student';
     }
