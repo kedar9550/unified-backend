@@ -11,8 +11,8 @@ const Branch = require('./branch.model');
 // @access  Private (UNIPRIME only)
 exports.createDepartment = async (req, res, next) => {
     try {
-        const { name, code, description, status } = req.body;
-        const department = new Department({ name, code, description, status });
+        const { name, code, description, status, hasStudents } = req.body;
+        const department = new Department({ name, code, description, status, hasStudents });
         const savedDept = await department.save();
         res.status(201).json({ success: true, data: savedDept });
     } catch (error) {

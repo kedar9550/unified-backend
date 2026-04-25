@@ -21,6 +21,10 @@ const departmentSchema = new mongoose.Schema({
     status: {
         type: Boolean,
         default: true
+    },
+    hasStudents: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 
