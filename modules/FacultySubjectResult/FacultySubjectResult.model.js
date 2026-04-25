@@ -30,7 +30,7 @@ const FacultySubjectResultSchema = new mongoose.Schema({
 
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Employee",
     },
 }, { timestamps: true });
 

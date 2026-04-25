@@ -1,20 +1,21 @@
-const StudentData = require("./Studentdata.model");
+const Student = require("./Studentdata.model");
 const csv = require("csv-parser");
 const fs = require("fs");
 
-// Upload Student CSV
+/**
+ * Upload Student CSV and map to new nested schema
+ */
 exports.uploadStudentCSV = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: "No file uploaded" });
   }
 
-  const students = [];
+  const studentsData = [];
   const errors = [];
 
   fs.createReadStream(req.file.path)
     .pipe(csv())
     .on("data", (data) => {
-      // Robust normalization of keys
       const getVal = (prefixes) => {
         const key = Object.keys(data).find(k => 
           prefixes.some(p => k.trim().toLowerCase() === p.toLowerCase())
@@ -22,18 +23,35 @@ exports.uploadStudentCSV = async (req, res) => {
         return key ? data[key] : null;
       };
 
-      const student = {
-        rollNo: getVal(["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID"]),
-        name: getVal(["Name", "Student Name", "name", "Full Name"]),
-        dept: getVal(["Dept", "department", "Dept Name"]),
-        email: getVal(["Email", "Email ID", "email"]),
-        phone: getVal(["Phone", "Phone No", "Mobile", "phone"]),
-        branch: getVal(["Branch", "branch"]),
-        program: getVal(["Program", "program", "Course"]),
-      };
+      const rollNo = getVal(["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID"]);
+      const name = getVal(["Name", "Student Name", "name", "Full Name"]);
 
-      if (student.rollNo && student.name) {
-        students.push(student);
+      if (rollNo && name) {
+        studentsData.push({
+          rollNo: rollNo.trim().toUpperCase(),
+          personalInfo: {
+            studentName: name.trim(),
+          },
+          academicInfo: {
+            programName: getVal(["Program", "program", "Course"]) || "B.Tech",
+            branch: getVal(["Branch", "branch"]) || "General",
+            department: getVal(["Dept", "department", "Dept Name"]),
+            semester: getVal(["Semester", "sem"]),
+            joinedBatch: parseInt(getVal(["Batch", "joinedBatch"])) || new Date().getFullYear(),
+            academicBatch: parseInt(getVal(["Academic Batch"])) || new Date().getFullYear(),
+            joinedYear: getVal(["Joined Year"]) || new Date().getFullYear().toString(),
+            relievedYear: getVal(["Relieved Year"]) || (new Date().getFullYear() + 4).toString(),
+            seatType: getVal(["Seat Type"]) || "Convener"
+          },
+          contactInfo: {
+            mobileNumber: getVal(["Phone", "Phone No", "Mobile", "phone"]) || "0000000000",
+            emailId: getVal(["Email", "Email ID", "email"]) || `${rollNo.toLowerCase()}@aec.edu.in`
+          },
+          system: {
+            isActive: true,
+            password: "Student@123" // Default password
+          }
+        });
       } else {
         errors.push({ row: data, message: "Missing required fields (Roll No or Name)" });
       }
@@ -43,115 +61,121 @@ exports.uploadStudentCSV = async (req, res) => {
         let successCount = 0;
         let skipCount = 0;
 
-        for (const student of students) {
+        for (const sData of studentsData) {
           try {
-            await StudentData.findOneAndUpdate(
-              { rollNo: student.rollNo },
-              student,
-              { upsert: true, new: true }
+            await Student.findOneAndUpdate(
+              { rollNo: sData.rollNo },
+              sData,
+              { upsert: true, new: true, runValidators: true }
             );
             successCount++;
           } catch (err) {
-            console.error(`Error saving student ${student.rollNo}:`, err);
+            console.error(`Error saving student ${sData.rollNo}:`, err.message);
             skipCount++;
           }
         }
 
-        // Clean up temporary file
-        fs.unlinkSync(req.file.path);
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
         res.status(200).json({
           success: true,
-          message: `CSV processed successfully. ${successCount} records saved/updated, ${skipCount} skipped.`,
-          summary: {
-            total: students.length,
-            success: successCount,
-            skipped: skipCount,
-            errors: errors.length
-          }
+          message: `CSV processed. ${successCount} saved, ${skipCount} skipped.`,
+          summary: { total: studentsData.length, success: successCount, skipped: skipCount, errors: errors.length }
         });
       } catch (error) {
-        console.error("CSV processing failed:", error);
-        res.status(500).json({ success: false, message: "Internal server error during CSV processing" });
+        res.status(500).json({ success: false, message: error.message });
       }
     });
 };
 
-// Get Unassigned Students
+/**
+ * Get Unassigned Students
+ */
 exports.getUnassignedStudents = async (req, res) => {
   try {
-    const students = await StudentData.find({ status: "unassigned" }).sort({ createdAt: -1 });
+    // Unassigned means either dept or semester is missing
+    const students = await Student.find({
+      $or: [
+        { "academicInfo.department": { $exists: false } },
+        { "academicInfo.department": null },
+        { "academicInfo.department": "" },
+        { "academicInfo.semester": { $exists: false } },
+        { "academicInfo.semester": null },
+        { "academicInfo.semester": "" }
+      ]
+    }).sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: students });
   } catch (error) {
-    console.error("Failed to fetch unassigned students:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Assign Students to Department and Semester
+/**
+ * Assign Students to Dept and Semester
+ */
 exports.assignStudents = async (req, res) => {
   const { studentIds, deptId, semester } = req.body;
-
   if (!studentIds || !deptId || !semester) {
-    return res.status(400).json({ success: false, message: "Missing assignment details" });
+    return res.status(400).json({ success: false, message: "Missing details" });
   }
 
   try {
-    await StudentData.updateMany(
+    // Assuming deptId is a string name or ID. If it's a name:
+    await Student.updateMany(
       { rollNo: { $in: studentIds } },
       { 
-        assignedDept: deptId, 
-        semester: semester,
-        status: "assigned"
+        "academicInfo.department": deptId, 
+        "academicInfo.semester": semester 
       }
     );
-
-    res.status(200).json({ success: true, message: "Students assigned successfully" });
+    res.status(200).json({ success: true, message: "Students assigned" });
   } catch (error) {
-    console.error("Assignment failed:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Delete Student
+/**
+ * Delete Student
+ */
 exports.deleteStudent = async (req, res) => {
-  const { rollNo } = req.params;
-
   try {
-    const deleted = await StudentData.findOneAndDelete({ rollNo });
-    if (!deleted) {
-      return res.status(404).json({ success: false, message: "Student not found" });
-    }
-    res.status(200).json({ success: true, message: "Student record deleted successfully" });
+    const deleted = await Student.findOneAndDelete({ rollNo: req.params.rollNo });
+    if (!deleted) return res.status(404).json({ success: false, message: "Not found" });
+    res.json({ success: true, message: "Deleted" });
   } catch (error) {
-    console.error("Delete failed:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Delete All Unassigned Students
+/**
+ * Delete All Unassigned
+ */
 exports.deleteAllUnassigned = async (req, res) => {
   try {
-    const result = await StudentData.deleteMany({ status: "unassigned" });
-    res.status(200).json({ 
-      success: true, 
-      message: `${result.deletedCount} unassigned records deleted successfully` 
+    const result = await Student.deleteMany({
+      $or: [
+        { "academicInfo.department": { $exists: false } },
+        { "academicInfo.department": null },
+        { "academicInfo.department": "" }
+      ]
     });
+    res.json({ success: true, count: result.deletedCount });
   } catch (error) {
-    console.error("Bulk delete failed:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Get Assigned Students
+/**
+ * Get Assigned Students
+ */
 exports.getAssignedStudents = async (req, res) => {
   try {
-    const students = await StudentData.find({ status: "assigned" })
-      .populate("assignedDept", "name")
-      .sort({ updatedAt: -1 });
+    const students = await Student.find({
+      "academicInfo.department": { $ne: null, $ne: "" },
+      "academicInfo.semester": { $ne: null, $ne: "" }
+    }).sort({ updatedAt: -1 });
     res.status(200).json({ success: true, data: students });
   } catch (error) {
-    console.error("Failed to fetch assigned students:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

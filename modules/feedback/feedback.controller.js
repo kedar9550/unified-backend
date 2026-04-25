@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require('uuid');
-const User = require('../user/user.model');
+const Employee = require('../employee/employee.model');
 const Feedback = require('./feedback.model');
 const AcademicYear = require('../academicYear/academicYear.model');
 const { parseCSV, validateHeaders } = require('../../utils/csvParser');
@@ -49,7 +49,7 @@ const uploadFeedback = async (req, res) => {
             const row = rows[i];
             const rowNum = i + 2;
 
-            const faculty = await User.findOne({ institutionId: row.faculty_id });
+            const faculty = await Employee.findOne({ institutionId: row.faculty_id });
             if (!faculty) {
                 errors.push({ row: rowNum, error: `Faculty not found: ${row.faculty_id}` });
                 continue;

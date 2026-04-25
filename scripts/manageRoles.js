@@ -2,8 +2,8 @@ require('dotenv').config({ path: __dirname + '/../.env' });
 const mongoose = require('mongoose');
 
 const Role = require('../modules/role/role.model');
-const UserAppRole = require('../modules/userAppRole/userAppRole.model');
-const User = require('../modules/user/user.model');
+const EmployeeAppRole = require('../modules/userAppRole/userAppRole.model');
+const Employee = require('../modules/employee/employee.model');
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb://kedarnadha_db_user:5uyAKg1rRFhH1f20@ac-pogja6y-shard-00-00.kcpzev0.mongodb.net:27017,ac-pogja6y-shard-00-01.kcpzev0.mongodb.net:27017,ac-pogja6y-shard-00-02.kcpzev0.mongodb.net:27017/UnifiedDb?ssl=true&replicaSet=atlas-vyaq5g-shard-0&authSource=admin&appName=Cluster0";
 const APP_NAME = process.env.APP_NAME || "UNIFIED_SYSTEM";
@@ -58,17 +58,17 @@ const run = async () => {
                 process.exit(1);
             }
 
-            const user = await User.findById(userId);
+            const user = await Employee.findById(userId);
             if (!user) {
-                console.error(`❌ User with ID ${userId} does not exist in the database!`);
+                console.error(`❌ Employee with ID ${userId} does not exist in the database!`);
                 process.exit(1);
             }
 
-            const existingAssignment = await UserAppRole.findOne({ userId: user._id, role: role._id, app: APP_NAME });
+            const existingAssignment = await EmployeeAppRole.findOne({ userId: user._id, role: role._id, app: APP_NAME });
             if (existingAssignment) {
-                console.log(`⚠️ User ${user.name} already has the '${roleName.toUpperCase()}' role assigned.`);
+                console.log(`⚠️ Employee ${user.name} already has the '${roleName.toUpperCase()}' role assigned.`);
             } else {
-                await UserAppRole.create({
+                await EmployeeAppRole.create({
                     userId: user._id,
                     role: role._id,
                     app: APP_NAME
@@ -84,7 +84,7 @@ const run = async () => {
         console.log(`Unknown action: ${action}`);
         console.log("Usage Commands:");
         console.log("  node scripts/manageRoles.js create-role \"<RoleName>\"");
-        console.log("  node scripts/manageRoles.js assign-role \"<RoleName>\" \"<UserId>\"");
+        console.log("  node scripts/manageRoles.js assign-role \"<RoleName>\" \"<EmployeeId>\"");
     }
 
     process.exit(0);

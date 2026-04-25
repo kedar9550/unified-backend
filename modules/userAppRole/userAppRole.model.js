@@ -3,8 +3,14 @@ const mongoose = require('mongoose');
 const UserAppRoleSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
         required: true,
+        refPath: 'userModel'
+    },
+    userModel: {
+        type: String,
+        required: true,
+        enum: ['Employee', 'Student'],
+        default: 'Employee'
     },
     app: {
         type: String,

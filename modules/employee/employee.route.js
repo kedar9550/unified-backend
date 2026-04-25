@@ -2,24 +2,20 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 const { protect } = require('../../middlewares/authMiddleware');
 
 const {
     registerUser,
     validateUser,
-    changePassword,
-    forgotPassword,
-    verifyOtp,
-    resetPasswordWithOtp,
     logoutUser,
     getMe,
     updateProfile,
     profileImage,
     searchUser,
     getecapdata,
-    getActiveUsersCount,
     bulkRegisterUser
-} = require('./user.controller');
+} = require('./employee.controller');
 
 // --- Multer Setup ---
 const storage = multer.diskStorage({
@@ -43,28 +39,12 @@ const csvStorage = multer.diskStorage({
         cb(null, 'bulk-' + Date.now() + '.csv');
     }
 });
-const uploadCsv = multer({ 
-    storage: csvStorage,
-    fileFilter: (req, file, cb) => {
-        if (file.mimetype === "text/csv" || path.extname(file.originalname).toLowerCase() === ".csv") {
-            cb(null, true);
-        } else {
-            cb(new Error("Only CSV files are allowed"), false);
-        }
-    }
-});
+const uploadCsv = multer({ storage: csvStorage });
 
 // --- Auth & Onboarding ---
 router.post('/register', registerUser);
-router.post('/login', validateUser); // Enterprise login
+router.post('/login', validateUser); 
 router.post('/logout', protect, logoutUser);
-
-
-// --- Password Recovery ---
-router.post('/password/forgot', forgotPassword);
-router.post('/password/verify-otp', verifyOtp);
-router.post('/password/reset', resetPasswordWithOtp);
-router.post('/password/change', protect, changePassword);
 
 // --- Profile & User Data ---
 router.get('/me', protect, getMe);
@@ -73,7 +53,6 @@ router.post('/me/profile-image', protect, upload.single('image'), profileImage);
 
 // --- Admin / Discovery ---
 router.get('/search', protect, searchUser);
-router.get('/active-count', protect, getActiveUsersCount);
 router.post('/ecap-data', getecapdata);
 router.post('/bulk-upload', protect, uploadCsv.single('file'), bulkRegisterUser);
 

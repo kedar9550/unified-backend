@@ -1,6 +1,6 @@
 const Role = require('./role.model');
-const UserAppRole = require('../userAppRole/userAppRole.model');
-const User = require('../user/user.model');
+const EmployeeAppRole = require('../userAppRole/userAppRole.model');
+const Employee = require('../employee/employee.model');
 
 // @desc    Get all roles
 // @route   GET /api/roles
@@ -88,7 +88,7 @@ exports.deleteRole = async (req, res, next) => {
         }
 
         // Also remove all user mappings for this role
-        await UserAppRole.deleteMany({ role: req.params.id });
+        await EmployeeAppRole.deleteMany({ role: req.params.id });
 
         res.status(200).json({
             success: true,
@@ -102,21 +102,21 @@ exports.deleteRole = async (req, res, next) => {
 // @desc    Assign user to role
 // @route   POST /api/roles/assign
 // @access  Private (Admin/UniPrime)
-exports.assignUserToRole = async (req, res, next) => {
+exports.assignEmployeeToRole = async (req, res, next) => {
     try {
         const { userId, roleId } = req.body;
         const app = process.env.APP_NAME || 'UNIFIED_SYSTEM';
 
         // Check if mapping exists
-        const existingMapping = await UserAppRole.findOne({ userId, role: roleId, app });
+        const existingMapping = await EmployeeAppRole.findOne({ userId, role: roleId, app });
         if (existingMapping) {
             return res.status(400).json({
                 success: false,
-                message: 'User already assigned to this role'
+                message: 'Employee already assigned to this role'
             });
         }
 
-        const mapping = await UserAppRole.create({
+        const mapping = await EmployeeAppRole.create({
             userId,
             role: roleId,
             app
@@ -134,9 +134,9 @@ exports.assignUserToRole = async (req, res, next) => {
 // @desc    Get users for a role
 // @route   GET /api/roles/:id/users
 // @access  Private (Admin/UniPrime)
-exports.getRoleUsers = async (req, res, next) => {
+exports.getRoleEmployees = async (req, res, next) => {
     try {
-        const mappings = await UserAppRole.find({ role: req.params.id })
+        const mappings = await EmployeeAppRole.find({ role: req.params.id })
             .populate('userId', 'name institutionId email userType');
         
         const users = mappings.map(m => m.userId).filter(u => u !== null);
@@ -153,12 +153,12 @@ exports.getRoleUsers = async (req, res, next) => {
 // @desc    Remove user from role
 // @route   DELETE /api/roles/:id/users/:userId
 // @access  Private (Admin/UniPrime)
-exports.removeUserFromRole = async (req, res, next) => {
+exports.removeEmployeeFromRole = async (req, res, next) => {
     try {
         const { id, userId } = req.params;
         const app = process.env.APP_NAME || 'UNIFIED_SYSTEM';
 
-        const mapping = await UserAppRole.findOneAndDelete({ userId, role: id, app });
+        const mapping = await EmployeeAppRole.findOneAndDelete({ userId, role: id, app });
 
         if (!mapping) {
             return res.status(404).json({
@@ -169,7 +169,7 @@ exports.removeUserFromRole = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            message: 'User removed from role'
+            message: 'Employee removed from role'
         });
     } catch (error) {
         next(error);
@@ -178,9 +178,9 @@ exports.removeUserFromRole = async (req, res, next) => {
 // @desc    Get roles for a specific user
 // @route   GET /api/roles/user/:userId
 // @access  Private (Admin/UniPrime)
-exports.getUserRoles = async (req, res, next) => {
+exports.getEmployeeRoles = async (req, res, next) => {
     try {
-        const mappings = await UserAppRole.find({ userId: req.params.userId })
+        const mappings = await EmployeeAppRole.find({ userId: req.params.userId })
             .populate('role', 'name description');
         
         const roles = mappings.map(m => m.role).filter(r => r !== null);
@@ -205,14 +205,14 @@ const getIdentityBasedRoleName = (userType, designation) => {
 // @desc    Sync user roles (Bulk Update with Default Role Enforcement)
 // @route   POST /api/roles/user/sync
 // @access  Private (Admin/UniPrime)
-exports.syncUserRoles = async (req, res, next) => {
+exports.syncEmployeeRoles = async (req, res, next) => {
     try {
         const { userId, roleIds, hodDepartments } = req.body;
         const app = process.env.APP_NAME || 'UNIFIED_SYSTEM';
 
         // 1. Fetch user to check identity
-        const user = await User.findById(userId);
-        if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+        const user = await Employee.findById(userId);
+        if (!user) return res.status(404).json({ success: false, message: 'Employee not found' });
 
         // 2. Identify default roles and HOD in the provided selection
         const selectedRoles = await Role.find({ _id: { $in: roleIds } });
@@ -225,7 +225,7 @@ exports.syncUserRoles = async (req, res, next) => {
         if (selectedDefaultRoles.length > 1) {
             return res.status(400).json({
                 success: false,
-                message: `User can only have one default role. Found: ${selectedDefaultRoles.map(r => r.name).join(', ')}`
+                message: `Employee can only have one default role. Found: ${selectedDefaultRoles.map(r => r.name).join(', ')}`
             });
         }
 
@@ -240,7 +240,7 @@ exports.syncUserRoles = async (req, res, next) => {
         }
 
         // 4. Update mappings
-        await UserAppRole.deleteMany({ userId, app });
+        await EmployeeAppRole.deleteMany({ userId, app });
 
         const mappings = finalRoleIds.map(roleId => {
             const mapping = {
@@ -255,11 +255,11 @@ exports.syncUserRoles = async (req, res, next) => {
             return mapping;
         });
         
-        await UserAppRole.insertMany(mappings);
+        await EmployeeAppRole.insertMany(mappings);
 
         res.status(200).json({
             success: true,
-            message: 'User roles and context updated successfully'
+            message: 'Employee roles and context updated successfully'
         });
     } catch (error) {
         next(error);
@@ -269,10 +269,10 @@ exports.syncUserRoles = async (req, res, next) => {
 // @desc    Reconcile default roles for all users (Migration)
 // @route   POST /api/roles/reconcile-all
 // @access  Private (Admin/UniPrime)
-exports.reconcileAllUserRoles = async (req, res, next) => {
+exports.reconcileAllEmployeeRoles = async (req, res, next) => {
     try {
         const app = process.env.APP_NAME || 'UNIFIED_SYSTEM';
-        const users = await User.find();
+        const users = await Employee.find();
         let updatedCount = 0;
 
         for (const user of users) {
@@ -288,21 +288,21 @@ exports.reconcileAllUserRoles = async (req, res, next) => {
             }
 
             // Check if user has this role
-            const existingMapping = await UserAppRole.findOne({ userId: user._id, role: idRole._id, app });
+            const existingMapping = await EmployeeAppRole.findOne({ userId: user._id, role: idRole._id, app });
             
             // Check if user has other default roles
-            const otherMappings = await UserAppRole.find({ userId: user._id, app }).populate('role');
+            const otherMappings = await EmployeeAppRole.find({ userId: user._id, app }).populate('role');
             const otherDefaultRoles = otherMappings.filter(m => m.role?.defaultRole && m.role?.name !== identityRoleName);
 
             if (!existingMapping || otherDefaultRoles.length > 0) {
                 // Fix: Remove extra default roles, ensure identity-based one exists
                 if (otherDefaultRoles.length > 0) {
                     const idsToRemove = otherDefaultRoles.map(m => m._id);
-                    await UserAppRole.deleteMany({ _id: { $in: idsToRemove } });
+                    await EmployeeAppRole.deleteMany({ _id: { $in: idsToRemove } });
                 }
 
                 if (!existingMapping) {
-                    await UserAppRole.create({ userId: user._id, role: idRole._id, app });
+                    await EmployeeAppRole.create({ userId: user._id, role: idRole._id, app });
                 }
                 updatedCount++;
             }

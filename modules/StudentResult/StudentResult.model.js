@@ -100,7 +100,7 @@ const StudentResultSchema = new mongoose.Schema({
     //  Audit
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Employee",
     },
 
 }, { timestamps: true });

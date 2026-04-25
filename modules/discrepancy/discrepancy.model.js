@@ -4,7 +4,7 @@ const DiscrepancySchema = new mongoose.Schema({
     // Who raised it
     raisedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "User",
+        ref: "Employee",
         required: true,
     },
     facultyInstitutionId: { type: String, trim: true },
@@ -39,7 +39,7 @@ const DiscrepancySchema = new mongoose.Schema({
     },
 
     // Resolution
-    resolvedBy:     { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    resolvedBy:     { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
     resolutionNote: { type: String, trim: true },
     rejectionNote:  { type: String, trim: true },
     proofDocument:  { type: String },

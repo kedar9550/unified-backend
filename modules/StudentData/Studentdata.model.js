@@ -1,4 +1,5 @@
-import mongoose from "mongoose";
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
 
 const studentSchema = new mongoose.Schema({
 
@@ -99,6 +100,31 @@ const studentSchema = new mongoose.Schema({
     password: { type: String, required: true }
   }
 
-}, { timestamps: true });
 
-export default mongoose.model("Student", studentSchema);
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true }
+});
+
+
+studentSchema.virtual("assignmentStatus").get(function () {
+  if (this.academicInfo?.department && this.academicInfo?.semester) {
+    return "Assigned";
+  }
+  return "Unassigned";
+});
+
+// hash password
+studentSchema.pre("save", async function () {
+    if (!this.isModified("system.password")) return;
+    const salt = await bcrypt.genSalt(10);
+    this.system.password = await bcrypt.hash(this.system.password, salt);
+});
+
+// compare password
+studentSchema.methods.comparePassword = function (password) {
+    return bcrypt.compare(password, this.system.password);
+};
+
+module.exports = mongoose.model("Student", studentSchema);
