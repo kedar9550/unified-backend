@@ -1,6 +1,7 @@
 const Employee = require('./employee.model');
 const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
+const Department = require('../academics/department.model');
 const authService = require('../../utils/authService');
 const generateToken = require('../../utils/generateToken');
 const sendOtpSms = require('../../utils/smsService');
@@ -47,10 +48,21 @@ const registerUser = async (req, res) => {
             console.error("ECAP ERROR:", apiErr.message);
         }
 
+        const deptRecord = await Department.findOne({
+            $or: [
+                { name: new RegExp(`^${department}$`, 'i') },
+                { code: new RegExp(`^${department}$`, 'i') }
+            ]
+        });
+
+        if (!deptRecord) {
+            return res.status(404).json({ message: `Department '${department}' not found in our system. Please add it first.` });
+        }
+
         const employee = await Employee.create({
             name: fullname,
             institutionId: id,
-            department,
+            department: deptRecord._id,
             designation,
             email,
             phone,
@@ -216,7 +228,38 @@ const searchUser = async (req, res) => {
         const isNumeric = /^[0-9]+$/.test(query);
         const matchStage = isNumeric ? { institutionId: query } : { name: { $regex: query, $options: "i" } };
 
-        const users = await Employee.find(matchStage).limit(20).select('name institutionId email department designation userType');
+        const users = await Employee.aggregate([
+            { $match: matchStage },
+            { $limit: 20 },
+            {
+                $lookup: {
+                    from: 'userapproles',
+                    localField: '_id',
+                    foreignField: 'userId',
+                    as: 'userAppRoles'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'roles',
+                    localField: 'userAppRoles.role',
+                    foreignField: '_id',
+                    as: 'roles'
+                }
+            },
+            {
+                $project: {
+                    name: 1,
+                    institutionId: 1,
+                    email: 1,
+                    department: 1,
+                    designation: 1,
+                    userType: { $literal: 'Employee' },
+                    roles: 1
+                }
+            }
+        ]);
+        
         res.status(200).json(users);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -257,35 +300,91 @@ const bulkRegisterUser = async (req, res) => {
 
         for await (const row of stream) {
             try {
-                const { name, institutionId, department, designation, email, phone, password, userType } = row;
+                const institutionId = row.institutionId?.trim();
+                const email = row.email?.trim();
 
-                if (!name || !institutionId || !department || !email || !phone || !password || !userType) {
-                    errors.push({ id: institutionId || "Unknown", error: "Missing required fields" });
+                if (!institutionId) {
+                    errors.push({ id: "Unknown", error: "Missing institutionId in CSV" });
                     continue;
                 }
 
-                if (userType === "Employee") {
-                    const existing = await Employee.findOne({ $or: [{ institutionId }, { email: email.toLowerCase() }] });
-                    if (existing) {
-                        errors.push({ id: institutionId, error: "Already exists" });
-                        continue;
-                    }
-
-                    const user = await Employee.create({ name, institutionId, department, designation, email, phone, password });
-                    
-                    let roleName = "STAFF";
-                    const checkDesig = (designation || "").toLowerCase();
-                    if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) roleName = "FACULTY";
-                    else if (/technician|programmer/i.test(checkDesig)) roleName = "TECHNICIAN";
-
-                    let defaultRole = await Role.findOne({ name: roleName, app: appName });
-                    if (!defaultRole) defaultRole = await Role.create({ name: roleName, app: appName, defaultRole: true, description: `Default role for ${roleName}` });
-
-                    await UserAppRole.create({ userId: user._id, userModel: 'Employee', app: appName, role: defaultRole._id });
-                    results.push({ id: institutionId, status: "Success" });
-                } else {
-                    errors.push({ id: institutionId, error: "Only Employee bulk upload supported here" });
+                if (!email) {
+                    errors.push({ id: institutionId, error: "Missing email in CSV" });
+                    continue;
                 }
+
+                // Validate email format
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    errors.push({ id: institutionId, error: "Invalid email format" });
+                    continue;
+                }
+
+                const existing = await Employee.findOne({ $or: [{ institutionId }, { email: email.toLowerCase() }] });
+                if (existing) {
+                    errors.push({ id: institutionId, error: "Employee with this ID or Email already exists" });
+                    continue;
+                }
+
+                // Fetch ECAP Data
+                let identityData = null;
+                try {
+                    const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${institutionId}`);
+                    identityData = identityResponse?.data?.[0];
+                } catch (apiErr) {
+                    errors.push({ id: institutionId, error: "Failed to connect to ECAP API" });
+                    continue;
+                }
+
+                if (!identityData || identityData.error) {
+                    errors.push({ id: institutionId, error: "Invalid Employee ID. Not found in ECAP" });
+                    continue;
+                }
+
+                const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
+                const ecapDept = (identityData.departmentname || identityData.DepartmentName)?.trim();
+                const ecapDesig = (identityData.designation || identityData.Designation)?.trim() || "Employee";
+                const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim() || "0000000000";
+
+                if (!ecapName || !ecapDept) {
+                    errors.push({ id: institutionId, error: "Missing Name or Department in ECAP Data" });
+                    continue;
+                }
+
+                // Match Department
+                const deptRecord = await Department.findOne({
+                    $or: [
+                        { name: new RegExp(`^${ecapDept}$`, 'i') },
+                        { code: new RegExp(`^${ecapDept}$`, 'i') }
+                    ]
+                });
+
+                if (!deptRecord) {
+                    errors.push({ id: institutionId, error: `Department '${ecapDept}' from ECAP not found in our system.` });
+                    continue;
+                }
+
+                const password = "Aditya@123"; // Default password
+
+                const user = await Employee.create({ 
+                    name: ecapName, 
+                    institutionId, 
+                    department: deptRecord._id, 
+                    designation: ecapDesig, 
+                    email, 
+                    phone: ecapPhone, 
+                    password 
+                });
+                
+                let roleName = "STAFF";
+                const checkDesig = (ecapDesig || "").toLowerCase();
+                if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) roleName = "FACULTY";
+                else if (/technician|programmer/i.test(checkDesig)) roleName = "TECHNICIAN";
+
+                let defaultRole = await Role.findOne({ name: roleName, app: appName });
+                if (!defaultRole) defaultRole = await Role.create({ name: roleName, app: appName, defaultRole: true, description: `Default role for ${roleName}` });
+
+                await UserAppRole.create({ userId: user._id, userModel: 'Employee', app: appName, role: defaultRole._id });
+                results.push({ id: institutionId, status: "Success" });
             } catch (rowErr) {
                 errors.push({ id: row.institutionId || "Unknown", error: rowErr.message });
             }
