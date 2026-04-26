@@ -20,18 +20,24 @@ const studentSchema = new mongoose.Schema({
   academicInfo: {
     programName: { type: String, required: true, },
     branch: { type: String, required: true },
-    department: String,
-    semester: String,
+    department: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
+    semester: Number,
     joinedBatch: { type: Number, required: true },
     academicBatch: { type: Number, required: true },
     joinedYear: { type: String, required: true },
     relievedYear: { type: String, required: true },
     studentStatus: { type: String, enum: ["Regular", "Transfer", "Alumni", "Detained"] },
-    entranceType: { type: String, enum: ["EAMCET", "I-CET", "Diploma", "Lateral Entry", "Management", "Other"] },
-    seatType: { type: String, enum: ["foreign-nation", "Management", "Convener"], required: true },
+    entranceType: { type: String },
+    seatType: { type: String },
     eamcetHallTicketNumber: String,
     eamcetRank: Number,
-    scholarship: String
+    scholarship: String,
+    backlogs: { type: Number, default: 0 },
+    overallPercent: { type: Number, default: 0 },
+    semesterResults: [{
+      semester: Number,
+      percentage: Number
+    }]
   },
 
   contactInfo: {
@@ -117,14 +123,14 @@ studentSchema.virtual("assignmentStatus").get(function () {
 
 // hash password
 studentSchema.pre("save", async function () {
-    if (!this.isModified("system.password")) return;
-    const salt = await bcrypt.genSalt(10);
-    this.system.password = await bcrypt.hash(this.system.password, salt);
+  if (!this.isModified("system.password")) return;
+  const salt = await bcrypt.genSalt(10);
+  this.system.password = await bcrypt.hash(this.system.password, salt);
 });
 
 // compare password
 studentSchema.methods.comparePassword = function (password) {
-    return bcrypt.compare(password, this.system.password);
+  return bcrypt.compare(password, this.system.password);
 };
 
 module.exports = mongoose.model("Student", studentSchema);

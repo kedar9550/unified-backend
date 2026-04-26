@@ -26,6 +26,8 @@ const upload = multer({
 });
 
 // Routes
+router.post("/add", controller.addStudent);
+router.post("/sync", controller.syncStudentData);
 router.post("/upload", upload.single("file"), controller.uploadStudentCSV);
 router.get("/unassigned", controller.getUnassignedStudents);
 router.get("/assigned", controller.getAssignedStudents);
