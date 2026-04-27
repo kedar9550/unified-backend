@@ -1,5 +1,7 @@
 const Student = require("./Studentdata.model");
 const Department = require("../academics/department.model");
+const Program = require("../academics/program.model");
+const Branch = require("../academics/branch.model");
 const studentService = require("./student.service");
 const csv = require("csv-parser");
 const fs = require("fs");
@@ -331,6 +333,35 @@ exports.getAssignedStudents = async (req, res) => {
     }).populate("academicInfo.department", "name code").sort({ updatedAt: -1 });
     res.status(200).json({ success: true, data: students });
   } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * Get Unique Programs, Branches, and Departments for filtering
+ */
+exports.getFilterOptions = async (req, res) => {
+  try {
+    console.log("Fetching filter options from master models...");
+    
+    const programs = await Program.find({ status: true }, "name").sort("name");
+    const branches = await Branch.find({ status: true }, "name").sort("name");
+    const departments = await Department.find({ status: true }, "name code").sort("name");
+
+    console.log("Found master programs:", programs.length);
+    console.log("Found master branches:", branches.length);
+    console.log("Found master depts:", departments.length);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        programs: programs.map(p => p.name),
+        branches: [...new Set(branches.map(b => b.name))], // Unique branch names
+        departments: departments.map(d => ({ id: d._id, name: d.name, code: d.code }))
+      }
+    });
+  } catch (error) {
+    console.error("Error in getFilterOptions:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

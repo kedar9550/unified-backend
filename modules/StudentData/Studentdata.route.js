@@ -31,6 +31,7 @@ router.post("/sync", controller.syncStudentData);
 router.post("/upload", upload.single("file"), controller.uploadStudentCSV);
 router.get("/unassigned", controller.getUnassignedStudents);
 router.get("/assigned", controller.getAssignedStudents);
+router.get("/filter-options", controller.getFilterOptions);
 router.post("/assign", controller.assignStudents);
 router.delete("/all/unassigned", controller.deleteAllUnassigned);
 router.delete("/:rollNo", controller.deleteStudent);
