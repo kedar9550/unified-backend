@@ -4,12 +4,14 @@ const branchSchema = new mongoose.Schema({
     programId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Program',
-        required: true
+        required: true,
+        index: true
     },
     departmentId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Department',
-        required: true
+        required: true,
+        index: true
     },
     name: {
         type: String,
@@ -25,7 +27,8 @@ const branchSchema = new mongoose.Schema({
     },
     status: {
         type: Boolean,
-        default: true
+        default: true,
+        index: true
     }
 }, { timestamps: true });
 

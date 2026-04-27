@@ -24,11 +24,9 @@ const programSchema = new mongoose.Schema({
         trim: true
     },
     status: {
-
-
-
         type: Boolean,
-        default: true
+        default: true,
+        index: true
     }
 }, { timestamps: true });
 

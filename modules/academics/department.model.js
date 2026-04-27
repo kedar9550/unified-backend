@@ -20,7 +20,8 @@ const departmentSchema = new mongoose.Schema({
     },
     status: {
         type: Boolean,
-        default: true
+        default: true,
+        index: true
     },
     hasStudents: {
         type: Boolean,

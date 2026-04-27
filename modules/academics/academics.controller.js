@@ -11,8 +11,7 @@ const Branch = require('./branch.model');
 // @access  Private (UNIPRIME only)
 exports.createDepartment = async (req, res, next) => {
     try {
-        const { name, code, description, status, hasStudents } = req.body;
-        const department = new Department({ name, code, description, status, hasStudents });
+        const department = new Department(req.body);
         const savedDept = await department.save();
         res.status(201).json({ success: true, data: savedDept });
     } catch (error) {
@@ -32,7 +31,21 @@ exports.createDepartment = async (req, res, next) => {
 // @access  Private
 exports.getAllDepartments = async (req, res, next) => {
     try {
-        const departments = await Department.find();
+        const query = {};
+        if (req.query.status !== undefined) {
+            query.status = req.query.status === 'true';
+        } else {
+            query.status = true; // Default to active only as per requirement
+        }
+
+        if (req.query.programId) {
+            // Find all branches for this program
+            const branches = await Branch.find({ programId: req.query.programId }).select('departmentId');
+            const deptIds = branches.map(b => b.departmentId);
+            query._id = { $in: deptIds };
+        }
+
+        const departments = await Department.find(query);
         res.status(200).json({ success: true, data: departments });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -107,6 +120,12 @@ exports.getAllPrograms = async (req, res, next) => {
     try {
         const query = {};
         if (req.query.type) query.type = req.query.type;
+        
+        if (req.query.status !== undefined) {
+            query.status = req.query.status === 'true';
+        } else {
+            query.status = true; // Default to active only
+        }
 
         const programs = await Program.find(query);
         res.status(200).json({ success: true, data: programs });
@@ -191,6 +210,12 @@ exports.getAllBranches = async (req, res, next) => {
         const query = {};
         if (req.query.programId) query.programId = req.query.programId;
         if (req.query.departmentId) query.departmentId = req.query.departmentId;
+        
+        if (req.query.status !== undefined) {
+            query.status = req.query.status === 'true';
+        } else {
+            query.status = true; // Default to active only
+        }
 
         const branches = await Branch.find(query)
             .populate('programId')
