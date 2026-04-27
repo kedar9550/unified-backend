@@ -38,6 +38,7 @@ const loginUser = async (institutionId, password, appName) => {
     const roles = userAppRoles.map(uar => ({
         role: uar.role.name,
         app: uar.app,
+        departments: uar.departments || [],
         permissions: [] 
     }));
 

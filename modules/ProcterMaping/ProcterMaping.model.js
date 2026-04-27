@@ -6,6 +6,10 @@ const procterMapingSchema = new mongoose.Schema({
         ref: "AcademicYear",
         required: true
     },
+    semester: {
+        type: Number,
+        required: true
+    },
     semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "SemesterType",
@@ -27,6 +31,11 @@ const procterMapingSchema = new mongoose.Schema({
         type: String,
         required: true
     }
-})
+}, { timestamps: true });
+
+procterMapingSchema.index(
+    { studentId: 1, semester: 1 },
+    { unique: true }
+);
 
 module.exports = mongoose.model("ProcterMaping", procterMapingSchema);

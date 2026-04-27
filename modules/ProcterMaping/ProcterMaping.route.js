@@ -4,6 +4,8 @@ const multer = require("multer");
 const {
     uploadCSV,
     getMappings,
+    getStudentsForMapping,
+    createMapping,
     updateMapping,
     deleteMapping,
     deleteSemesterData
@@ -34,6 +36,13 @@ router.post(
     uploadCSV
 );
 
+router.post(
+    "/",
+    protect,
+    authorize("ADMIN", "HOD"),
+    createMapping
+);
+
 router.delete(
     "/semester",
     protect,
@@ -57,5 +66,6 @@ router.delete(
 
 // Read operations
 router.get("/", protect, getMappings);
+router.get("/students", protect, getStudentsForMapping);
 
 module.exports = router;
