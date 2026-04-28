@@ -6,17 +6,15 @@ const Branch = require("../academics/branch.model");
 const ProcterMaping = require("../ProcterMaping/ProcterMaping.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
-// @desc    Download CSV template specific to program (no program column in CSV)
+const Student = require("../StudentData/Studentdata.model");
+// @desc    Download CSV template
 // @route   GET /api/student-results/template
 const downloadTemplate = (req, res) => {
     const headers = [
         "studentid",
-        "studentname",
         "subjectcode",
         "subjectname",
-        "academicyear",
         "semester",
-        "branchcode",
         "examyear",
         "resulttype",
         "grade",
@@ -35,109 +33,115 @@ const downloadTemplate = (req, res) => {
 const updateProctorSummaries = async (uploadedResults) => {
     try {
         console.log(`[ProctorSummary] Starting update for ${uploadedResults.length} uploaded results`);
-        const termData = {}; 
+        
+        // Extract unique studentIds and semesters from the uploaded results
+        const studentIds = [...new Set(uploadedResults.map(r => r.studentId))];
+        const semesters = [...new Set(uploadedResults.map(r => r.semester))];
+        const numericSemesters = semesters.map(s => Number(s)).filter(s => !isNaN(s));
 
-        uploadedResults.forEach(r => {
-            const key = `${r.academicYearId}_${r.semesterTypeId}`;
-            if (!termData[key]) {
-                termData[key] = {
-                    academicYearId: r.academicYearId,
-                    semesterTypeId: r.semesterTypeId,
-                    studentIds: new Set()
-                };
-            }
-            termData[key].studentIds.add(r.studentId);
+        // 1. Find the Procter mappings for these students and semesters
+        const mappings = await ProcterMaping.find({
+            studentId: { $in: studentIds },
+            $or: [
+                { semester: { $in: semesters } },
+                { semester: { $in: numericSemesters } }
+            ]
         });
 
-        console.log(`[ProctorSummary] Found ${Object.keys(termData).length} unique terms`);
+        if (mappings.length === 0) {
+            console.log(`[ProctorSummary] No proctor mappings found for these students/semesters.`);
+            return;
+        }
 
-        for (const key of Object.keys(termData)) {
-            const { academicYearId, semesterTypeId, studentIds } = termData[key];
-            const sIdsArray = Array.from(studentIds);
+        console.log(`[ProctorSummary] Found ${mappings.length} ProcterMaping records.`);
+
+        // 2. Group by proctorId + academicYearId + semesterTypeId
+        const proctorTerms = {}; 
+        
+        mappings.forEach(m => {
+            const key = `${m.proctorId}_${m.academicYearId}_${m.semesterTypeId}`;
+            if (!proctorTerms[key]) {
+                proctorTerms[key] = {
+                    proctorId: m.proctorId,
+                    proctorName: m.proctorName,
+                    academicYearId: m.academicYearId,
+                    semesterTypeId: m.semesterTypeId,
+                };
+            }
+        });
+
+        // 3. Recalculate summary for each affected proctor term
+        for (const key of Object.keys(proctorTerms)) {
+            const { proctorId, proctorName, academicYearId, semesterTypeId } = proctorTerms[key];
             
-            console.log(`[ProctorSummary] Term ${key}: Checking ${sIdsArray.length} students`);
-
-            // Find proctors mapped to these students for this Academic Year (ignoring strict semester match)
-            const mappings = await ProcterMaping.find({
+            // Fetch ALL assigned students for this proctor in this academic term
+            const allProctorMappings = await ProcterMaping.find({
+                proctorId: proctorId,
                 academicYearId: academicYearId,
-                studentId: { $in: sIdsArray }
+                semesterTypeId: semesterTypeId
+            });
+            
+            // Map student -> semester for their assignment
+            const assignmentMap = new Map();
+            allProctorMappings.forEach(m => {
+                assignmentMap.set(m.studentId, m.semester);
+            });
+            
+            const allAssignedSIds = Array.from(assignmentMap.keys());
+
+            // Fetch REGULAR results for all their assigned students in their respective mapped semesters
+            const results = await StudentResult.find({
+                studentId: { $in: allAssignedSIds },
+                resultType: "REGULAR"
             });
 
-            console.log(`[ProctorSummary] Found ${mappings.length} ProcterMaping records for term`);
+            // Filter results to only include the semester the student was mapped to for this proctor
+            const validResults = results.filter(res => {
+                const assignedSem = assignmentMap.get(res.studentId);
+                if (assignedSem === undefined || assignedSem === null) return false;
+                return res.semester.toString() === assignedSem.toString();
+            });
 
-            if (mappings.length === 0) continue;
+            console.log(`[ProctorSummary] Proctor ${proctorId}: assigned ${allAssignedSIds.length} students, fetched ${validResults.length} valid result records`);
 
-            const proctorMap = {}; // Group by proctorId
-            mappings.forEach(m => {
-                if (!proctorMap[m.proctorId]) {
-                    proctorMap[m.proctorId] = { proctorName: m.proctorName };
+            const failedStudentIds = new Set();
+            validResults.forEach(resRow => {
+                if (resRow.result && resRow.result.toUpperCase() === "FAIL") {
+                    failedStudentIds.add(resRow.studentId);
                 }
             });
 
-            console.log(`[ProctorSummary] Found ${Object.keys(proctorMap).length} unique proctors mapped to these students`);
+            const appearedStudentIds = new Set(validResults.map(r => r.studentId));
+            const totalAssigned = allAssignedSIds.length;
+            const studentsAppeared = appearedStudentIds.size;
+            const studentsFailed = failedStudentIds.size;
+            
+            const studentsPassed = studentsAppeared - studentsFailed;
+            const passPercentage = studentsAppeared > 0 ? ((studentsPassed / studentsAppeared) * 100).toFixed(2) : 0;
 
-            for (const [proctorId, pData] of Object.entries(proctorMap)) {
-                // Fetch ALL their assigned students for this Academic Year to ensure accurate total count
-                const allProctorMappings = await ProcterMaping.find({
-                    proctorId: proctorId,
-                    academicYearId: academicYearId
-                });
-                
-                // Use a Set to enforce unique students (in case they mapped the same student in multiple semesters)
-                const uniqueAssignedSIds = new Set(allProctorMappings.map(m => m.studentId));
-                const allAssignedSIds = Array.from(uniqueAssignedSIds);
+            console.log(`[ProctorSummary] Proctor ${proctorId}: Total:${totalAssigned}, Appeared:${studentsAppeared}, Passed:${studentsPassed}, Fail:${studentsFailed}, %:${passPercentage}`);
 
-                // Fetch REGULAR results for all their assigned students
-                const results = await StudentResult.find({
-                    studentId: { $in: allAssignedSIds },
+            await ProctorSummary.findOneAndUpdate(
+                {
                     academicYearId: academicYearId,
                     semesterTypeId: semesterTypeId,
-                    resultType: "REGULAR"
-                });
-
-                console.log(`[ProctorSummary] Proctor ${proctorId}: assigned ${allAssignedSIds.length} students, fetched ${results.length} result records`);
-
-                const failedStudentIds = new Set();
-                results.forEach(resRow => {
-                    if (resRow.result && resRow.result.toUpperCase() === "FAIL") {
-                        failedStudentIds.add(resRow.studentId);
+                    proctorId: proctorId
+                },
+                {
+                    $set: {
+                        proctorName: proctorName,
+                        totalMappedStudents: totalAssigned,
+                        studentsAppeared: studentsAppeared,
+                        studentsPassed: studentsPassed,
+                        passPercentage: Number(passPercentage),
+                        lastCalculatedAt: new Date()
                     }
-                });
-
-                const appearedStudentIds = new Set(results.map(r => r.studentId));
-                const totalAssigned = allAssignedSIds.length;
-                const studentsAppeared = appearedStudentIds.size;
-                const studentsFailed = failedStudentIds.size;
-                
-                // Passed = Students who actually had results (appeared) minus those who failed
-                const studentsPassed = studentsAppeared - studentsFailed;
-                
-                // Pass percentage is (Passed / Appeared) * 100
-                const passPercentage = studentsAppeared > 0 ? ((studentsPassed / studentsAppeared) * 100).toFixed(2) : 0;
-
-                console.log(`[ProctorSummary] Proctor ${proctorId}: Total:${totalAssigned}, Appeared:${appearedStudentIds.size}, Passed:${studentsPassed}, Fail:${studentsFailed}, %:${passPercentage}`);
-
-                const updated = await ProctorSummary.findOneAndUpdate(
-                    {
-                        academicYearId: academicYearId,
-                        semesterTypeId: semesterTypeId,
-                        proctorId: proctorId
-                    },
-                    {
-                        $set: {
-                            proctorName: pData.proctorName,
-                            totalMappedStudents: totalAssigned,
-                            studentsAppeared: appearedStudentIds.size,
-                            studentsPassed: studentsPassed,
-                            passPercentage: Number(passPercentage),
-                            lastCalculatedAt: new Date()
-                        }
-                    },
-                    { upsert: true, new: true, runValidators: true } // Added runValidators
-                );
-                console.log(`[ProctorSummary] Successfully upserted summary for proctor ${proctorId}`);
-            }
+                },
+                { upsert: true, new: true, runValidators: true }
+            );
+            console.log(`[ProctorSummary] Successfully upserted summary for proctor ${proctorId}`);
         }
+        
         console.log(`[ProctorSummary] Finished updateProctorSummaries`);
     } catch (err) {
         console.error("Error updating proctor summaries in background: ", err);
@@ -150,26 +154,12 @@ const uploadCSV = async (req, res) => {
             return res.status(400).json({ message: "No CSV file uploaded" });
         }
 
-        const { programId } = req.body;
-
-        if (!programId) {
-            return res.status(400).json({ message: "Program ID is required from frontend selection" });
-        }
-
-        const programObj = await Program.findById(programId);
-        if (!programObj) {
-            return res.status(404).json({ message: "Selected program not found." });
-        }
-
         const rows = parseCSV(req.file.buffer);
         const requiredHeaders = [
             "studentid",
-            "studentname",
             "subjectcode",
             "subjectname",
-            "academicyear",
             "semester",
-            "branchcode",
             "examyear",
             "resulttype",
             "grade",
@@ -184,20 +174,17 @@ const uploadCSV = async (req, res) => {
         const errors = [];
 
         // Cache for optimization
-        const ayCache = {};
-        const semTypeCache = {};
+        const studentCache = {};
+        const programCache = {};
         const branchCache = {};
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const {
                 studentid,
-                studentname,
                 subjectcode,
                 subjectname,
-                academicyear,
                 semester,
-                branchcode,
                 examyear,
                 resulttype,
                 grade,
@@ -208,84 +195,70 @@ const uploadCSV = async (req, res) => {
 
             const rowNum = i + 2;
 
-            // 1. Resolve Academic Year
-            let ayId = ayCache[academicyear];
-            if (!ayId) {
-                const ay = await AcademicYear.findOne({ year: academicyear });
-                if (!ay) {
-                    errors.push(`Row ${rowNum}: Academic Year '${academicyear}' not found.`);
-                    continue;
-                }
-                ayId = ay._id;
-                ayCache[academicyear] = ayId;
-            }
-
-            // 2. Resolve Semester Type and Semester instance automatically
-            let semesterTypeName = "";
-            const semVal = (semester || "").toString().trim().toUpperCase();
-
-            if (semVal === "SUMMER") {
-                semesterTypeName = "SUMMER";
-            } else {
-                const semNum = parseInt(semVal);
-                if (isNaN(semNum)) {
-                    errors.push(`Row ${rowNum}: Invalid semester value '${semester}'.`);
-                    continue;
-                }
-                semesterTypeName = semNum % 2 === 0 ? "EVEN" : "ODD";
-            }
-
-            // Resolve SemesterType ID
-            let semTypeId = semTypeCache[semesterTypeName];
-            if (!semTypeId) {
-                const st = await SemesterType.findOne({ name: semesterTypeName });
-                if (!st) {
-                    errors.push(`Row ${rowNum}: Global Semester Type '${semesterTypeName}' not found. Please seed semester types.`);
-                    continue;
-                }
-                semTypeId = st._id;
-                semTypeCache[semesterTypeName] = semTypeId;
-            }
-
-            // 3. Resolve Branch from short code in CSV
-            const branchShortCode = (branchcode || "").toString().trim().toUpperCase();
-            let branchData = branchCache[branchShortCode];
-            if (!branchData) {
-                const branchObj = await Branch.findOne({
-                    programId: programId,
-                    code: branchShortCode
-                });
-                if (!branchObj) {
-                    errors.push(`Row ${rowNum}: Branch code '${branchShortCode}' not found for the selected program.`);
-                    continue;
-                }
-                branchData = { bId: branchObj._id, deptId: branchObj.departmentId };
-                branchCache[branchShortCode] = branchData;
-            }
-            const bId = branchData.bId;
-            const rowDeptId = branchData.deptId;
-
             const sId = (studentid || "").trim();
-            const sName = (studentname || "").trim();
             const subCode = (subjectcode || "").trim();
             const subName = (subjectname || "").trim();
             const eYear = (examyear || "").toString().trim();
             const rType = (resulttype || "REGULAR").toString().trim().toUpperCase();
+            const semVal = (semester || "").toString().trim().toUpperCase();
 
-            if (!sId || !subCode || !eYear) {
-                errors.push(`Row ${rowNum}: Missing studentId, subjectCode, or examYear.`);
+            if (!sId || !subCode || !eYear || !semVal) {
+                errors.push(`Row ${rowNum}: Missing studentid, subjectcode, semester, or examyear.`);
                 continue;
             }
 
-            // 4. Duplicate Prevention
+            // 1. Resolve Student to get name, department, program, branch
+            let studentData = studentCache[sId];
+            if (!studentData) {
+                const studentObj = await Student.findOne({ rollNo: sId });
+                if (!studentObj) {
+                    errors.push(`Row ${rowNum}: Student with ID '${sId}' not found in the system.`);
+                    continue;
+                }
+                studentData = {
+                    name: studentObj.personalInfo?.studentName || "",
+                    departmentId: studentObj.academicInfo?.department,
+                    programName: studentObj.academicInfo?.programName,
+                    branchCode: studentObj.academicInfo?.branch
+                };
+                studentCache[sId] = studentData;
+            }
+
+            if (!studentData.departmentId || !studentData.programName || !studentData.branchCode) {
+                errors.push(`Row ${rowNum}: Student '${sId}' is missing academic info (department, program, or branch).`);
+                continue;
+            }
+
+            // Resolve Program ID
+            let pId = programCache[studentData.programName];
+            if (!pId) {
+                const pObj = await Program.findOne({ name: studentData.programName });
+                if (!pObj) {
+                    errors.push(`Row ${rowNum}: Program '${studentData.programName}' not found in the system.`);
+                    continue;
+                }
+                pId = pObj._id;
+                programCache[studentData.programName] = pId;
+            }
+
+            // Resolve Branch ID
+            const branchKey = `${pId}_${studentData.branchCode}`;
+            let bId = branchCache[branchKey];
+            if (!bId) {
+                const bObj = await Branch.findOne({ programId: pId, code: studentData.branchCode });
+                if (!bObj) {
+                    errors.push(`Row ${rowNum}: Branch '${studentData.branchCode}' not found for program '${studentData.programName}'.`);
+                    continue;
+                }
+                bId = bObj._id;
+                branchCache[branchKey] = bId;
+            }
+
+            // 2. Duplicate Prevention
             const duplicate = await StudentResult.findOne({
                 studentId: sId,
                 subjectCode: subCode,
                 semester: semVal,
-                semesterTypeId: semTypeId,
-                academicYearId: ayId,
-                departmentId: rowDeptId,
-                programId: programId,
                 examYear: eYear,
                 resultType: rType
             });
@@ -297,7 +270,7 @@ const uploadCSV = async (req, res) => {
 
             let finalResult = "PASS";
             const gradeVal = (grade || "").trim().toUpperCase();
-            if (gradeVal === "F") {
+            if (gradeVal === "F" || gradeVal === "ABSENT") {
                 finalResult = "FAIL";
             }
 
@@ -311,23 +284,21 @@ const uploadCSV = async (req, res) => {
 
             results.push({
                 studentId: sId,
-                studentName: sName,
+                studentName: studentData.name,
                 subjectCode: subCode,
                 subjectName: subName,
                 subjectType: finalSubjectType,
-                departmentId: rowDeptId,
-                programId: programId,
+                departmentId: studentData.departmentId,
+                programId: pId,
                 branchId: bId,
-                academicYearId: ayId,
                 semester: semVal,
-                semesterTypeId: semTypeId,
                 examYear: eYear,
                 resultType: rType,
                 grade: (grade || "").trim(),
                 result: finalResult,
                 sgpa: sgpa ? Number(sgpa) : 0,
                 cgpa: cgpa ? Number(cgpa) : 0,
-                uploadedBy: req.user.userId
+                uploadedBy: req.user?.userId || null
             });
         }
 
@@ -344,6 +315,7 @@ const uploadCSV = async (req, res) => {
             // Only update Proctor Summaries if the upload contains REGULAR results
             const regularResults = results.filter(r => r.resultType.toUpperCase() === "REGULAR");
             if (regularResults.length > 0) {
+                // Wait for background process so any failure doesn't go unnoticed and doesn't get killed
                 await updateProctorSummaries(regularResults);
             }
         }
@@ -369,11 +341,10 @@ const uploadCSV = async (req, res) => {
 
 const getResults = async (req, res) => {
     try {
-        const { departmentId, academicYear, semester, programId, branchId, examYear, resultType, semesterTypeId } = req.query;
+        const { departmentId, semester, programId, branchId, examYear, resultType } = req.query;
         const filter = {};
         if (departmentId) filter.departmentId = departmentId;
-        if (academicYear) filter.academicYearId = academicYear;
-        if (semesterTypeId) filter.semesterTypeId = semesterTypeId;
+        if (semester) filter.semester = semester;
         if (programId) filter.programId = programId;
         if (branchId) filter.branchId = branchId;
         if (examYear) filter.examYear = examYear;
@@ -383,8 +354,6 @@ const getResults = async (req, res) => {
             .sort({ studentId: 1 })
             .populate("programId", "name")
             .populate("branchId", "name code")
-            .populate("academicYearId", "year")
-            .populate("semesterTypeId", "name")
             .lean();
 
         res.status(200).json(results);

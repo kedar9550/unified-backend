@@ -1,6 +1,7 @@
 const FacultySubjectResult = require("./FacultySubjectResult.model");
 const AcademicYear = require("../academicYear/academicYear.model");
 const SemesterType = require("../semesterType/semesterType.model");
+const Employee = require("../employee/employee.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 
@@ -17,7 +18,6 @@ const uploadCSV = async (req, res) => {
         const rows = parseCSV(req.file.buffer);
         const requiredHeaders = [
             "facultyid",
-            "facultyname",
             "academicyear",
             "semester",
             "subjectname",
@@ -35,6 +35,7 @@ const uploadCSV = async (req, res) => {
         // Cache for academic years and semester types to avoid multiple queries
         const ayCache = {};
         const semTypeCache = {};
+        const facultyCache = {};
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -93,6 +94,20 @@ const uploadCSV = async (req, res) => {
 
             if (!facId || isNaN(app) || isNaN(pas)) continue;
 
+            // 2c. Fetch Faculty Name from Employee Database
+            let resolvedFacultyName = facultyname || "";
+            let emp = facultyCache[facId];
+            if (!emp) {
+                const employee = await Employee.findOne({ institutionId: facId, isActive: true });
+                if (!employee) {
+                    errors.push(`Row ${i + 2}: Faculty with ID '${facId}' not found or inactive.`);
+                    continue;
+                }
+                emp = { name: employee.name };
+                facultyCache[facId] = emp;
+            }
+            resolvedFacultyName = emp.name;
+
             // 3. Duplicate Prevention (facultyId string + subjectCode + semester number + ayId)
             const duplicate = await FacultySubjectResult.findOne({
                 facultyId: facId,           // string comparison
@@ -112,7 +127,7 @@ const uploadCSV = async (req, res) => {
 
             results.push({
                 facultyId: facId,
-                facultyName: facultyname,
+                facultyName: resolvedFacultyName,
                 subjectName: subjectname,
                 subjectCode: subjectcode,
                 branch: branch,

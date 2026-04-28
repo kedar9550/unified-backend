@@ -49,23 +49,11 @@ const StudentResultSchema = new mongoose.Schema({
         required: true
     },
 
-    academicYearId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "AcademicYear",
-        required: true
-    },
-
     semester: {
         type: String,
         required: true,
         trim: true
     },
-
-    semesterTypeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "SemesterType",
-    },
-
     //  Exam Info
     examYear: {
         type: String, // ex: "2025"
