@@ -14,7 +14,9 @@ const {
     profileImage,
     searchUser,
     getecapdata,
-    bulkRegisterUser
+    bulkRegisterUser,
+    bulkUpdateEmployees,
+    adminUpdateEmployee
 } = require('./employee.controller');
 
 // --- Multer Setup ---
@@ -55,5 +57,7 @@ router.post('/me/profile-image', protect, upload.single('image'), profileImage);
 router.get('/search', protect, searchUser);
 router.post('/ecap-data', getecapdata);
 router.post('/bulk-upload', protect, uploadCsv.single('file'), bulkRegisterUser);
+router.put('/bulk-sync', protect, bulkUpdateEmployees);
+router.put('/:id/admin-update', protect, adminUpdateEmployee);
 
 module.exports = router;

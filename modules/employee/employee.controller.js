@@ -96,6 +96,7 @@ const registerUser = async (req, res) => {
         });
 
         res.status(201).json({
+            success: true,
             message: "Employee registered",
             user: {
                 _id: employee._id,
@@ -225,8 +226,12 @@ const searchUser = async (req, res) => {
         const { query } = req.query;
         if (!query) return res.status(400).json({ message: "Search query required" });
 
-        const isNumeric = /^[0-9]+$/.test(query);
-        const matchStage = isNumeric ? { institutionId: query } : { name: { $regex: query, $options: "i" } };
+        const matchStage = {
+            $or: [
+                { institutionId: { $regex: query, $options: "i" } },
+                { name: { $regex: query, $options: "i" } }
+            ]
+        };
 
         const users = await Employee.aggregate([
             { $match: matchStage },
@@ -405,6 +410,131 @@ const bulkRegisterUser = async (req, res) => {
     }
 };
 
+/**
+ * Bulk Update Employees from ECAP
+ */
+const bulkUpdateEmployees = async (req, res) => {
+    try {
+        const employees = await Employee.find({});
+        const updated = [];
+        const uptodate = [];
+        const errors = [];
+
+        for (const employee of employees) {
+            try {
+                const institutionId = employee.institutionId;
+                if (!institutionId) continue;
+
+                // Fetch ECAP Data
+                const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${institutionId}`);
+                const identityData = identityResponse?.data?.[0];
+
+                if (!identityData || identityData.error) {
+                    errors.push({ id: institutionId, error: "Not found in ECAP" });
+                    continue;
+                }
+
+                const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
+                const ecapDept = (identityData.departmentname || identityData.DepartmentName)?.trim();
+                const ecapDesig = (identityData.designation || identityData.Designation)?.trim();
+                const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim();
+
+                // Match Department
+                let deptId = employee.department;
+                if (ecapDept) {
+                    const deptRecord = await Department.findOne({
+                        $or: [
+                            { name: new RegExp(`^${ecapDept}$`, 'i') },
+                            { code: new RegExp(`^${ecapDept}$`, 'i') }
+                        ]
+                    });
+                    if (deptRecord) deptId = deptRecord._id;
+                }
+
+                // Check if changed
+                const isChanged = 
+                    (ecapName && ecapName !== employee.name) ||
+                    (deptId && employee.department && deptId.toString() !== employee.department.toString()) ||
+                    (ecapDesig && ecapDesig !== employee.designation) ||
+                    (ecapPhone && ecapPhone !== employee.phone);
+
+                if (isChanged) {
+                    await Employee.updateOne(
+                        { _id: employee._id },
+                        {
+                            $set: {
+                                name: ecapName || employee.name,
+                                department: deptId,
+                                designation: ecapDesig || employee.designation,
+                                phone: ecapPhone || employee.phone
+                            }
+                        }
+                    );
+                    updated.push(institutionId);
+                } else {
+                    uptodate.push(institutionId);
+                }
+
+            } catch (err) {
+                errors.push({ id: employee.institutionId, error: err.message });
+            }
+        }
+
+        res.json({
+            success: true,
+            total: employees.length,
+            successCount: updated.length,
+            uptodateCount: uptodate.length,
+            failureCount: errors.length,
+            errors
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+};
+
+/**
+ * Admin Update Employee (Specific fields like Email)
+ */
+const adminUpdateEmployee = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ success: false, message: "Email is required" });
+        }
+
+        const employee = await Employee.findById(id);
+        if (!employee) {
+            return res.status(404).json({ success: false, message: "Employee not found" });
+        }
+
+        // Check if email is already taken by another user
+        const existingEmail = await Employee.findOne({ email: email.toLowerCase(), _id: { $ne: id } });
+        if (existingEmail) {
+            return res.status(409).json({ success: false, message: "Email is already in use by another user" });
+        }
+
+        employee.email = email.toLowerCase();
+        await employee.save();
+
+        res.json({ 
+            success: true, 
+            message: "Employee email updated successfully", 
+            employee: {
+                _id: employee._id,
+                name: employee.name,
+                email: employee.email,
+                institutionId: employee.institutionId
+            }
+        });
+    } catch (error) {
+        console.error("Admin Update Employee Error:", error);
+        res.status(500).json({ success: false, message: "Internal server error" });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -414,5 +544,7 @@ module.exports = {
     profileImage,
     searchUser,
     getecapdata,
-    bulkRegisterUser
+    bulkRegisterUser,
+    bulkUpdateEmployees,
+    adminUpdateEmployee
 };
