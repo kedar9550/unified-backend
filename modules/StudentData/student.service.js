@@ -99,14 +99,7 @@ const transformStudentData = async (externalData, defaultPassword) => {
   }
 
   const programExists = await Program.findOne({ name: new RegExp(`^${programName}$`, "i") });
-  if (!programExists) {
-    throw new Error(`Invalid Program: ${programName} not found in database`);
-  }
-
   const branchExists = await Branch.findOne({ name: new RegExp(`^${branchName}$`, "i") });
-  if (!branchExists) {
-    throw new Error(`Invalid Branch: ${branchName} not found in database`);
-  }
 
   // 3. Map Fields
   return {
@@ -123,8 +116,8 @@ const transformStudentData = async (externalData, defaultPassword) => {
       casteName: externalData.castename
     },
     academicInfo: {
-      programName: programExists.name,
-      branch: branchExists.name,
+      programName: programExists ? programExists.name : null,
+      branch: branchExists ? branchExists.name : null,
       semester: convertRomanToNumber(externalData.semestername),
       joinedBatch: parseInt(externalData.joinedbatch) || null,
       academicBatch: parseInt(externalData.acadamicbatch) || null,

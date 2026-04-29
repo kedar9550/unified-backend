@@ -127,6 +127,13 @@ exports.getAllPrograms = async (req, res, next) => {
             query.status = true; // Default to active only
         }
 
+        if (req.query.departmentId) {
+            // Find all unique programs that have branches in this department
+            const branches = await Branch.find({ departmentId: req.query.departmentId }).select('programId');
+            const programIds = [...new Set(branches.map(b => b.programId.toString()))];
+            query._id = { $in: programIds };
+        }
+
         const programs = await Program.find(query);
         res.status(200).json({ success: true, data: programs });
     } catch (error) {
