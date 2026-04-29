@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Student = require("./Studentdata.model");
 const Department = require("../academics/department.model");
 const Program = require("../academics/program.model");
@@ -8,6 +9,21 @@ const fs = require("fs");
 const bcrypt = require("bcryptjs");
 const Role = require("../role/role.model");
 const UserAppRole = require("../userAppRole/userAppRole.model");
+
+/**
+ * Helper to flatten object for MongoDB $set
+ */
+const flattenObject = (obj, prefix = "") => {
+  return Object.keys(obj).reduce((acc, k) => {
+    const pre = prefix.length ? prefix + "." : "";
+    if (typeof obj[k] === "object" && obj[k] !== null && !Array.isArray(obj[k]) && !(obj[k] instanceof mongoose.Types.ObjectId)) {
+      Object.assign(acc, flattenObject(obj[k], pre + k));
+    } else {
+      acc[pre + k] = obj[k];
+    }
+    return acc;
+  }, {});
+};
 
 const assignStudentRole = async (studentId) => {
   const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
@@ -47,28 +63,56 @@ exports.addStudent = async (req, res) => {
 
     const transformedData = await studentService.transformStudentData(externalData, defaultPassword);
 
+    // STRICT PRESERVATION: Dept and Password
     if (existingStudent) {
-      delete transformedData.system.password;
-    }
+      // Preserve existing password if it exists
+      if (existingStudent.system && existingStudent.system.password) {
+        delete transformedData.system.password;
+      } else {
+        // If existing student somehow has NO password, ensure we set the default
+        const salt = await bcrypt.genSalt(10);
+        transformedData.system.password = await bcrypt.hash("Aditya@123", salt);
+      }
 
-    if (department) {
-      // Find department
-      const dept = await Department.findById(department);
-      if (dept) {
-        transformedData.academicInfo.department = dept._id;
+      if (!department && existingStudent.academicInfo && existingStudent.academicInfo.department) {
+          transformedData.academicInfo.department = existingStudent.academicInfo.department;
       }
     }
 
-    // Save or update student
-    const student = await Student.findOneAndUpdate(
-      { rollNo: formattedRollNo },
-      transformedData,
-      { upsert: true, new: true, runValidators: true }
-    );
+    if (department) {
+      const dept = await Department.findById(department);
+      if (dept) transformedData.academicInfo.department = dept._id;
+    }
 
-    await assignStudentRole(student._id);
+    // Check for changes
+    let hasChanged = true;
+    if (existingStudent) {
+        const currentObj = existingStudent.toObject();
+        const relevantCurrent = {
+            personalInfo: currentObj.personalInfo,
+            academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
+            contactInfo: currentObj.contactInfo
+        };
+        const relevantNew = {
+            personalInfo: transformedData.personalInfo,
+            academicInfo: transformedData.academicInfo,
+            contactInfo: transformedData.contactInfo
+        };
+        hasChanged = JSON.stringify(relevantCurrent) !== JSON.stringify(relevantNew);
+    }
 
-    res.status(200).json({ success: true, data: student, message: "Student added/updated successfully" });
+    if (hasChanged) {
+        const updatePayload = flattenObject(transformedData);
+        const student = await Student.findOneAndUpdate(
+            { rollNo: formattedRollNo },
+            { $set: updatePayload },
+            { upsert: true, new: true, runValidators: true }
+        );
+        await assignStudentRole(student._id);
+        return res.status(200).json({ success: true, updated: true, message: "Student updated successfully" });
+    }
+
+    res.status(200).json({ success: true, updated: false, message: "Data already up to date" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -79,11 +123,26 @@ exports.addStudent = async (req, res) => {
  * Updates existing students from the external API (preserves existing department)
  */
 exports.syncStudentData = async (req, res) => {
-  const { rollNos } = req.body; // Array of roll numbers, if empty sync all (maybe too heavy, let's require rollNos)
+  let { rollNos } = req.body;
   
-  if (!rollNos || !Array.isArray(rollNos) || rollNos.length === 0) {
-    return res.status(400).json({ success: false, message: "Please provide an array of rollNos to sync" });
-  }
+  try {
+    if (!rollNos || !Array.isArray(rollNos) || rollNos.length === 0) {
+      // If no rollNos provided, fetch all students from DB
+      const allStudents = await Student.find({}, "rollNo");
+      rollNos = allStudents.map(s => s.rollNo);
+    }
+
+    if (rollNos.length === 0) {
+      return res.status(200).json({ success: true, updated: false, message: "No students found to sync." });
+    }
+
+    // Fetch all departments for auto-mapping
+    const departments = await Department.find({});
+    const deptMap = {};
+    departments.forEach(d => {
+      deptMap[d.name.toLowerCase()] = d._id;
+      deptMap[d.code.toLowerCase()] = d._id;
+    });
 
   let successCount = 0;
   let skipCount = 0;
@@ -110,35 +169,77 @@ exports.syncStudentData = async (req, res) => {
       
       const transformedData = await studentService.transformStudentData(externalData, defaultPassword);
 
-      // Preserve existing department if any
+      // STRICT PRESERVATION: Dept and Password
       if (existingStudent && existingStudent.academicInfo && existingStudent.academicInfo.department) {
         transformedData.academicInfo.department = existingStudent.academicInfo.department;
+      } else {
+        // If it's a NEW student, try to auto-map from ECAP data if department info is present
+        const ecapDept = externalData.deptname || externalData.departmentname || externalData.department;
+        if (ecapDept) {
+            const mappedDeptId = deptMap[ecapDept.toString().trim().toLowerCase()];
+            if (mappedDeptId) {
+                transformedData.academicInfo.department = mappedDeptId;
+            } else {
+                transformedData.academicInfo.department = null;
+            }
+        } else {
+            transformedData.academicInfo.department = null;
+        }
       }
-
-      // If it's an update, we should not hash the password again if we are passing the existing one.
-      if (existingStudent) {
-        delete transformedData.system.password;
-      }
-
-      const updatedStudent = await Student.findOneAndUpdate(
-        { rollNo: formattedRollNo },
-        { $set: transformedData },
-        { upsert: true, new: true, runValidators: true }
-      );
       
-      await assignStudentRole(updatedStudent._id);
-      successCount++;
+      if (existingStudent) {
+        if (existingStudent.system && existingStudent.system.password) {
+            delete transformedData.system.password;
+        } else {
+            const salt = await bcrypt.genSalt(10);
+            transformedData.system.password = await bcrypt.hash("Aditya@123", salt);
+        }
+      }
+
+      // Check for changes
+      let hasChanged = true;
+      if (existingStudent) {
+          const currentObj = existingStudent.toObject();
+          const relevantCurrent = {
+              personalInfo: currentObj.personalInfo,
+              academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
+              contactInfo: currentObj.contactInfo
+          };
+          const relevantNew = {
+              personalInfo: transformedData.personalInfo,
+              academicInfo: transformedData.academicInfo,
+              contactInfo: transformedData.contactInfo
+          };
+          hasChanged = JSON.stringify(relevantCurrent) !== JSON.stringify(relevantNew);
+      }
+
+      if (hasChanged) {
+          const updatePayload = flattenObject(transformedData);
+          const updatedStudent = await Student.findOneAndUpdate(
+            { rollNo: formattedRollNo },
+            { $set: updatePayload },
+            { upsert: true, new: true, runValidators: true }
+          );
+          await assignStudentRole(updatedStudent._id);
+          successCount++;
+      } else {
+          successCount++; // Count as success but no change
+      }
     } catch (err) {
       errors.push({ rollNo, message: err.message });
       skipCount++;
     }
   }
 
-  res.status(200).json({
-    success: true,
-    message: `Sync completed. ${successCount} updated, ${skipCount} failed.`,
-    summary: { success: successCount, failed: skipCount, errors }
-  });
+    res.status(200).json({
+      success: true,
+      updated: successCount > 0,
+      message: successCount > 0 ? "Sync Completed!" : "Data already up to date.",
+      summary: { success: successCount, failed: skipCount, errors }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };
 
 /**
@@ -224,9 +325,10 @@ exports.uploadStudentCSV = async (req, res) => {
               delete transformedData.system.password;
             }
 
+            const updatePayload = flattenObject(transformedData);
             const updatedStudent = await Student.findOneAndUpdate(
               { rollNo: row.rollNo },
-              { $set: transformedData },
+              { $set: updatePayload },
               { upsert: true, new: true, runValidators: true }
             );
             await assignStudentRole(updatedStudent._id);
@@ -250,6 +352,125 @@ exports.uploadStudentCSV = async (req, res) => {
     });
 };
 
+exports.bulkUpdateStudentCSV = async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, message: "No file uploaded" });
+  }
+
+  const csvRows = [];
+  const errors = [];
+
+  // Parse CSV
+  fs.createReadStream(req.file.path)
+    .pipe(csv())
+    .on("data", (data) => {
+      const getVal = (prefixes) => {
+        const key = Object.keys(data).find(k => 
+          prefixes.some(p => k.trim().toLowerCase() === p.toLowerCase())
+        );
+        return key ? data[key] : null;
+      };
+
+      const rollNo = getVal(["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID"]);
+
+      if (rollNo) {
+        csvRows.push({ rollNo: rollNo.trim().toUpperCase() });
+      }
+    })
+    .on("end", async () => {
+      try {
+        let updatedCount = 0;
+        let upToDateCount = 0;
+        let skipCount = 0;
+
+        for (const row of csvRows) {
+          try {
+            const existingStudent = await Student.findOne({ rollNo: row.rollNo });
+            if (!existingStudent) {
+              errors.push({ rollNo: row.rollNo, message: "Student not found in our database" });
+              skipCount++;
+              continue;
+            }
+
+            const externalData = await studentService.fetchStudentDataFromAPI(row.rollNo);
+            if (!externalData) {
+              errors.push({ rollNo: row.rollNo, message: "Data not found in external API" });
+              skipCount++;
+              continue;
+            }
+
+            // Transform data (password doesn't matter since we delete it)
+            const transformedData = await studentService.transformStudentData(externalData, "dummy");
+
+            // STRICT PRESERVATION: Dept and Password
+            if (existingStudent.academicInfo && existingStudent.academicInfo.department) {
+              transformedData.academicInfo.department = existingStudent.academicInfo.department;
+            }
+            if (existingStudent.academicInfo && existingStudent.academicInfo.semester && !transformedData.academicInfo.semester) {
+                transformedData.academicInfo.semester = existingStudent.academicInfo.semester;
+            }
+            
+            if (existingStudent.system && existingStudent.system.password) {
+                delete transformedData.system.password;
+            } else {
+                const salt = await bcrypt.genSalt(10);
+                transformedData.system.password = await bcrypt.hash("Aditya@123", salt);
+            }
+
+            // Check for changes (simplified check using JSON stringify on relevant parts)
+            // We compare personalInfo, academicInfo (excluding dept), and contactInfo
+            const currentObj = existingStudent.toObject();
+            const relevantCurrent = {
+                personalInfo: currentObj.personalInfo,
+                academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
+                contactInfo: currentObj.contactInfo
+            };
+            const relevantNew = {
+                personalInfo: transformedData.personalInfo,
+                academicInfo: transformedData.academicInfo,
+                contactInfo: transformedData.contactInfo
+            };
+
+            // Deep check would be better, but for speed and simplicity:
+            const hasChanged = JSON.stringify(relevantCurrent) !== JSON.stringify(relevantNew);
+
+            if (hasChanged) {
+              const updatePayload = flattenObject(transformedData);
+              await Student.findOneAndUpdate(
+                { rollNo: row.rollNo },
+                { $set: updatePayload },
+                { runValidators: true }
+              );
+              updatedCount++;
+            } else {
+              upToDateCount++;
+            }
+          } catch (err) {
+            errors.push({ rollNo: row.rollNo, message: err.message });
+            skipCount++;
+          }
+        }
+
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+
+        res.status(200).json({
+          success: true,
+          updated: updatedCount > 0,
+          message: updatedCount > 0 ? "Update Successful!" : "Data already up to date.",
+          summary: { 
+            total: csvRows.length, 
+            success: updatedCount, 
+            upToDate: upToDateCount,
+            failed: skipCount, 
+            errors 
+          }
+        });
+      } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+      }
+    });
+};
+
 /**
  * Get Unassigned Students
  */
@@ -260,7 +481,11 @@ exports.getUnassignedStudents = async (req, res) => {
         { "academicInfo.department": { $exists: false } },
         { "academicInfo.department": null },
         { "academicInfo.semester": { $exists: false } },
-        { "academicInfo.semester": null }
+        { "academicInfo.semester": null },
+        { "academicInfo.branch": { $exists: false } },
+        { "academicInfo.branch": null },
+        { "academicInfo.programName": { $exists: false } },
+        { "academicInfo.programName": null }
       ]
     }).populate("academicInfo.department", "name code").sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: students });
@@ -314,6 +539,12 @@ exports.deleteAllUnassigned = async (req, res) => {
       $or: [
         { "academicInfo.department": { $exists: false } },
         { "academicInfo.department": null },
+        { "academicInfo.semester": { $exists: false } },
+        { "academicInfo.semester": null },
+        { "academicInfo.branch": { $exists: false } },
+        { "academicInfo.branch": null },
+        { "academicInfo.programName": { $exists: false } },
+        { "academicInfo.programName": null }
       ]
     });
     res.json({ success: true, count: result.deletedCount });

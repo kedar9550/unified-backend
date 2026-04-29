@@ -18,8 +18,8 @@ const studentSchema = new mongoose.Schema({
   },
 
   academicInfo: {
-    programName: { type: String, required: true, },
-    branch: { type: String, required: true },
+    programName: { type: String },
+    branch: { type: String },
     department: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
     semester: Number,
     joinedBatch: { type: Number, required: true },
@@ -115,7 +115,7 @@ const studentSchema = new mongoose.Schema({
 
 
 studentSchema.virtual("assignmentStatus").get(function () {
-  if (this.academicInfo?.department && this.academicInfo?.semester) {
+  if (this.academicInfo?.department && this.academicInfo?.semester && this.academicInfo?.branch && this.academicInfo?.programName) {
     return "Assigned";
   }
   return "Unassigned";
