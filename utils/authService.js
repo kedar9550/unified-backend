@@ -7,11 +7,11 @@ const loginUser = async (institutionId, password, appName) => {
     // Determine user type based on ID pattern
     // Employees have numeric IDs (e.g., 1, 2, 100)
     // Students have alphanumeric IDs (e.g., 24B11AE001)
-    let user = await Employee.findOne({ institutionId });
+    let user = await Employee.findOne({ institutionId }).populate('department', 'name');
     let userType = 'Employee';
 
     if (!user) {
-        user = await Student.findOne({ rollNo: institutionId.toUpperCase() });
+        user = await Student.findOne({ rollNo: institutionId.toUpperCase() }).populate('academicInfo.department', 'name');
         userType = 'Student';
     }
 
@@ -46,14 +46,19 @@ const loginUser = async (institutionId, password, appName) => {
         throw new Error('User not authorized for this application');
     }
 
+    const toTitleCase = (str) => {
+        if (!str) return str;
+        return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
     // For frontend compatibility, normalize the user object
     const normalizedUser = {
         _id: user._id,
-        name: userType === 'Employee' ? user.name : user.personalInfo?.studentName,
+        name: toTitleCase(userType === 'Employee' ? user.name : user.personalInfo?.studentName),
         institutionId: userType === 'Employee' ? user.institutionId : user.rollNo,
         email: userType === 'Employee' ? user.email : user.contactInfo?.emailId,
         phone: userType === 'Employee' ? user.phone : user.contactInfo?.mobileNumber,
-        department: userType === 'Employee' ? user.department : user.academicInfo?.department,
+        department: userType === 'Employee' ? (user.department?.name || user.department) : (user.academicInfo?.department?.name || user.academicInfo?.department),
         designation: userType === 'Employee' ? user.designation : 'Student',
         userType: userType,
         profileImage: userType === 'Employee' ? user.profileImage : null,
