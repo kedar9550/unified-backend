@@ -39,10 +39,10 @@ const convertRomanToNumber = (romanStr) => {
  */
 const parseSemesterResults = (semesterResultString) => {
   if (!semesterResultString) return [];
-  
+
   const results = [];
   const parts = semesterResultString.split(",");
-  
+
   const semMapping = {
     "SEM11": 1, "SEM12": 2,
     "SEM21": 3, "SEM22": 4,
@@ -117,7 +117,7 @@ const transformStudentData = async (externalData, defaultPassword) => {
     },
     academicInfo: {
       programName: programExists ? programExists.name : null,
-      branch: branchExists ? branchExists.name : null,
+      branch: branchExists ? branchExists.name : branchName,
       semester: convertRomanToNumber(externalData.semestername),
       joinedBatch: parseInt(externalData.joinedbatch) || null,
       academicBatch: parseInt(externalData.acadamicbatch) || null,
