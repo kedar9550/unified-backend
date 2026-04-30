@@ -418,11 +418,31 @@ const getCoAttainment = async (req, res) => {
     }
 };
 
+const getAvailableSemesters = async (req, res) => {
+    try {
+        const { facultyId, academicYear } = req.query;
+        const query = {};
+
+        if (facultyId) query.facultyId = facultyId.trim();
+
+        if (academicYear) {
+            const { academicYearId } = await resolveAcademicIds({ academicYear });
+            if (academicYearId) query.academicYearId = academicYearId;
+        }
+
+        const semesters = await FacultySubjectResult.distinct("semester", query);
+        res.json(semesters.filter(s => s != null).sort((a, b) => a - b));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     uploadCSV,
     deleteSemesterData,
     getResults,
     getCoAttainment,
+    getAvailableSemesters,
     updateResult,
     deleteResult,
     createResult
