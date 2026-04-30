@@ -7,6 +7,16 @@ const ProcterMaping = require("../ProcterMaping/ProcterMaping.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
 const Student = require("../StudentData/Studentdata.model");
+
+const convertRomanToNumber = (romanStr) => {
+    if (!romanStr) return null;
+    const roman = romanStr.toString().trim().split(" ")[0].toUpperCase();
+    const romanMap = {
+        "I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10
+    };
+    return romanMap[roman] || Number(roman);
+};
+
 // @desc    Download CSV template
 // @route   GET /api/student-results/template
 const downloadTemplate = (req, res) => {
@@ -32,14 +42,17 @@ const downloadTemplate = (req, res) => {
 // Helper to recalculate Proctor Summaries safely using upsert
 const updateProctorSummaries = async (uploadedResults) => {
     try {
-        console.log(`[ProctorSummary] Starting update for ${uploadedResults.length} uploaded results`);
+        if (!uploadedResults || uploadedResults.length === 0) return;
         
-        // Extract unique studentIds and semesters from the uploaded results
+        console.log(`[ProctorSummary] Starting update for ${uploadedResults.length} results/mappings`);
+        
         const studentIds = [...new Set(uploadedResults.map(r => r.studentId))];
-        const semesters = [...new Set(uploadedResults.map(r => r.semester))];
+        const semesters = [...new Set(uploadedResults.map(r => r.semester?.toString()))].filter(Boolean);
         const numericSemesters = semesters.map(s => Number(s)).filter(s => !isNaN(s));
 
-        // 1. Find the Procter mappings for these students and semesters
+        console.log(`[ProctorSummary] Unique Students: ${studentIds.length}, Semesters: ${semesters}`);
+
+        // 1. Find all affected proctor assignments
         const mappings = await ProcterMaping.find({
             studentId: { $in: studentIds },
             $or: [
@@ -49,102 +62,92 @@ const updateProctorSummaries = async (uploadedResults) => {
         });
 
         if (mappings.length === 0) {
-            console.log(`[ProctorSummary] No proctor mappings found for these students/semesters.`);
+            console.log(`[ProctorSummary] No proctor mappings found for these students in semesters ${semesters}`);
             return;
         }
 
-        console.log(`[ProctorSummary] Found ${mappings.length} ProcterMaping records.`);
-
-        // 2. Group by proctorId + academicYearId + semesterTypeId
-        const proctorTerms = {}; 
-        
+        // Group by term (Proctor + Year + SemType)
+        const termsToUpdate = {};
         mappings.forEach(m => {
             const key = `${m.proctorId}_${m.academicYearId}_${m.semesterTypeId}`;
-            if (!proctorTerms[key]) {
-                proctorTerms[key] = {
+            if (!termsToUpdate[key]) {
+                termsToUpdate[key] = {
                     proctorId: m.proctorId,
                     proctorName: m.proctorName,
                     academicYearId: m.academicYearId,
-                    semesterTypeId: m.semesterTypeId,
+                    semesterTypeId: m.semesterTypeId
                 };
             }
         });
 
-        // 3. Recalculate summary for each affected proctor term
-        for (const key of Object.keys(proctorTerms)) {
-            const { proctorId, proctorName, academicYearId, semesterTypeId } = proctorTerms[key];
-            
-            // Fetch ALL assigned students for this proctor in this academic term
-            const allProctorMappings = await ProcterMaping.find({
-                proctorId: proctorId,
-                academicYearId: academicYearId,
-                semesterTypeId: semesterTypeId
-            });
-            
-            // Map student -> semester for their assignment
-            const assignmentMap = new Map();
-            allProctorMappings.forEach(m => {
-                assignmentMap.set(m.studentId, m.semester);
-            });
-            
-            const allAssignedSIds = Array.from(assignmentMap.keys());
+        console.log(`[ProctorSummary] Found ${Object.keys(termsToUpdate).length} proctor terms to recalculate`);
 
-            // Fetch REGULAR results for all their assigned students in their respective mapped semesters
-            const results = await StudentResult.find({
-                studentId: { $in: allAssignedSIds },
+        for (const key in termsToUpdate) {
+            const { proctorId, proctorName, academicYearId, semesterTypeId } = termsToUpdate[key];
+            
+            // Get ALL students assigned to this proctor for this specific term
+            const allAssignments = await ProcterMaping.find({
+                proctorId,
+                academicYearId,
+                semesterTypeId
+            });
+
+            const assignmentMap = {}; // studentId -> semester (string)
+            allAssignments.forEach(a => {
+                assignmentMap[a.studentId] = a.semester.toString();
+            });
+
+            const studentIdsForProctor = Object.keys(assignmentMap);
+
+            // Fetch all REGULAR results for these students
+            const allResults = await StudentResult.find({
+                studentId: { $in: studentIdsForProctor },
                 resultType: "REGULAR"
             });
 
-            // Filter results to only include the semester the student was mapped to for this proctor
-            const validResults = results.filter(res => {
-                const assignedSem = assignmentMap.get(res.studentId);
-                if (assignedSem === undefined || assignedSem === null) return false;
-                return res.semester.toString() === assignedSem.toString();
+            // Filter results that match the assigned semester
+            const validResults = allResults.filter(r => {
+                const mappedSem = assignmentMap[r.studentId];
+                return mappedSem && r.semester.toString() === mappedSem;
             });
 
-            console.log(`[ProctorSummary] Proctor ${proctorId}: assigned ${allAssignedSIds.length} students, fetched ${validResults.length} valid result records`);
+            // Calculate stats
+            const appearedIds = new Set();
+            const failedIds = new Set();
 
-            const failedStudentIds = new Set();
-            validResults.forEach(resRow => {
-                if (resRow.result && resRow.result.toUpperCase() === "FAIL") {
-                    failedStudentIds.add(resRow.studentId);
+            validResults.forEach(r => {
+                appearedIds.add(r.studentId);
+                if (r.result?.toUpperCase() === "FAIL" || r.grade?.toUpperCase() === "F") {
+                    failedIds.add(r.studentId);
                 }
             });
 
-            const appearedStudentIds = new Set(validResults.map(r => r.studentId));
-            const totalAssigned = allAssignedSIds.length;
-            const studentsAppeared = appearedStudentIds.size;
-            const studentsFailed = failedStudentIds.size;
-            
-            const studentsPassed = studentsAppeared - studentsFailed;
-            const passPercentage = studentsAppeared > 0 ? ((studentsPassed / studentsAppeared) * 100).toFixed(2) : 0;
+            const totalMapped = studentIdsForProctor.length;
+            const appeared = appearedIds.size;
+            const failed = failedIds.size;
+            const passed = appeared - failed;
+            const passPercentage = appeared > 0 ? ((passed / appeared) * 100).toFixed(2) : 0;
 
-            console.log(`[ProctorSummary] Proctor ${proctorId}: Total:${totalAssigned}, Appeared:${studentsAppeared}, Passed:${studentsPassed}, Fail:${studentsFailed}, %:${passPercentage}`);
+            console.log(`[ProctorSummary] Updating Proctor ${proctorId} (${proctorName}): Mapped:${totalMapped}, Appeared:${appeared}, Passed:${passed}, %:${passPercentage}`);
 
             await ProctorSummary.findOneAndUpdate(
-                {
-                    academicYearId: academicYearId,
-                    semesterTypeId: semesterTypeId,
-                    proctorId: proctorId
-                },
+                { academicYearId, semesterTypeId, proctorId },
                 {
                     $set: {
-                        proctorName: proctorName,
-                        totalMappedStudents: totalAssigned,
-                        studentsAppeared: studentsAppeared,
-                        studentsPassed: studentsPassed,
+                        proctorName,
+                        totalMappedStudents: totalMapped,
+                        studentsAppeared: appeared,
+                        studentsPassed: passed,
                         passPercentage: Number(passPercentage),
                         lastCalculatedAt: new Date()
                     }
                 },
-                { upsert: true, new: true, runValidators: true }
+                { upsert: true, new: true }
             );
-            console.log(`[ProctorSummary] Successfully upserted summary for proctor ${proctorId}`);
         }
-        
-        console.log(`[ProctorSummary] Finished updateProctorSummaries`);
-    } catch (err) {
-        console.error("Error updating proctor summaries in background: ", err);
+        console.log(`[ProctorSummary] Recalculation complete`);
+    } catch (error) {
+        console.error("[ProctorSummary] Critical Error:", error);
     }
 };
 
@@ -200,12 +203,19 @@ const uploadCSV = async (req, res) => {
             const subName = (subjectname || "").trim();
             const eYear = (examyear || "").toString().trim();
             const rType = (resulttype || "REGULAR").toString().trim().toUpperCase();
-            const semVal = (semester || "").toString().trim().toUpperCase();
+            const rawSemVal = (semester || "").toString().trim().toUpperCase();
 
-            if (!sId || !subCode || !eYear || !semVal) {
+            if (!sId || !subCode || !eYear || !rawSemVal) {
                 errors.push(`Row ${rowNum}: Missing studentid, subjectcode, semester, or examyear.`);
                 continue;
             }
+
+            const parsedSem = convertRomanToNumber(rawSemVal);
+            if (!parsedSem || isNaN(parsedSem)) {
+                errors.push(`Row ${rowNum}: Invalid semester format '${rawSemVal}'.`);
+                continue;
+            }
+            const semVal = parsedSem.toString();
 
             // 1. Resolve Student to get name, department, program, branch
             let studentData = studentCache[sId];
@@ -367,30 +377,57 @@ const getProctorPassPercentage = async (req, res) => {
     try {
         const { facultyId, academicYear, semesterTypeId } = req.query;
  
-        if (!facultyId || !academicYear || !semesterTypeId) {
-            return res.status(400).json({ message: "facultyId, academicYear, and semesterTypeId are required." });
+        if (!facultyId || !academicYear) {
+            return res.status(400).json({ message: "facultyId and academicYear are required." });
         }
  
-        const summary = await ProctorSummary.findOne({
+        const matchQuery = {
             proctorId: facultyId,
-            academicYearId: academicYear,
-            semesterTypeId: semesterTypeId
-        });
+            academicYearId: academicYear
+        };
 
-        if (!summary) {
+        if (semesterTypeId) {
+            matchQuery.semesterTypeId = semesterTypeId;
+        }
+
+        const summaries = await ProctorSummary.find(matchQuery).populate("semesterTypeId", "name");
+
+        if (summaries.length === 0) {
             return res.json({
                 totalMappedStudents: 0,
                 studentsAppeared: 0,
                 studentsPassed: 0,
-                passPercentage: 0
+                passPercentage: 0,
+                details: []
             });
         }
 
+        let totalMappedStudents = 0;
+        let studentsAppeared = 0;
+        let studentsPassed = 0;
+
+        const details = summaries.map(s => {
+            totalMappedStudents += s.totalMappedStudents;
+            studentsAppeared += s.studentsAppeared;
+            studentsPassed += s.studentsPassed;
+            
+            return {
+                semesterName: s.semesterTypeId?.name || "Unknown",
+                totalMappedStudents: s.totalMappedStudents,
+                studentsAppeared: s.studentsAppeared,
+                studentsPassed: s.studentsPassed,
+                passPercentage: s.passPercentage
+            };
+        });
+
+        const passPercentage = studentsAppeared > 0 ? ((studentsPassed / studentsAppeared) * 100).toFixed(2) : 0;
+
         res.json({
-            totalMappedStudents: summary.totalMappedStudents,
-            studentsAppeared: summary.studentsAppeared,
-            studentsPassed: summary.studentsPassed,
-            passPercentage: summary.passPercentage
+            totalMappedStudents,
+            studentsAppeared,
+            studentsPassed,
+            passPercentage: Number(passPercentage),
+            details
         });
 
     } catch (error) {
@@ -403,5 +440,6 @@ module.exports = {
     downloadTemplate,
     uploadCSV,
     getResults,
-    getProctorPassPercentage
+    getProctorPassPercentage,
+    updateProctorSummaries // Exporting for use in ProcterMaping
 };

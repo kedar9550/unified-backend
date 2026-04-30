@@ -5,6 +5,7 @@ const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 const Student = require("../StudentData/Studentdata.model");
 const Employee = require("../employee/employee.model");
+const { updateProctorSummaries } = require("../StudentResult/StudentResult.controller");
 /**
  * Bulk insert from CSV
  * headers: proctorId, proctorName, studentId, studentName, academicYear, semester
@@ -124,6 +125,8 @@ const uploadCSV = async (req, res) => {
 
         if (mappings.length > 0) {
             await ProcterMaping.insertMany(mappings);
+            // Trigger background summary update for all affected students
+            await updateProctorSummaries(mappings);
         }
 
         res.status(201).json({
@@ -218,8 +221,8 @@ const getStudentsForMapping = async (req, res) => {
 
         const students = await Student.find({
             "academicInfo.department": department,
-            "academicInfo.programName": program,
-            "academicInfo.branch": branch,
+            "academicInfo.programName": new RegExp(`^${program}$`, "i"),
+            "academicInfo.branch": new RegExp(`^${branch}$`, "i"),
             "academicInfo.semester": numericSemester,
             "academicInfo.studentStatus": "Regular",
             "system.isActive": true
@@ -302,6 +305,8 @@ const createMapping = async (req, res) => {
         });
 
         await newMapping.save();
+        // Trigger background summary update for this student
+        await updateProctorSummaries([newMapping]);
         res.status(201).json({ message: "Created successfully", data: newMapping });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -326,6 +331,8 @@ const updateMapping = async (req, res) => {
 
         const updated = await ProcterMaping.findByIdAndUpdate(id, updateData, { new: true });
         if (!updated) return res.status(404).json({ message: "Record not found" });
+        // Trigger background summary update
+        await updateProctorSummaries([updated]);
         res.json({ message: "Updated successfully", data: updated });
     } catch (error) {
         res.status(500).json({ message: error.message });
