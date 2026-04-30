@@ -20,8 +20,6 @@ const uploadCSV = async (req, res) => {
             "facultyid",
             "academicyear",
             "semester",
-            "subjectname",
-            "subjectcode",
             "branch",
             "appeared",
             "passed",
@@ -44,11 +42,14 @@ const uploadCSV = async (req, res) => {
                 facultyname,
                 academicyear,
                 semester,
-                subjectname,
-                subjectcode,
+                coursename,
+                coursecode,
                 branch,
                 appeared,
                 passed,
+                section,
+                noofcos,
+                noofcosattained,
                 passpercentage
             } = row;
 
@@ -108,16 +109,16 @@ const uploadCSV = async (req, res) => {
             }
             resolvedFacultyName = emp.name;
 
-            // 3. Duplicate Prevention (facultyId string + subjectCode + semester number + ayId)
+            // 3. Duplicate Prevention (facultyId string + courseCode + semester number + ayId)
             const duplicate = await FacultySubjectResult.findOne({
-                facultyId: facId,           // string comparison
-                subjectCode: subjectcode,
+                facultyId: facId,
+                courseCode: coursecode,
                 semester: semNo,
                 academicYearId: ayId
             });
 
             if (duplicate) {
-                errors.push(`Row ${i + 2}: Record already exists for Faculty ID ${facId} and Subject ${subjectcode}. Skipping.`);
+                errors.push(`Row ${i + 2}: Record already exists for Faculty ID ${facId} and Subject ${coursecode}. Skipping.`);
                 continue;
             }
 
@@ -128,15 +129,17 @@ const uploadCSV = async (req, res) => {
             results.push({
                 facultyId: facId,
                 facultyName: resolvedFacultyName,
-                subjectName: subjectname,
-                subjectCode: subjectcode,
+                courseName: coursename,
+                courseCode: coursecode,
                 branch: branch,
                 academicYearId: ayId,
                 semesterTypeId: semTypeId,
                 semester: semNo,
-                semType: calculatedSemType,
                 appeared: app,
                 passed: pas,
+                section: section,
+                noOfCos: Number(noofcos) || 0,
+                noOfCosAttained: Number(noofcosattained) || 0,
                 passPercentage: isNaN(finalPercentage) ? calculatedPercentage.toFixed(2) : finalPercentage.toFixed(2),
                 uploadedBy: req.user.userId
             });
@@ -251,7 +254,20 @@ const getResults = async (req, res) => {
             .populate("semesterTypeId", "name")
             .sort({ createdAt: -1 });
 
-        res.json(results);
+        // Flatten populated fields for frontend consumption
+        const formatted = results.map((r) => {
+            const obj = r.toObject();
+            return {
+                ...obj,
+                academicYear: obj.academicYearId?.year || "",
+                semesterType: obj.semesterTypeId?.name || "",
+                // Alias for frontend compatibility
+                subjectName: obj.courseName,
+                subjectCode: obj.courseCode,
+            };
+        });
+
+        res.json(formatted);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -320,12 +336,13 @@ const deleteResult = async (req, res) => {
 const createResult = async (req, res) => {
     try {
         const {
-            facultyId, facultyName, subjectName, subjectCode, branch,
-            academicYearId, semesterTypeId, appeared, passed
+            facultyId, facultyName, courseName, courseCode, branch,
+            academicYearId, semesterTypeId, semester, section,
+            noOfCos, noOfCosAttained, appeared, passed
         } = req.body;
 
-        if (!facultyId || !subjectName || !academicYearId || !semesterTypeId) {
-            return res.status(400).json({ message: "facultyId, subjectName, academicYearId, and semesterTypeId are required." });
+        if (!facultyId || !courseName || !academicYearId || !semesterTypeId) {
+            return res.status(400).json({ message: "facultyId, courseName, academicYearId, and semesterTypeId are required." });
         }
 
         const app = Number(appeared) || 0;
@@ -335,9 +352,13 @@ const createResult = async (req, res) => {
         const record = await FacultySubjectResult.create({
             facultyId,
             facultyName,
-            subjectName,
-            subjectCode,
+            courseName,
+            courseCode,
             branch,
+            section,
+            semester: Number(semester) || undefined,
+            noOfCos: Number(noOfCos) || 0,
+            noOfCosAttained: Number(noOfCosAttained) || 0,
             academicYearId,
             semesterTypeId,
             appeared: app,
