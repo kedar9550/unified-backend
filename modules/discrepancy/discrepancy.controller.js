@@ -15,7 +15,7 @@ const SECTION_ROLE_MAP = {
  */
 const raiseDiscrepancy = async (req, res) => {
     try {
-        const { academicYearId, semesterTypeId, section, note, facultyInstitutionId, facultyName } = req.body;
+        const { academicYearId, semesterTypeId, semester, section, note, facultyInstitutionId, facultyName } = req.body;
 
         if (!academicYearId || !semesterTypeId || !section || !note) {
             return res.status(400).json({ message: "academicYearId, semesterTypeId, section, and note are required." });
@@ -29,6 +29,7 @@ const raiseDiscrepancy = async (req, res) => {
             facultyName:          facultyName || "",
             academicYearId,
             semesterTypeId,
+            semester,
             section,
             note,
             assignedRole,

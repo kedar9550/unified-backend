@@ -21,6 +21,7 @@ const DiscrepancySchema = new mongoose.Schema({
         ref: "SemesterType",
         required: true,
     },
+    semester: { type: Number },
     section: {
         type: String,
         enum: ["TEACHING", "PROCTORING", "FEEDBACK", "OTHER"],

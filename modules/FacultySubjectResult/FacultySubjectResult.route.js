@@ -8,7 +8,8 @@ const {
     getCoAttainment,
     updateResult,
     deleteResult,
-    createResult
+    createResult,
+    getAvailableSemesters
 } = require("./FacultySubjectResult.controller");
 const { protect, authorize } = require("../../middlewares/authMiddleware");
 
@@ -85,6 +86,17 @@ router.get(
     "/",
     protect,
     getResults
+);
+
+/**
+ * @route   GET /api/faculty-subject-results/available-semesters
+ * @desc    Get unique semester numbers for a faculty
+ * @access  Private (Protected)
+ */
+router.get(
+    "/available-semesters",
+    protect,
+    getAvailableSemesters
 );
 
 /**
