@@ -23,6 +23,10 @@ const uploadCSV = async (req, res) => {
             "branch",
             "appeared",
             "passed",
+            "coursetype",
+            "noofcos",
+            "noofcosattained",
+            "section"
         ];
 
         validateHeaders(rows, requiredHeaders);
@@ -38,12 +42,13 @@ const uploadCSV = async (req, res) => {
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const {
-                facultyid,       // institutional ID string e.g. FAC2024001
+                facultyid,
                 facultyname,
                 academicyear,
                 semester,
                 coursename,
                 coursecode,
+                coursetype,
                 branch,
                 appeared,
                 passed,
@@ -72,7 +77,7 @@ const uploadCSV = async (req, res) => {
                 continue;
             }
             const calculatedSemType = semNo % 2 === 0 ? "EVEN" : "ODD";
- 
+
             let semTypeId = semTypeCache[calculatedSemType];
             if (!semTypeId) {
                 const st = await SemesterType.findOne({ name: calculatedSemType });
@@ -126,20 +131,71 @@ const uploadCSV = async (req, res) => {
             const calculatedPercentage = app > 0 ? (pas / app) * 100 : 0;
             const finalPercentage = passpercentage ? Number(passpercentage) : calculatedPercentage;
 
+            let finalCourseType = (coursetype || "").toUpperCase().trim();
+            const cos = Number(noofcos);
+            const cosAttained = Number(noofcosattained);
+            const sec = (section || "").trim();
+
+            //  Course Type
+            if (!coursetype || coursetype.trim() === "") {
+                errors.push(`Row ${i + 2}: Course Type is missing. Allowed: THEORY / PRACTICAL / INTEGRATED.`);
+                continue;
+            }
+
+            if (!["THEORY", "PRACTICAL", "INTEGRATED"].includes(finalCourseType)) {
+                errors.push(`Row ${i + 2}: Invalid Course Type '${coursetype}'.`);
+                continue;
+            }
+
+            // noOfCos
+            if (noofcos === undefined || noofcos === "") {
+                errors.push(`Row ${i + 2}: noOfCos is missing.`);
+                continue;
+            }
+
+            if (isNaN(cos) || cos < 0) {
+                errors.push(`Row ${i + 2}: noOfCos must be a valid positive number.`);
+                continue;
+            }
+
+            // noOfCosAttained
+            if (noofcosattained === undefined || noofcosattained === "") {
+                errors.push(`Row ${i + 2}: noOfCosAttained is missing.`);
+                continue;
+            }
+
+            if (isNaN(cosAttained) || cosAttained < 0) {
+                errors.push(`Row ${i + 2}: noOfCosAttained must be a valid positive number.`);
+                continue;
+            }
+
+            // Logical Validation (VERY IMPORTANT )
+            if (cosAttained > cos) {
+                errors.push(`Row ${i + 2}: noOfCosAttained (${cosAttained}) cannot be greater than noOfCos (${cos}).`);
+                continue;
+            }
+
+            // Section
+            if (!sec) {
+                errors.push(`Row ${i + 2}: Section is missing.`);
+                continue;
+            }
+
             results.push({
                 facultyId: facId,
                 facultyName: resolvedFacultyName,
                 courseName: coursename,
                 courseCode: coursecode,
+                courseType: finalCourseType,
                 branch: branch,
                 academicYearId: ayId,
                 semesterTypeId: semTypeId,
                 semester: semNo,
                 appeared: app,
                 passed: pas,
-                section: section,
-                noOfCos: Number(noofcos) || 0,
-                noOfCosAttained: Number(noofcosattained) || 0,
+                section: sec,
+                noOfCos: cos,
+                noOfCosAttained: cosAttained,
                 passPercentage: isNaN(finalPercentage) ? calculatedPercentage.toFixed(2) : finalPercentage.toFixed(2),
                 uploadedBy: req.user.userId
             });
@@ -288,7 +344,7 @@ const updateResult = async (req, res) => {
 
             const app = updates.appeared !== undefined ? Number(updates.appeared) : existing.appeared;
             const pas = updates.passed !== undefined ? Number(updates.passed) : existing.passed;
-            
+
             updates.passPercentage = app > 0 ? ((pas / app) * 100).toFixed(2) : 0;
         }
 
@@ -336,7 +392,7 @@ const deleteResult = async (req, res) => {
 const createResult = async (req, res) => {
     try {
         const {
-            facultyId, facultyName, courseName, courseCode, branch,
+            facultyId, facultyName, courseName, courseCode, courseType, branch,
             academicYearId, semesterTypeId, semester, section,
             noOfCos, noOfCosAttained, appeared, passed
         } = req.body;
@@ -354,6 +410,7 @@ const createResult = async (req, res) => {
             facultyName,
             courseName,
             courseCode,
+            courseType: courseType?.toUpperCase(),
             branch,
             section,
             semester: Number(semester) || undefined,
