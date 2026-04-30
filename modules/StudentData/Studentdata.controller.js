@@ -32,7 +32,7 @@ const assignStudentRole = async (studentId) => {
 
   let defaultRole = await Role.findOne({ name: "STUDENT", app: appName });
   if (!defaultRole) {
-      defaultRole = await Role.create({ name: "STUDENT", app: appName, defaultRole: true, description: "Default role for STUDENT" });
+    defaultRole = await Role.create({ name: "STUDENT", app: appName, defaultRole: true, description: "Default role for STUDENT" });
   }
   await UserAppRole.create({ userId: studentId, userModel: "Student", app: appName, role: defaultRole._id });
 };
@@ -49,7 +49,7 @@ exports.addStudent = async (req, res) => {
   try {
     const formattedRollNo = rollNo.trim().toUpperCase();
     const externalData = await studentService.fetchStudentDataFromAPI(formattedRollNo);
-    
+
     if (!externalData) {
       return res.status(404).json({ success: false, message: `Student data not found in external API for ${formattedRollNo}` });
     }
@@ -75,7 +75,7 @@ exports.addStudent = async (req, res) => {
       }
 
       if (!department && existingStudent.academicInfo && existingStudent.academicInfo.department) {
-          transformedData.academicInfo.department = existingStudent.academicInfo.department;
+        transformedData.academicInfo.department = existingStudent.academicInfo.department;
       }
     }
 
@@ -87,29 +87,29 @@ exports.addStudent = async (req, res) => {
     // Check for changes
     let hasChanged = true;
     if (existingStudent) {
-        const currentObj = existingStudent.toObject();
-        const relevantCurrent = {
-            personalInfo: currentObj.personalInfo,
-            academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
-            contactInfo: currentObj.contactInfo
-        };
-        const relevantNew = {
-            personalInfo: transformedData.personalInfo,
-            academicInfo: transformedData.academicInfo,
-            contactInfo: transformedData.contactInfo
-        };
-        hasChanged = JSON.stringify(relevantCurrent) !== JSON.stringify(relevantNew);
+      const currentObj = existingStudent.toObject();
+      const relevantCurrent = {
+        personalInfo: currentObj.personalInfo,
+        academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
+        contactInfo: currentObj.contactInfo
+      };
+      const relevantNew = {
+        personalInfo: transformedData.personalInfo,
+        academicInfo: transformedData.academicInfo,
+        contactInfo: transformedData.contactInfo
+      };
+      hasChanged = JSON.stringify(relevantCurrent) !== JSON.stringify(relevantNew);
     }
 
     if (hasChanged) {
-        const updatePayload = flattenObject(transformedData);
-        const student = await Student.findOneAndUpdate(
-            { rollNo: formattedRollNo },
-            { $set: updatePayload },
-            { upsert: true, new: true, runValidators: true }
-        );
-        await assignStudentRole(student._id);
-        return res.status(200).json({ success: true, updated: true, message: "Student updated successfully" });
+      const updatePayload = flattenObject(transformedData);
+      const student = await Student.findOneAndUpdate(
+        { rollNo: formattedRollNo },
+        { $set: updatePayload },
+        { upsert: true, new: true, runValidators: true }
+      );
+      await assignStudentRole(student._id);
+      return res.status(200).json({ success: true, updated: true, message: "Student updated successfully" });
     }
 
     res.status(200).json({ success: true, updated: false, message: "Data already up to date" });
@@ -124,7 +124,7 @@ exports.addStudent = async (req, res) => {
  */
 exports.syncStudentData = async (req, res) => {
   let { rollNos } = req.body;
-  
+
   try {
     if (!rollNos || !Array.isArray(rollNos) || rollNos.length === 0) {
       // If no rollNos provided, fetch all students from DB
@@ -144,76 +144,76 @@ exports.syncStudentData = async (req, res) => {
       deptMap[d.code.toLowerCase()] = d._id;
     });
 
-  let successCount = 0;
-  let skipCount = 0;
-  const errors = [];
+    let successCount = 0;
+    let skipCount = 0;
+    const errors = [];
 
-  for (let rollNo of rollNos) {
-    try {
-      const formattedRollNo = rollNo.trim().toUpperCase();
-      const existingStudent = await Student.findOne({ rollNo: formattedRollNo });
-      
-      const externalData = await studentService.fetchStudentDataFromAPI(formattedRollNo);
-      
-      if (!externalData) {
-        errors.push({ rollNo, message: "Not found in external API" });
-        skipCount++;
-        continue;
-      }
+    for (let rollNo of rollNos) {
+      try {
+        const formattedRollNo = rollNo.trim().toUpperCase();
+        const existingStudent = await Student.findOne({ rollNo: formattedRollNo });
 
-      let defaultPassword = "Aditya@123";
-      if (!existingStudent) {
-        const salt = await bcrypt.genSalt(10);
-        defaultPassword = await bcrypt.hash("Aditya@123", salt);
-      }
-      
-      const transformedData = await studentService.transformStudentData(externalData, defaultPassword);
+        const externalData = await studentService.fetchStudentDataFromAPI(formattedRollNo);
 
-      // STRICT PRESERVATION: Dept and Password
-      if (existingStudent && existingStudent.academicInfo && existingStudent.academicInfo.department) {
-        transformedData.academicInfo.department = existingStudent.academicInfo.department;
-      } else {
-        // If it's a NEW student, try to auto-map from ECAP data if department info is present
-        const ecapDept = externalData.deptname || externalData.departmentname || externalData.department;
-        if (ecapDept) {
+        if (!externalData) {
+          errors.push({ rollNo, message: "Not found in external API" });
+          skipCount++;
+          continue;
+        }
+
+        let defaultPassword = "Aditya@123";
+        if (!existingStudent) {
+          const salt = await bcrypt.genSalt(10);
+          defaultPassword = await bcrypt.hash("Aditya@123", salt);
+        }
+
+        const transformedData = await studentService.transformStudentData(externalData, defaultPassword);
+
+        // STRICT PRESERVATION: Dept and Password
+        if (existingStudent && existingStudent.academicInfo && existingStudent.academicInfo.department) {
+          transformedData.academicInfo.department = existingStudent.academicInfo.department;
+        } else {
+          // If it's a NEW student, try to auto-map from ECAP data if department info is present
+          const ecapDept = externalData.deptname || externalData.departmentname || externalData.department;
+          if (ecapDept) {
             const mappedDeptId = deptMap[ecapDept.toString().trim().toLowerCase()];
             if (mappedDeptId) {
-                transformedData.academicInfo.department = mappedDeptId;
+              transformedData.academicInfo.department = mappedDeptId;
             } else {
-                transformedData.academicInfo.department = null;
+              transformedData.academicInfo.department = null;
             }
-        } else {
+          } else {
             transformedData.academicInfo.department = null;
+          }
         }
-      }
-      
-      if (existingStudent) {
-        if (existingStudent.system && existingStudent.system.password) {
+
+        if (existingStudent) {
+          if (existingStudent.system && existingStudent.system.password) {
             delete transformedData.system.password;
-        } else {
+          } else {
             const salt = await bcrypt.genSalt(10);
             transformedData.system.password = await bcrypt.hash("Aditya@123", salt);
+          }
         }
-      }
 
-      // Check for changes
-      let hasChanged = true;
-      if (existingStudent) {
+        // Check for changes
+        let hasChanged = true;
+        if (existingStudent) {
           const currentObj = existingStudent.toObject();
           const relevantCurrent = {
-              personalInfo: currentObj.personalInfo,
-              academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
-              contactInfo: currentObj.contactInfo
+            personalInfo: currentObj.personalInfo,
+            academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
+            contactInfo: currentObj.contactInfo
           };
           const relevantNew = {
-              personalInfo: transformedData.personalInfo,
-              academicInfo: transformedData.academicInfo,
-              contactInfo: transformedData.contactInfo
+            personalInfo: transformedData.personalInfo,
+            academicInfo: transformedData.academicInfo,
+            contactInfo: transformedData.contactInfo
           };
           hasChanged = JSON.stringify(relevantCurrent) !== JSON.stringify(relevantNew);
-      }
+        }
 
-      if (hasChanged) {
+        if (hasChanged) {
           const updatePayload = flattenObject(transformedData);
           const updatedStudent = await Student.findOneAndUpdate(
             { rollNo: formattedRollNo },
@@ -222,14 +222,14 @@ exports.syncStudentData = async (req, res) => {
           );
           await assignStudentRole(updatedStudent._id);
           successCount++;
-      } else {
+        } else {
           successCount++; // Count as success but no change
+        }
+      } catch (err) {
+        errors.push({ rollNo, message: err.message });
+        skipCount++;
       }
-    } catch (err) {
-      errors.push({ rollNo, message: err.message });
-      skipCount++;
     }
-  }
 
     res.status(200).json({
       success: true,
@@ -258,7 +258,7 @@ exports.uploadStudentCSV = async (req, res) => {
     .pipe(csv())
     .on("data", (data) => {
       const getVal = (prefixes) => {
-        const key = Object.keys(data).find(k => 
+        const key = Object.keys(data).find(k =>
           prefixes.some(p => k.trim().toLowerCase() === p.toLowerCase())
         );
         return key ? data[key] : null;
@@ -292,7 +292,7 @@ exports.uploadStudentCSV = async (req, res) => {
         for (const row of csvRows) {
           try {
             const externalData = await studentService.fetchStudentDataFromAPI(row.rollNo);
-            
+
             if (!externalData) {
               errors.push({ rollNo: row.rollNo, message: "Data not found in external API" });
               skipCount++;
@@ -300,7 +300,7 @@ exports.uploadStudentCSV = async (req, res) => {
             }
 
             const existingStudent = await Student.findOne({ rollNo: row.rollNo });
-            
+
             let defaultPassword = "Aditya@123";
             if (!existingStudent) {
               const salt = await bcrypt.genSalt(10);
@@ -365,7 +365,7 @@ exports.bulkUpdateStudentCSV = async (req, res) => {
     .pipe(csv())
     .on("data", (data) => {
       const getVal = (prefixes) => {
-        const key = Object.keys(data).find(k => 
+        const key = Object.keys(data).find(k =>
           prefixes.some(p => k.trim().toLowerCase() === p.toLowerCase())
         );
         return key ? data[key] : null;
@@ -407,28 +407,28 @@ exports.bulkUpdateStudentCSV = async (req, res) => {
               transformedData.academicInfo.department = existingStudent.academicInfo.department;
             }
             if (existingStudent.academicInfo && existingStudent.academicInfo.semester && !transformedData.academicInfo.semester) {
-                transformedData.academicInfo.semester = existingStudent.academicInfo.semester;
+              transformedData.academicInfo.semester = existingStudent.academicInfo.semester;
             }
-            
+
             if (existingStudent.system && existingStudent.system.password) {
-                delete transformedData.system.password;
+              delete transformedData.system.password;
             } else {
-                const salt = await bcrypt.genSalt(10);
-                transformedData.system.password = await bcrypt.hash("Aditya@123", salt);
+              const salt = await bcrypt.genSalt(10);
+              transformedData.system.password = await bcrypt.hash("Aditya@123", salt);
             }
 
             // Check for changes (simplified check using JSON stringify on relevant parts)
             // We compare personalInfo, academicInfo (excluding dept), and contactInfo
             const currentObj = existingStudent.toObject();
             const relevantCurrent = {
-                personalInfo: currentObj.personalInfo,
-                academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
-                contactInfo: currentObj.contactInfo
+              personalInfo: currentObj.personalInfo,
+              academicInfo: { ...currentObj.academicInfo, department: transformedData.academicInfo.department },
+              contactInfo: currentObj.contactInfo
             };
             const relevantNew = {
-                personalInfo: transformedData.personalInfo,
-                academicInfo: transformedData.academicInfo,
-                contactInfo: transformedData.contactInfo
+              personalInfo: transformedData.personalInfo,
+              academicInfo: transformedData.academicInfo,
+              contactInfo: transformedData.contactInfo
             };
 
             // Deep check would be better, but for speed and simplicity:
@@ -457,12 +457,12 @@ exports.bulkUpdateStudentCSV = async (req, res) => {
           success: true,
           updated: updatedCount > 0,
           message: updatedCount > 0 ? "Update Successful!" : "Data already up to date.",
-          summary: { 
-            total: csvRows.length, 
-            success: updatedCount, 
+          summary: {
+            total: csvRows.length,
+            success: updatedCount,
             upToDate: upToDateCount,
-            failed: skipCount, 
-            errors 
+            failed: skipCount,
+            errors
           }
         });
       } catch (error) {
@@ -498,25 +498,25 @@ exports.getUnassignedStudents = async (req, res) => {
  * Assign Students to Dept and Semester
  */
 exports.assignStudents = async (req, res) => {
-  const { studentIds, deptId, semester } = req.body;
-  if (!studentIds || !deptId || !semester) {
+  const { studentIds, deptId } = req.body;
+
+  if (!studentIds || !deptId) {
     return res.status(400).json({ success: false, message: "Missing details" });
   }
 
   try {
     await Student.updateMany(
       { rollNo: { $in: studentIds } },
-      { 
-        "academicInfo.department": deptId, 
-        "academicInfo.semester": Number(semester)
+      {
+        "academicInfo.department": deptId
       }
     );
-    res.status(200).json({ success: true, message: "Students assigned" });
+
+    res.status(200).json({ success: true, message: "Students assigned successfully" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
 /**
  * Delete Student
  */
@@ -574,7 +574,7 @@ exports.getAssignedStudents = async (req, res) => {
 exports.getFilterOptions = async (req, res) => {
   try {
     console.log("Fetching filter options from master models...");
-    
+
     const programs = await Program.find({ status: true }, "name").sort("name");
     const branches = await Branch.find({ status: true }, "name").sort("name");
     const departments = await Department.find({ status: true }, "name code").sort("name");
