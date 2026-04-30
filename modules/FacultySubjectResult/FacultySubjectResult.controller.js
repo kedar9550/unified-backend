@@ -373,10 +373,56 @@ const createResult = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/faculty-subject-results/co-attainment
+ * Returns CO attainment data for a faculty filtered by academicYear & semester.
+ * Data comes from the same FacultySubjectResult collection (noOfCos, noOfCosAttained).
+ */
+const getCoAttainment = async (req, res) => {
+    try {
+        const { facultyId, academicYear, semester } = req.query;
+        const query = {};
+
+        if (facultyId) query.facultyId = facultyId.trim();
+
+        if (academicYear || semester) {
+            const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
+            if (academicYearId) query.academicYearId = academicYearId;
+            if (semesterTypeId) query.semesterTypeId = semesterTypeId;
+        }
+
+        const results = await FacultySubjectResult.find(query)
+            .populate("academicYearId", "year")
+            .populate("semesterTypeId", "name")
+            .sort({ createdAt: -1 });
+
+        const formatted = results.map((r) => {
+            const obj = r.toObject();
+            return {
+                _id: obj._id,
+                courseName: obj.courseName,
+                courseCode: obj.courseCode,
+                semester: obj.semester,
+                branch: obj.branch,
+                section: obj.section,
+                semesterType: obj.semesterTypeId?.name || "",
+                academicYear: obj.academicYearId?.year || "",
+                noOfCos: obj.noOfCos || 0,
+                noOfCosAttained: obj.noOfCosAttained || 0,
+            };
+        });
+
+        res.json(formatted);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     uploadCSV,
     deleteSemesterData,
     getResults,
+    getCoAttainment,
     updateResult,
     deleteResult,
     createResult

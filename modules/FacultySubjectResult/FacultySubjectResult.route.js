@@ -5,6 +5,7 @@ const {
     uploadCSV,
     deleteSemesterData,
     getResults,
+    getCoAttainment,
     updateResult,
     deleteResult,
     createResult
@@ -62,6 +63,17 @@ router.delete(
     protect,
     authorize("ADMIN", "EXAMSECTION"),
     deleteSemesterData
+);
+
+/**
+ * @route   GET /api/faculty-subject-results/co-attainment
+ * @desc    Get CO attainment data for a faculty (noOfCos, noOfCosAttained per course)
+ * @access  Private (Protected)
+ */
+router.get(
+    "/co-attainment",
+    protect,
+    getCoAttainment
 );
 
 /**
