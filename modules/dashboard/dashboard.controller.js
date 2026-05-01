@@ -74,7 +74,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             }
         ]);
 
-        console.log("Recent Users:", recentUsers);
+        //console.log("Recent Users:", recentUsers);
 
         // Role distribution aggregation
         const roleDistributionRaw = await UserAppRole.aggregate([
