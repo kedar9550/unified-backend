@@ -23,6 +23,11 @@ const EmployeeSchema = new mongoose.Schema({
         ref: "Department",
         required: true
     },
+    coreDepartment: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Department",
+        required: true
+    },
     designation: {
         type: String,
         trim: true,

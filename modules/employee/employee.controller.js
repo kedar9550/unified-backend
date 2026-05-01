@@ -63,6 +63,7 @@ const registerUser = async (req, res) => {
             name: fullname,
             institutionId: id,
             department: deptRecord._id,
+            coreDepartment: deptRecord._id,
             designation,
             email,
             phone,
@@ -258,6 +259,7 @@ const searchUser = async (req, res) => {
                     institutionId: 1,
                     email: 1,
                     department: 1,
+                    coreDepartment: 1,
                     designation: 1,
                     userType: { $literal: 'Employee' },
                     roles: 1
@@ -374,6 +376,7 @@ const bulkRegisterUser = async (req, res) => {
                     name: ecapName, 
                     institutionId, 
                     department: deptRecord._id, 
+                    coreDepartment: deptRecord._id,
                     designation: ecapDesig, 
                     email, 
                     phone: ecapPhone, 
@@ -456,19 +459,25 @@ const bulkUpdateEmployees = async (req, res) => {
                     (ecapName && ecapName !== employee.name) ||
                     (deptId && employee.department && deptId.toString() !== employee.department.toString()) ||
                     (ecapDesig && ecapDesig !== employee.designation) ||
-                    (ecapPhone && ecapPhone !== employee.phone);
+                    (ecapPhone && ecapPhone !== employee.phone) ||
+                    (!employee.coreDepartment); // Also check if coreDepartment is missing
 
                 if (isChanged) {
+                    const updateData = {
+                        name: ecapName || employee.name,
+                        department: deptId,
+                        designation: ecapDesig || employee.designation,
+                        phone: ecapPhone || employee.phone
+                    };
+
+                    // Only set coreDepartment if it's currently missing
+                    if (!employee.coreDepartment) {
+                        updateData.coreDepartment = deptId || employee.department;
+                    }
+
                     await Employee.updateOne(
                         { _id: employee._id },
-                        {
-                            $set: {
-                                name: ecapName || employee.name,
-                                department: deptId,
-                                designation: ecapDesig || employee.designation,
-                                phone: ecapPhone || employee.phone
-                            }
-                        }
+                        { $set: updateData }
                     );
                     updated.push(institutionId);
                 } else {
@@ -499,35 +508,42 @@ const bulkUpdateEmployees = async (req, res) => {
 const adminUpdateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
-        const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({ success: false, message: "Email is required" });
-        }
+        const { email, coreDepartment } = req.body;
+        console.log("Admin Update Request:", { id, email, coreDepartment });
 
         const employee = await Employee.findById(id);
         if (!employee) {
             return res.status(404).json({ success: false, message: "Employee not found" });
         }
 
-        // Check if email is already taken by another user
-        const existingEmail = await Employee.findOne({ email: email.toLowerCase(), _id: { $ne: id } });
-        if (existingEmail) {
-            return res.status(409).json({ success: false, message: "Email is already in use by another user" });
+        const updates = {};
+        
+        if (email) {
+            // Check if email is already taken by another user
+            const existingEmail = await Employee.findOne({ email: email.toLowerCase(), _id: { $ne: id } });
+            if (existingEmail) {
+                return res.status(409).json({ success: false, message: "Email is already in use by another user" });
+            }
+            employee.email = email.toLowerCase();
         }
 
-        employee.email = email.toLowerCase();
+        if (coreDepartment) {
+            employee.coreDepartment = coreDepartment;
+        } else if (!employee.coreDepartment) {
+            // If it's missing in DB and not provided in request, default it to department
+            employee.coreDepartment = employee.department;
+        }
+
         await employee.save();
+
+        const updatedEmployee = await Employee.findById(id)
+            .populate('department', 'name')
+            .populate('coreDepartment', 'name');
 
         res.json({ 
             success: true, 
-            message: "Employee email updated successfully", 
-            employee: {
-                _id: employee._id,
-                name: employee.name,
-                email: employee.email,
-                institutionId: employee.institutionId
-            }
+            message: "Employee updated successfully", 
+            employee: updatedEmployee
         });
     } catch (error) {
         console.error("Admin Update Employee Error:", error);
