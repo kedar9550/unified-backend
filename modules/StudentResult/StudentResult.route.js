@@ -5,7 +5,8 @@ const {
     downloadTemplate,
     uploadCSV,
     getResults,
-    getProctorPassPercentage
+    getProctorPassPercentage,
+    getProctorDepartments
 } = require("./StudentResult.controller");
 const { protect, authorize } = require("../../middlewares/authMiddleware");
 
@@ -62,6 +63,7 @@ router.post(
  * @access  Private
  */
 router.get("/proctor-results", protect, getProctorPassPercentage);
+router.get("/proctor-departments", protect, getProctorDepartments);
 
 /**
  * @route   GET /api/student-results

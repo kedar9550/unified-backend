@@ -4,6 +4,7 @@ const SemesterType = require("../semesterType/semesterType.model");
 const Employee = require("../employee/employee.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
+const ProcterMaping = require("../ProcterMaping/ProcterMaping.model");
 
 /**
  * Bulk insert from CSV
@@ -487,8 +488,21 @@ const getAvailableSemesters = async (req, res) => {
             if (academicYearId) query.academicYearId = academicYearId;
         }
 
-        const semesters = await FacultySubjectResult.distinct("semester", query);
-        res.json(semesters.filter(s => s != null).sort((a, b) => a - b));
+        const teachingSemesters = await FacultySubjectResult.distinct("semester", query);
+
+        // Also check proctoring assignments
+        const proctorQuery = {};
+        if (facultyId) proctorQuery.proctorId = facultyId.trim();
+        if (academicYear) {
+            const { academicYearId } = await resolveAcademicIds({ academicYear });
+            if (academicYearId) proctorQuery.academicYearId = academicYearId;
+        }
+        const proctoringSemesters = await ProcterMaping.distinct("semester", proctorQuery);
+
+        // Merge and unique
+        const allSemesters = [...new Set([...teachingSemesters, ...proctoringSemesters])];
+        
+        res.json(allSemesters.filter(s => s != null).sort((a, b) => a - b));
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
