@@ -33,6 +33,39 @@ const convertRomanToNumber = (romanStr) => {
   return romanMap[roman] || null;
 };
 
+
+const convertSemesterToNumber = (semesterStr) => {
+  if (!semesterStr) return null;
+
+  const str = semesterStr.trim().toUpperCase();
+
+  // Case 1: "VIII Semester"
+  const romanMatch = str.match(/^(I|II|III|IV|V|VI|VII|VIII|IX|X)\s+SEMESTER$/);
+  if (romanMatch) {
+    const romanMap = {
+      I: 1, II: 2, III: 3, IV: 4, V: 5,
+      VI: 6, VII: 7, VIII: 8, IX: 9, X: 10
+    };
+    return romanMap[romanMatch[1]];
+  }
+
+  // Case 2: "2/4 Semester-II"
+  const complexMatch = str.match(/^(\d+)\/\d+\s+SEMESTER-(I|II|III|IV)$/);
+  if (complexMatch) {
+    const year = parseInt(complexMatch[1]);
+
+    const romanMap = {
+      I: 1, II: 2, III: 3, IV: 4
+    };
+
+    const semInYear = romanMap[complexMatch[2]];
+
+    return (year - 1) * 2 + semInYear;
+  }
+
+  return null;
+};
+
 /**
  * Parse Semester Results
  * Example: "Sem11:76.35, Sem12:80.1" -> [{ semester: 1, percentage: 76.35 }, { semester: 2, percentage: 80.1 }]
@@ -118,7 +151,7 @@ const transformStudentData = async (externalData, defaultPassword) => {
     academicInfo: {
       programName: programExists ? programExists.name : null,
       branch: branchExists ? branchExists.name : branchName,
-      semester: convertRomanToNumber(externalData.semestername),
+      semester: convertSemesterToNumber(externalData.semestername),
       joinedBatch: parseInt(externalData.joinedbatch) || null,
       academicBatch: parseInt(externalData.acadamicbatch) || null,
       joinedYear: externalData.joinedyear || "",
