@@ -46,13 +46,21 @@ const loginUser = async (institutionId, password, appName) => {
         throw new Error('User not authorized for this application');
     }
 
+    const normalizedUser = normalizeUser(user, userType);
+
+    return {
+        user: normalizedUser,
+        roles
+    };
+};
+
+const normalizeUser = (user, userType) => {
     const toTitleCase = (str) => {
         if (!str) return str;
         return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
     };
 
-    // For frontend compatibility, normalize the user object
-    const normalizedUser = {
+    return {
         _id: user._id,
         name: toTitleCase(userType === 'Employee' ? user.name : user.personalInfo?.studentName),
         institutionId: userType === 'Employee' ? user.institutionId : user.rollNo,
@@ -62,14 +70,16 @@ const loginUser = async (institutionId, password, appName) => {
         designation: userType === 'Employee' ? user.designation : 'Student',
         userType: userType,
         profileImage: userType === 'Employee' ? user.profileImage : null,
-    };
-
-    return {
-        user: normalizedUser,
-        roles
+        scopusId: userType === 'Employee' ? user.scopusId : "",
+        wosId: userType === 'Employee' ? user.wosId : "",
+        orcidId: userType === 'Employee' ? user.orcidId : "",
+        googleScholarId: userType === 'Employee' ? user.googleScholarId : "",
+        panNumber: userType === 'Employee' ? user.panNumber : "",
+        college: userType === 'Employee' ? user.college : "",
     };
 };
 
 module.exports = {
-    loginUser
+    loginUser,
+    normalizeUser
 };
