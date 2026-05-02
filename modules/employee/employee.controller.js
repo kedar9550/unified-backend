@@ -1,4 +1,5 @@
 const Employee = require('./employee.model');
+const mongoose = require('mongoose');
 const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
 const Department = require('../academics/department.model');
@@ -150,17 +151,19 @@ const getMe = async (req, res) => {
         const isNumeric = /^\d+$/.test(req.user.institutionId);
 
         if (isNumeric) {
-            user = await Employee.findById(req.user._id);
+            user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name');
         } else {
             const Student = require('../StudentData/Studentdata.model');
-            user = await Student.findById(req.user._id);
+            user = await Student.findOne({ rollNo: req.user.institutionId.toUpperCase() });
         }
 
         if (!user) return res.status(404).json({ message: "User not found" });
 
+        const normalizedUser = authService.normalizeUser(user, isNumeric ? 'Employee' : 'Student');
+
         res.json({
             user: {
-                ...req.user,
+                ...normalizedUser,
                 roles: req.user.roles
             }
         });
@@ -186,14 +189,30 @@ const logoutUser = (req, res) => {
  */
 const updateProfile = async (req, res) => {
     try {
-        const allowedFields = ["name", "phone", "department", "institutionId", "designation", "email"];
+        const allowedFields = ["name", "phone", "department", "institutionId", "designation", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college"];
         const updates = {};
         allowedFields.forEach((field) => {
             if (req.body[field]) updates[field] = req.body[field];
         });
 
-        const user = await Employee.findByIdAndUpdate(req.user._id, updates, { new: true });
-        res.json({ user });
+        const institutionId = req.user.institutionId;
+        if (!institutionId) {
+            return res.status(400).json({ message: "Invalid session. Please log in again." });
+        }
+
+        const user = await Employee.findOneAndUpdate(
+            { institutionId },
+            { $set: updates },
+            { new: true }
+        ).populate('department', 'name');
+        
+        if (!user) return res.status(404).json({ message: "User not found" });
+
+        // Refresh token with updated user data
+        const normalizedUser = authService.normalizeUser(user, 'Employee');
+        generateToken({ ...normalizedUser, roles: req.user.roles }, res);
+
+        res.json({ user: normalizedUser });
     } catch (err) {
         res.status(500).json({ message: "Server error" });
     }
