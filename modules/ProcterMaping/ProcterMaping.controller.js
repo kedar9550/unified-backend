@@ -178,21 +178,30 @@ const resolveTargetIds = async (queryAy, querySem) => {
  */
 const getMappings = async (req, res) => {
     try {
-        const { academicYear, semester, proctorId, studentId } = req.query;
+        const { academicYear, semester, proctorId, studentId, academicYearId, semesterTypeId } = req.query;
         const query = {};
 
         if (proctorId) query.proctorId = proctorId.trim();
         if (studentId) query.studentId = studentId.trim();
 
-        if (academicYear && semester) {
-            const { academicYearId, semesterTypeId } = await resolveTargetIds(academicYear, semester);
+        if (academicYearId) {
             query.academicYearId = academicYearId;
+        }
+        if (semesterTypeId) {
             query.semesterTypeId = semesterTypeId;
-        } else if (!proctorId && !studentId) {
-            // If no specific proctor/student search, default to active
-            const { academicYearId, semesterTypeId } = await resolveActiveIds();
-            query.academicYearId = academicYearId;
-            query.semesterTypeId = semesterTypeId;
+        }
+
+        if (!academicYearId && !semesterTypeId) {
+            if (academicYear && semester) {
+                const { academicYearId: resolvedAy, semesterTypeId: resolvedSem } = await resolveTargetIds(academicYear, semester);
+                query.academicYearId = resolvedAy;
+                query.semesterTypeId = resolvedSem;
+            } else if (!proctorId && !studentId) {
+                // If no specific proctor/student search, default to active
+                const { academicYearId: activeAy, semesterTypeId: activeSem } = await resolveActiveIds();
+                query.academicYearId = activeAy;
+                query.semesterTypeId = activeSem;
+            }
         }
 
         const data = await ProcterMaping.find(query)

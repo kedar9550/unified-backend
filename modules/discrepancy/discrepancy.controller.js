@@ -15,13 +15,18 @@ const SECTION_ROLE_MAP = {
  */
 const raiseDiscrepancy = async (req, res) => {
     try {
-        const { academicYearId, semesterTypeId, semester, section, note, facultyInstitutionId, facultyName } = req.body;
+        const { academicYearId, semesterTypeId, semester, section, note, facultyInstitutionId, facultyName, proctoringType, studentDepartmentId } = req.body;
 
         if (!academicYearId || !semesterTypeId || !section || !note) {
             return res.status(400).json({ message: "academicYearId, semesterTypeId, section, and note are required." });
         }
 
-        const assignedRole = SECTION_ROLE_MAP[section] || "ADMIN";
+        let assignedRole = SECTION_ROLE_MAP[section] || "ADMIN";
+
+        // Specialized routing for Proctoring Assigned Count -> HOD
+        if (section === "PROCTORING" && proctoringType === "ASSIGNED_COUNT") {
+            assignedRole = "HOD";
+        }
 
         const disc = await Discrepancy.create({
             raisedBy:             req.user.userId,
@@ -33,6 +38,8 @@ const raiseDiscrepancy = async (req, res) => {
             section,
             note,
             assignedRole,
+            proctoringType,
+            studentDepartmentId,
         });
 
         res.status(201).json({ message: "Discrepancy raised successfully.", discrepancy: disc });
@@ -50,32 +57,53 @@ const raiseDiscrepancy = async (req, res) => {
 const getDiscrepancies = async (req, res) => {
     try {
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
+        const resolverRoles = userRoles.filter(r => !["FACULTY", "STUDENT"].includes(r));
         const isFaculty = userRoles.includes("FACULTY");
 
         let query = {};
 
-        if (isFaculty) {
-            // Faculty only sees what they raised
-            query.raisedBy = req.user.userId;
-        } else {
-            // Find the highest-priority role that has assignments
-            const resolverRoles = userRoles.filter(r => !["FACULTY", "STUDENT"].includes(r));
-            if (resolverRoles.length === 0) {
-                return res.json([]);
-            }
-            
-            // Backward compatibility for existing discrepancies that were saved with "FEEDBACK" role
+        if (resolverRoles.length > 0) {
+            // User is a resolver (HOD, ADMIN, EXAMSECTION, etc.)
             const rolesToQuery = [...resolverRoles];
             if (rolesToQuery.includes("FEEDBACK COORDINATOR")) {
                 rolesToQuery.push("FEEDBACK");
             }
 
-            query.assignedRole = { $in: rolesToQuery };
+            // If user has HOD role, filter by department for HOD-assigned ones
+            if (rolesToQuery.includes("HOD")) {
+                const hodDeptIds = [];
+                (req.user.roles || []).forEach(r => {
+                    if (r.role?.toUpperCase() === "HOD" && r.departments) {
+                        const depts = r.departments.map(d => typeof d === 'object' ? d._id : d);
+                        hodDeptIds.push(...depts);
+                    }
+                });
+
+                const Employee = require("../employee/employee.model");
+                const employee = await Employee.findById(req.user.userId);
+                if (hodDeptIds.length === 0 && employee?.department) {
+                    hodDeptIds.push(employee.department);
+                }
+
+                query.$or = [
+                    { assignedRole: { $in: rolesToQuery.filter(r => r !== "HOD") } },
+                    { assignedRole: "HOD", studentDepartmentId: { $in: hodDeptIds } }
+                ];
+            } else {
+                query.assignedRole = { $in: rolesToQuery };
+            }
+        } else if (isFaculty) {
+            // User is ONLY a faculty, see only raised discrepancies
+            query.raisedBy = req.user.userId;
+        } else {
+            // Student or role with no resolver permissions
+            return res.json([]);
         }
 
         const discrepancies = await Discrepancy.find(query)
             .populate("academicYearId", "year")
             .populate("semesterTypeId", "name")
+            .populate("studentDepartmentId", "name")
             .populate("raisedBy", "name institutionId")
             .populate("resolvedBy", "name")
             .sort({ createdAt: -1 });
