@@ -1,4 +1,5 @@
 const Employee = require('./employee.model');
+const Student = require('../StudentData/Studentdata.model');
 const mongoose = require('mongoose');
 const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
@@ -153,7 +154,6 @@ const getMe = async (req, res) => {
         if (isNumeric) {
             user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name');
         } else {
-            const Student = require('../StudentData/Studentdata.model');
             user = await Student.findOne({ rollNo: req.user.institutionId.toUpperCase() });
         }
 
@@ -577,41 +577,48 @@ const changePassword = async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;
         const userId = req.user?.userId;
+        const userType = req.user?.userType || ( /^\d+$/.test(req.user?.institutionId) ? 'Employee' : 'Student');
 
-        console.log("Change Password Attempt for User ID:", userId);
+        console.log("Change Password Attempt for User ID:", userId, "Type:", userType);
 
         if (!oldPassword || !newPassword) {
             return res.status(400).json({ message: 'Old and new password are required' });
         }
         
-        // Try finding by userId first, then institutionId as fallback
-        let employee = await Employee.findById(userId).select('+password');
-        
-        if (!employee && req.user?.institutionId) {
-            console.log("Change Password: findById failed, trying institutionId:", req.user.institutionId);
-            employee = await Employee.findOne({ institutionId: req.user.institutionId }).select('+password');
+        let user;
+        if (userType === 'Student') {
+            user = await Student.findById(userId).select('+system.password');
+            if (!user && req.user?.institutionId) {
+                user = await Student.findOne({ rollNo: req.user.institutionId.toUpperCase() }).select('+system.password');
+            }
+        } else {
+            user = await Employee.findById(userId).select('+password');
+            if (!user && req.user?.institutionId) {
+                user = await Employee.findOne({ institutionId: req.user.institutionId }).select('+password');
+            }
         }
         
-        if (!employee) {
-            console.log("Change Password: Employee not found for ID:", userId, "or Institution ID:", req.user?.institutionId);
-            return res.status(404).json({ message: 'Employee not found' });
+        if (!user) {
+            return res.status(404).json({ message: `${userType} not found` });
         }
 
-        console.log("Change Password: Found employee:", employee.email);
-        console.log("Change Password: Has password in DB?", !!employee.password);
-
-        // Direct comparison for debugging
-        const isMatch = await bcrypt.compare(oldPassword, employee.password);
-        console.log("Change Password: Old password match?", isMatch);
-
+        // Match Password
+        const isMatch = await user.comparePassword(oldPassword);
         if (!isMatch) {
             return res.status(401).json({ message: 'Current password is incorrect' });
         }
 
-        employee.password = newPassword; 
-        await employee.save();
+        // Set new password
+        if (userType === 'Student') {
+            if (!user.system) user.system = {};
+            user.system.password = newPassword;
+        } else {
+            user.password = newPassword;
+        }
+        
+        await user.save();
 
-        console.log("Change Password: Password updated successfully for:", employee.email);
+        console.log("Change Password: Password updated successfully for:", userType, userId);
         return res.status(200).json({ message: 'Password updated successfully' });
     } catch (err) {
         console.error('changePassword error:', err);
