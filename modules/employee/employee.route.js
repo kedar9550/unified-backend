@@ -16,7 +16,8 @@ const {
     getecapdata,
     bulkRegisterUser,
     bulkUpdateEmployees,
-    adminUpdateEmployee
+    adminUpdateEmployee,
+    changePassword
 } = require('./employee.controller');
 
 // --- Multer Setup ---
@@ -51,6 +52,7 @@ router.post('/logout', protect, logoutUser);
 // --- Profile & User Data ---
 router.get('/me', protect, getMe);
 router.put('/me/update', protect, updateProfile);
+router.put('/me/change-password', protect, changePassword);
 router.post('/me/profile-image', protect, upload.single('image'), profileImage);
 
 // --- Admin / Discovery ---

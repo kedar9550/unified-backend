@@ -570,6 +570,55 @@ const adminUpdateEmployee = async (req, res) => {
     }
 };
 
+/**
+ * Change Password — verifies old password, saves new hashed password.
+ */
+const changePassword = async (req, res) => {
+    try {
+        const { oldPassword, newPassword } = req.body;
+        const userId = req.user?.userId;
+
+        console.log("Change Password Attempt for User ID:", userId);
+
+        if (!oldPassword || !newPassword) {
+            return res.status(400).json({ message: 'Old and new password are required' });
+        }
+        
+        // Try finding by userId first, then institutionId as fallback
+        let employee = await Employee.findById(userId).select('+password');
+        
+        if (!employee && req.user?.institutionId) {
+            console.log("Change Password: findById failed, trying institutionId:", req.user.institutionId);
+            employee = await Employee.findOne({ institutionId: req.user.institutionId }).select('+password');
+        }
+        
+        if (!employee) {
+            console.log("Change Password: Employee not found for ID:", userId, "or Institution ID:", req.user?.institutionId);
+            return res.status(404).json({ message: 'Employee not found' });
+        }
+
+        console.log("Change Password: Found employee:", employee.email);
+        console.log("Change Password: Has password in DB?", !!employee.password);
+
+        // Direct comparison for debugging
+        const isMatch = await bcrypt.compare(oldPassword, employee.password);
+        console.log("Change Password: Old password match?", isMatch);
+
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Current password is incorrect' });
+        }
+
+        employee.password = newPassword; 
+        await employee.save();
+
+        console.log("Change Password: Password updated successfully for:", employee.email);
+        return res.status(200).json({ message: 'Password updated successfully' });
+    } catch (err) {
+        console.error('changePassword error:', err);
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -581,5 +630,6 @@ module.exports = {
     getecapdata,
     bulkRegisterUser,
     bulkUpdateEmployees,
-    adminUpdateEmployee
+    adminUpdateEmployee,
+    changePassword
 };
