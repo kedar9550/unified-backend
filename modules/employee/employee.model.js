@@ -58,6 +58,53 @@ const EmployeeSchema = new mongoose.Schema({
         }
     },
 
+
+    scopusId: {
+        type: String,
+        trim: true,
+        default: null,
+        unique: true,
+    },
+
+    webOfScienceId: {
+        type: String,
+        trim: true,
+        default: null,
+        unique: true,
+    },
+
+    orcid: {
+        type: String,
+        trim: true,
+        unique: true,
+        validate: {
+            validator: function (v) {
+                return !v || /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(v);
+            },
+            message: "Invalid ORCID format"
+        }
+    },
+
+    googleScholarId: {
+        type: String,
+        trim: true,
+        default: null,
+        unique: true,
+    },
+
+    panNumber: {
+        type: String,
+        uppercase: true,
+        trim: true,
+        unique: true,
+        validate: {
+            validator: function (v) {
+                return !v || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v);
+            },
+            message: "Invalid PAN format"
+        }
+    },
+
     isActive: {
         type: Boolean,
         default: true
