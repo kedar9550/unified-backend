@@ -39,6 +39,10 @@ const DiscrepancySchema = new mongoose.Schema({
         default: "PENDING",
     },
 
+    // Proctoring specific fields
+    proctoringType: { type: String, enum: ["ASSIGNED_COUNT", "PASS_COUNT"] },
+    studentDepartmentId: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
+
     // Resolution
     resolvedBy:     { type: mongoose.Schema.Types.ObjectId, ref: "Employee" },
     resolutionNote: { type: String, trim: true },

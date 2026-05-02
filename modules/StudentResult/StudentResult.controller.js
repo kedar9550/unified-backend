@@ -7,6 +7,7 @@ const ProcterMaping = require("../ProcterMaping/ProcterMaping.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
 const Student = require("../StudentData/Studentdata.model");
+const Department = require("../academics/department.model");
 
 const convertRomanToNumber = (romanStr) => {
     if (!romanStr) return null;
@@ -436,10 +437,50 @@ const getProctorPassPercentage = async (req, res) => {
     }
 };
 
+const getProctorDepartments = async (req, res) => {
+    try {
+        const { facultyId, academicYear, semester } = req.query;
+
+        if (!facultyId || !academicYear) {
+            return res.status(400).json({ message: "facultyId and academicYear are required." });
+        }
+
+        const query = {
+            proctorId: facultyId,
+            academicYearId: academicYear
+        };
+
+        if (semester) {
+            query.semester = Number(semester);
+        }
+
+        const mappings = await ProcterMaping.find(query).select("studentId");
+        const studentIds = mappings.map(m => m.studentId);
+
+        if (studentIds.length === 0) {
+            return res.json([]);
+        }
+
+        const students = await Student.find({ rollNo: { $in: studentIds } }).select("academicInfo.department");
+        const deptIds = [...new Set(students.map(s => s.academicInfo?.department?.toString()).filter(Boolean))];
+
+        if (deptIds.length === 0) {
+            return res.json([]);
+        }
+
+        const departments = await Department.find({ _id: { $in: deptIds } }).select("name _id");
+        res.json(departments);
+    } catch (error) {
+        console.error("Fetch Proctor Departments Error:", error);
+        res.status(500).json({ message: error.message || "An error occurred while fetching departments." });
+    }
+};
+
 module.exports = {
     downloadTemplate,
     uploadCSV,
     getResults,
     getProctorPassPercentage,
+    getProctorDepartments,
     updateProctorSummaries // Exporting for use in ProcterMaping
 };
