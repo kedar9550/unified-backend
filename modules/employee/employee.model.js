@@ -69,6 +69,16 @@ const EmployeeSchema = new mongoose.Schema({
     profileImage: {
         type: String,
         default: null
+    },
+    scopusId: { type: String, default: "" },
+    wosId: { type: String, default: "" },
+    orcidId: { type: String, default: "" },
+    googleScholarId: { type: String, default: "" },
+    panNumber: { type: String, default: "" },
+    college: { 
+        type: String, 
+        enum: ["Aditya University", "Aditya college of engineering and technology", "Aditya College of Pharmacy", ""],
+        default: "" 
     }
 
 }, { timestamps: true });
