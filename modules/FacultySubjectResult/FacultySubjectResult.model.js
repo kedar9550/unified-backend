@@ -11,7 +11,22 @@ const FacultySubjectResultSchema = new mongoose.Schema({
     courseType: { type: String, enum: ["THEORY", "PRACTICAL", "INTEGRATED"] },
     branch: String,
     section: String,
-    semester: Number,
+
+
+    // New fields for Unified System
+    programId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Program",
+        required: true,
+    },
+    branchId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Branch",
+        required: true,
+    },
+    semesterNumber: { type: String }, // For SEM programs (supports formats like "25-S")
+    yearNumber: { type: String },     // For YEAR programs (Pharma.D)
+
     appeared: Number,
     passed: Number,
     passPercentage: Number,
@@ -21,10 +36,12 @@ const FacultySubjectResultSchema = new mongoose.Schema({
     academicYearId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "AcademicYear",
+        required: true,
     },
     semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "SemesterType",
+        // Nullable for YEAR programs
     },
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,

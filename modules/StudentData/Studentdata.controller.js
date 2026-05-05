@@ -478,14 +478,21 @@ exports.getUnassignedStudents = async (req, res) => {
   try {
     const students = await Student.find({
       $or: [
-        { "academicInfo.department": { $exists: false } },
         { "academicInfo.department": null },
-        { "academicInfo.semester": { $exists: false } },
-        { "academicInfo.semester": null },
-        { "academicInfo.branch": { $exists: false } },
         { "academicInfo.branch": null },
-        { "academicInfo.programName": { $exists: false } },
-        { "academicInfo.programName": null }
+        { "academicInfo.programName": null },
+        { 
+          $and: [
+            { "academicInfo.programName": "Pharma.D" },
+            { "academicInfo.yearName": null }
+          ]
+        },
+        {
+          $and: [
+            { "academicInfo.programName": { $ne: "Pharma.D" } },
+            { "academicInfo.semester": null }
+          ]
+        }
       ]
     }).populate("academicInfo.department", "name code").sort({ createdAt: -1 });
     res.status(200).json({ success: true, data: students });
@@ -537,14 +544,21 @@ exports.deleteAllUnassigned = async (req, res) => {
   try {
     const result = await Student.deleteMany({
       $or: [
-        { "academicInfo.department": { $exists: false } },
         { "academicInfo.department": null },
-        { "academicInfo.semester": { $exists: false } },
-        { "academicInfo.semester": null },
-        { "academicInfo.branch": { $exists: false } },
         { "academicInfo.branch": null },
-        { "academicInfo.programName": { $exists: false } },
-        { "academicInfo.programName": null }
+        { "academicInfo.programName": null },
+        { 
+          $and: [
+            { "academicInfo.programName": "Pharma.D" },
+            { "academicInfo.yearName": null }
+          ]
+        },
+        {
+          $and: [
+            { "academicInfo.programName": { $ne: "Pharma.D" } },
+            { "academicInfo.semester": null }
+          ]
+        }
       ]
     });
     res.json({ success: true, count: result.deletedCount });
@@ -560,7 +574,12 @@ exports.getAssignedStudents = async (req, res) => {
   try {
     const students = await Student.find({
       "academicInfo.department": { $ne: null },
-      "academicInfo.semester": { $ne: null }
+      "academicInfo.branch": { $ne: null },
+      "academicInfo.programName": { $ne: null },
+      $or: [
+        { "academicInfo.programName": "Pharma.D", "academicInfo.yearName": { $ne: null } },
+        { "academicInfo.programName": { $ne: "Pharma.D" }, "academicInfo.semester": { $ne: null } }
+      ]
     }).populate("academicInfo.department", "name code").sort({ updatedAt: -1 });
     res.status(200).json({ success: true, data: students });
   } catch (error) {

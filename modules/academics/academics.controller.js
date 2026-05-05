@@ -1,6 +1,72 @@
 const Department = require('./department.model');
 const Program = require('./program.model');
 const Branch = require('./branch.model');
+const School = require('./school.model');
+
+// ====================
+// SCHOOL CONTROLLERS
+// ====================
+
+// @desc    Create a new school
+// @route   POST /api/academics/schools
+// @access  Private
+exports.createSchool = async (req, res, next) => {
+    try {
+        const school = new School(req.body);
+        const savedSchool = await school.save();
+        res.status(201).json({ success: true, data: savedSchool });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(400).json({ success: false, message: 'School name or code already exists.' });
+        }
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Get all schools
+// @route   GET /api/academics/schools
+// @access  Private
+exports.getAllSchools = async (req, res, next) => {
+    try {
+        const query = req.query.status !== undefined ? { status: req.query.status === 'true' } : { status: true };
+        const schools = await School.find(query);
+        res.status(200).json({ success: true, data: schools });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Update a school
+// @route   PUT /api/academics/schools/:id
+// @access  Private
+exports.updateSchool = async (req, res, next) => {
+    try {
+        const school = await School.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!school) return res.status(404).json({ success: false, message: 'School not found' });
+        res.status(200).json({ success: true, data: school });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// @desc    Delete a school
+// @route   DELETE /api/academics/schools/:id
+// @access  Private
+exports.deleteSchool = async (req, res, next) => {
+    try {
+        const school = await School.findById(req.params.id);
+        if (!school) return res.status(404).json({ success: false, message: 'School not found' });
+        
+        const deptCount = await Department.countDocuments({ schoolId: school._id });
+        if (deptCount > 0) {
+            return res.status(400).json({ success: false, message: 'Cannot delete school with existing departments' });
+        }
+        await school.deleteOne();
+        res.status(200).json({ success: true, message: 'School deleted' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
 
 // ====================
 // DEPARTMENT CONTROLLERS
@@ -45,7 +111,7 @@ exports.getAllDepartments = async (req, res, next) => {
             query._id = { $in: deptIds };
         }
 
-        const departments = await Department.find(query);
+        const departments = await Department.find(query).populate('schoolId');
         res.status(200).json({ success: true, data: departments });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });

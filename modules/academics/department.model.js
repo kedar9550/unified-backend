@@ -23,9 +23,15 @@ const departmentSchema = new mongoose.Schema({
         default: true,
         index: true
     },
-    hasStudents: {
-        type: Boolean,
-        default: false
+    type: {
+        type: String,
+        enum: ['Academic', 'Central'],
+        default: 'Academic',
+        required: true
+    },
+    schoolId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'School'
     }
 }, { timestamps: true });
 

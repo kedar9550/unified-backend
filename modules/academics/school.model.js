@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const programSchema = new mongoose.Schema({
+const schoolSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
@@ -14,24 +14,9 @@ const programSchema = new mongoose.Schema({
         trim: true,
         unique: true
     },
-    type: {
-        type: String,
-        enum: ['UG', 'PG', 'PHD', 'DIPLOMA', 'CERTIFICATE'],
-        required: true
-    },
     description: {
         type: String,
         trim: true
-    },
-    durationYears: {
-        type: Number,
-        required: true,
-        default: 4
-    },
-    programPattern: {
-        type: String,
-        enum: ['SEMESTER', 'YEAR'],
-        default: 'SEMESTER'
     },
     status: {
         type: Boolean,
@@ -40,4 +25,4 @@ const programSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Program', programSchema);
+module.exports = mongoose.model('School', schoolSchema);

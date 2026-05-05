@@ -3,6 +3,15 @@ const router = express.Router();
 const academicsController = require('./academics.controller');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 
+// --- SCHOOL ROUTES ---
+router.route('/schools')
+    .get(protect, academicsController.getAllSchools)
+    .post(protect, authorize('UNIPRIME'), academicsController.createSchool);
+
+router.route('/schools/:id')
+    .put(protect, authorize('UNIPRIME'), academicsController.updateSchool)
+    .delete(protect, authorize('UNIPRIME'), academicsController.deleteSchool);
+
 // --- DEPARTMENT ROUTES ---
 router.route('/departments')
     .get(protect, academicsController.getAllDepartments)

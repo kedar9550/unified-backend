@@ -6,13 +6,17 @@ const Department = require("../academics/department.model");
 const EXTERNAL_API_URL = "https://info.aec.edu.in/adityaapi/api/studentdata";
 
 /**
- * Fetch student data from external API
+ * Fetch student data from external eCap API
  */
 const fetchStudentDataFromAPI = async (rollNo) => {
   try {
     const response = await axios.get(`${EXTERNAL_API_URL}/${rollNo}`);
-    if (response.data && response.data.length > 0) {
-      return response.data[0]; // Assuming it returns an array of student data
+    if (Array.isArray(response.data) && response.data.length > 0) {
+      const studentData = response.data[0];
+      // Check if it's an actual student record, not an error object like [{"Message": "Not found"}]
+      if (studentData && studentData.rollno) {
+        return studentData;
+      }
     }
     return null;
   } catch (error) {
@@ -22,30 +26,23 @@ const fetchStudentDataFromAPI = async (rollNo) => {
 };
 
 /**
- * Convert Roman numeral semester to Number
+ * Convert Roman numeral semester string to Number
+ * Handles:
+ *   "I Semester"   → 1
+ *   "VIII Semester" → 8
+ *   "2/4 Semester-II" → 4
+ *
+ * Returns null for Pharma.D year strings like "I Year", "II Year"
  */
-const convertRomanToNumber = (romanStr) => {
-  if (!romanStr) return null;
-  const roman = romanStr.split(" ")[0].toUpperCase();
-  const romanMap = {
-    "I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10
-  };
-  return romanMap[roman] || null;
-};
-
-
 const convertSemesterToNumber = (semesterStr) => {
   if (!semesterStr) return null;
 
   const str = semesterStr.trim().toUpperCase();
 
-  // Case 1: "VIII Semester"
+  // Case 1: "VIII Semester", "I Semester" etc.
   const romanMatch = str.match(/^(I|II|III|IV|V|VI|VII|VIII|IX|X)\s+SEMESTER$/);
   if (romanMatch) {
-    const romanMap = {
-      I: 1, II: 2, III: 3, IV: 4, V: 5,
-      VI: 6, VII: 7, VIII: 8, IX: 9, X: 10
-    };
+    const romanMap = { I: 1, II: 2, III: 3, IV: 4, V: 5, VI: 6, VII: 7, VIII: 8, IX: 9, X: 10 };
     return romanMap[romanMatch[1]];
   }
 
@@ -53,29 +50,68 @@ const convertSemesterToNumber = (semesterStr) => {
   const complexMatch = str.match(/^(\d+)\/\d+\s+SEMESTER-(I|II|III|IV)$/);
   if (complexMatch) {
     const year = parseInt(complexMatch[1]);
-
-    const romanMap = {
-      I: 1, II: 2, III: 3, IV: 4
-    };
-
+    const romanMap = { I: 1, II: 2, III: 3, IV: 4 };
     const semInYear = romanMap[complexMatch[2]];
-
     return (year - 1) * 2 + semInYear;
   }
 
+  // Pharma.D: "I Year", "II Year" etc. → return null (not a semester number)
   return null;
 };
 
 /**
- * Parse Semester Results
- * Example: "Sem11:76.35, Sem12:80.1" -> [{ semester: 1, percentage: 76.35 }, { semester: 2, percentage: 80.1 }]
+ * Detect semType from eCap semestername field
+ *
+ * Rules:
+ *   "I Year" / "II Year" etc.    → { semType: "YEAR", yearName: "I Year", semester: null }
+ *   "I Semester" / "III Semester" → ODD  (1,3,5,7)
+ *   "II Semester" / "IV Semester" → EVEN (2,4,6,8)
+ *   null / unrecognized           → { semType: null, yearName: null, semester: null }
+ *
+ * Note: SUMMER is NOT derived from eCap API — it is set manually by admin
+ *       when activating the summer semester in AcademicYear settings.
+ *       eCap never returns "Summer Semester" — so we don't handle it here.
+ */
+const resolveSemFields = (semesterStr) => {
+  if (!semesterStr) {
+    return { semester: null, semType: null, yearName: null };
+  }
+
+  const str = semesterStr.trim().toUpperCase();
+
+  // Pharma.D year pattern: "I YEAR", "II YEAR", "III YEAR" etc.
+  const yearPattern = /^(I|II|III|IV|V|VI)\s+YEAR$/;
+  if (yearPattern.test(str)) {
+    return {
+      semester: null,
+      semType: "YEAR",
+      yearName: semesterStr.trim()  // preserve original case: "I Year"
+    };
+  }
+
+  // Regular semester number
+  const semNum = convertSemesterToNumber(semesterStr);
+  if (semNum !== null) {
+    return {
+      semester: semNum,
+      semType: semNum % 2 !== 0 ? "ODD" : "EVEN",
+      yearName: null
+    };
+  }
+
+  // Unrecognized
+  return { semester: null, semType: null, yearName: null };
+};
+
+/**
+ * Parse Semester Results string from eCap
+ * Example: "Sem11:76.35, Sem12:80.1"
  */
 const parseSemesterResults = (semesterResultString) => {
   if (!semesterResultString) return [];
 
   const results = [];
   const parts = semesterResultString.split(",");
-
   const semMapping = {
     "SEM11": 1, "SEM12": 2,
     "SEM21": 3, "SEM22": 4,
@@ -84,15 +120,22 @@ const parseSemesterResults = (semesterResultString) => {
   };
 
   for (const part of parts) {
+    if (!part.includes(":")) {
+      if (part.trim()) {
+        results.push({ semKey: part.trim() });
+      }
+      continue;
+    }
+
     const [semKey, percentageStr] = part.split(":");
     if (semKey && percentageStr) {
       const formattedKey = semKey.trim().toUpperCase();
       const semesterNumber = semMapping[formattedKey];
       if (semesterNumber) {
-        results.push({
-          semester: semesterNumber,
-          percentage: parseFloat(percentageStr)
-        });
+        results.push({ semester: semesterNumber, percentage: parseFloat(percentageStr) });
+      } else {
+        // Fallback for unmapped formats like Pharma.D
+        results.push({ semKey: semKey.trim(), percentage: parseFloat(percentageStr) || 0 });
       }
     }
   }
@@ -100,10 +143,9 @@ const parseSemesterResults = (semesterResultString) => {
 };
 
 /**
- * Transform external data to internal schema
+ * Transform external eCap data to our internal Student schema
  */
 const transformStudentData = async (externalData, defaultPassword) => {
-  // 1. Normalize simple values
   const normalizeStatus = (status) => {
     if (!status) return "Regular";
     const s = status.trim();
@@ -123,18 +165,25 @@ const transformStudentData = async (externalData, defaultPassword) => {
   const studentStatus = normalizeStatus(externalData.studentstatus);
   const isActive = studentStatus === "Regular";
 
-  // 2. Validate Program & Branch
   const programName = externalData.coursename ? externalData.coursename.trim() : null;
   const branchName = externalData.branch ? externalData.branch.trim() : null;
 
   if (!programName || !branchName) {
-    throw new Error("Missing Program or Branch in API response");
+    throw new Error(`ECAP API is missing 'coursename' or 'branch' for student ${externalData.rollno || 'Unknown'}. Received Program: '${programName}', Branch: '${branchName}'`);
   }
 
   const programExists = await Program.findOne({ name: new RegExp(`^${programName}$`, "i") });
   const branchExists = await Branch.findOne({ name: new RegExp(`^${branchName}$`, "i") });
 
-  // 3. Map Fields
+  // ── Resolve semester fields ──────────────────────────────────────
+  // eCap field: externalData.semestername
+  // Examples:
+  //   "I Semester"  → semester: 1, semType: "ODD",  yearName: null
+  //   "IV Semester" → semester: 4, semType: "EVEN", yearName: null
+  //   "I Year"      → semester: null, semType: "YEAR", yearName: "I Year"  (Pharma.D)
+  const { semester, semType, yearName } = resolveSemFields(externalData.semestername);
+  // ────────────────────────────────────────────────────────────────
+
   return {
     rollNo: externalData.rollno,
     personalInfo: {
@@ -151,7 +200,9 @@ const transformStudentData = async (externalData, defaultPassword) => {
     academicInfo: {
       programName: programExists ? programExists.name : null,
       branch: branchExists ? branchExists.name : branchName,
-      semester: convertSemesterToNumber(externalData.semestername),
+      semester,        // Number or null
+      semType,         // "ODD"|"EVEN"|"YEAR"|null
+      yearName,        // "I Year"|"II Year"|... or null
       joinedBatch: parseInt(externalData.joinedbatch) || null,
       academicBatch: parseInt(externalData.acadamicbatch) || null,
       joinedYear: externalData.joinedyear || "",
@@ -189,37 +240,37 @@ const transformStudentData = async (externalData, defaultPassword) => {
     },
     education: {
       ssc: {
-        hallTicket: externalData.sschallticket,
+        hallTicket: externalData.sschtno,
         board: externalData.sscboard,
         yearOfPass: parseInt(externalData.sscyearofpass) || null,
         maxMarks: parseFloat(externalData.sscmaxmarks) || null,
-        obtainedMarks: parseFloat(externalData.sscobtainedmarks) || null,
+        obtainedMarks: parseFloat(externalData.sscobtained) || null,
         institution: externalData.sscinstitution,
         gradePoints: parseFloat(externalData.sscgradepoints) || null
       },
       intermediate: {
-        hallTicket: externalData.interhallticket,
+        hallTicket: externalData.interhtno,
         board: externalData.interboard,
         yearOfPass: parseInt(externalData.interyearofpass) || null,
         maxMarks: parseFloat(externalData.intermaxmarks) || null,
-        obtainedMarks: parseFloat(externalData.interobtainedmarks) || null,
+        obtainedMarks: parseFloat(externalData.interobtained) || null,
         institution: externalData.interinstitution,
         gradePoints: parseFloat(externalData.intergradepoints) || null
       },
       diploma: {
-        hallTicket: externalData.diplomahallticket,
+        hallTicket: externalData.diplomahtno,
         board: externalData.diplomaboard,
         yearOfPass: parseInt(externalData.diplomayearofpass) || null,
         maxMarks: parseFloat(externalData.diplomamaxmarks) || null,
-        obtainedMarks: parseFloat(externalData.diplomaobtainedmarks) || null,
+        obtainedMarks: parseFloat(externalData.diplomaobtained) || null,
         institution: externalData.diplomainstitution
       },
       degree: {
-        hallTicket: externalData.degreehallticket,
+        hallTicket: externalData.degreehtno,
         board: externalData.degreeboard,
         yearOfPass: parseInt(externalData.degreeyearofpass) || null,
         maxMarks: parseFloat(externalData.degreemaxmarks) || null,
-        obtainedMarks: parseFloat(externalData.degreeobtainedmarks) || null,
+        obtainedMarks: parseFloat(externalData.degreeobtained) || null,
         institution: externalData.degreeinstitution
       }
     },
@@ -232,5 +283,6 @@ const transformStudentData = async (externalData, defaultPassword) => {
 
 module.exports = {
   fetchStudentDataFromAPI,
-  transformStudentData
+  transformStudentData,
+  resolveSemFields  // exported for use in other modules if needed
 };

@@ -6,7 +6,7 @@ const studentSchema = new mongoose.Schema({
   rollNo: { type: String, required: true, unique: true },
 
   personalInfo: {
-    studentName: { type: String, required: true, },
+    studentName: { type: String, required: true },
     gender: String,
     dateOfBirth: String,
     bloodGroup: String,
@@ -21,7 +21,33 @@ const studentSchema = new mongoose.Schema({
     programName: { type: String },
     branch: { type: String },
     department: { type: mongoose.Schema.Types.ObjectId, ref: "Department" },
-    semester: Number,
+
+    // ─── Semester Fields ────────────────────────────────────────────
+    //
+    // semester: Number (1,2,3,4...) OR null (for Pharma.D and Summer)
+    //
+    //   B.Tech/M.Tech/MBA etc:
+    //     semester = 1 to 8  (the actual sem number from eCap)
+    //     semType  = "ODD" | "EVEN"   (auto-derived: odd number = ODD, even = EVEN)
+    //     yearName = null
+    //
+    //   Summer Semester:
+    //     semester = null
+    //     semType  = "SUMMER"
+    //     yearName = null
+    //     (summer code like "25S" is stored at AcademicYear/SemesterType level, not here)
+    //
+    //   Pharma.D:
+    //     semester = null          ← no semester concept
+    //     semType  = "YEAR"
+    //     yearName = "I Year"      ← directly from eCap semestername field
+    //
+    semester: { type: Number, default: null },     // 1,2,3... or null
+    semType:  { type: String, default: null,       // "ODD"|"EVEN"|"SUMMER"|"YEAR"
+                enum: ["ODD", "EVEN", "SUMMER", "YEAR", null] },
+    yearName: { type: String, default: null },     // only for Pharma.D: "I Year","II Year"...
+    // ────────────────────────────────────────────────────────────────
+
     joinedBatch: { type: Number, required: true },
     academicBatch: { type: Number, required: true },
     joinedYear: { type: String, required: true },
@@ -36,6 +62,7 @@ const studentSchema = new mongoose.Schema({
     overallPercent: { type: Number, default: 0 },
     semesterResults: [{
       semester: Number,
+      semKey: String,
       percentage: Number
     }]
   },
@@ -106,7 +133,6 @@ const studentSchema = new mongoose.Schema({
     password: { type: String, required: true }
   }
 
-
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
@@ -115,8 +141,13 @@ const studentSchema = new mongoose.Schema({
 
 
 studentSchema.virtual("assignmentStatus").get(function () {
-  if (this.academicInfo?.department && this.academicInfo?.semester && this.academicInfo?.branch && this.academicInfo?.programName) {
-    return "Assigned";
+  if (this.academicInfo?.department && this.academicInfo?.branch && this.academicInfo?.programName) {
+    // For Pharma.D: yearName must be set
+    if (this.academicInfo?.programName === "Pharma.D") {
+      return this.academicInfo?.yearName ? "Assigned" : "Unassigned";
+    }
+    // For others: semester must be set
+    return this.academicInfo?.semester ? "Assigned" : "Unassigned";
   }
   return "Unassigned";
 });

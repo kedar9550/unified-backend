@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const {
     uploadCSV,
+    uploadUnifiedResults,
     deleteSemesterData,
     getResults,
     getCoAttainment,
@@ -40,6 +41,19 @@ router.post(
     authorize("ADMIN", "EXAMSECTION", "FACULTY"),
     upload.single("file"),
     uploadCSV
+);
+
+/**
+ * @route   POST /api/faculty-subject-results/upload-results
+ * @desc    Unified CSV results upload (Supports SEM/YEAR programs)
+ * @access  Private (Admin, Exam Cell)
+ */
+router.post(
+    "/upload-results",
+    protect,
+    authorize("ADMIN", "EXAMSECTION", "FACULTY"),
+    upload.single("file"),
+    uploadUnifiedResults
 );
 
 /**
