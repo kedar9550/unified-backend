@@ -518,7 +518,17 @@ const getCoAttainment = async (req, res) => {
 
         if (academicYear || semester) {
             const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
-            if (academicYearId) query.academicYearId = academicYearId;
+            
+            if (academicYearId) {
+                const ayDoc = await AcademicYear.findById(academicYearId);
+                if (ayDoc) {
+                    const allAysForYear = await AcademicYear.find({ year: ayDoc.year }).select("_id");
+                    query.academicYearId = { $in: allAysForYear.map(y => y._id) };
+                } else {
+                    query.academicYearId = academicYearId;
+                }
+            }
+            
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
 
