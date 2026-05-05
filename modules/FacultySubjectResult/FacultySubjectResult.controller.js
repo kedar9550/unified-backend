@@ -65,12 +65,13 @@ const uploadUnifiedResults = async (req, res) => {
         const branchCache = {};
         const semTypeCache = {};
 
+        const processedKeys = new Set();
+
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const rowNum = i + 2;
             const {
                 facultyid,
-                facultyname,
                 academicyear,
                 program: programName,
                 branch: branchName,
@@ -89,10 +90,8 @@ const uploadUnifiedResults = async (req, res) => {
                 // 1. Validate mandatory fields
                 if (!facultyid) throw new Error("Faculty ID is missing");
                 
-                // --- ADDED: Faculty existence check ---
                 const faculty = await Employee.findOne({ institutionId: facultyid.trim() });
                 if (!faculty) throw new Error(`Faculty with ID '${facultyid}' not found in system`);
-                // --------------------------------------
 
                 if (!academicyear) throw new Error("Academic Year is missing");
                 if (!programName) throw new Error("Program is missing");
@@ -118,19 +117,9 @@ const uploadUnifiedResults = async (req, res) => {
                 if (isNaN(cosA)) throw new Error(`Invalid No. of COs Attained: ${noofcosattained}`);
                 if (cosA > cos) throw new Error(`COs Attained (${cosA}) cannot be more than Total COs (${cos})`);
 
-                // 2. Resolve Academic Year
-                let ayId = ayCache[academicyear];
-                if (!ayId) {
-                    const ay = await AcademicYear.findOne({ year: academicyear });
-                    if (!ay) throw new Error(`Academic Year '${academicyear}' not found`);
-                    ayId = ay._id;
-                    ayCache[academicyear] = ayId;
-                }
-
-                // 3. Resolve Program
+                // 2. Resolve Program
                 let programDoc = programCache[programName];
                 if (!programDoc) {
-                    // Escape special characters in programName for regex
                     const escapedName = programName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                     programDoc = await Program.findOne({ 
                         $or: [
@@ -142,10 +131,43 @@ const uploadUnifiedResults = async (req, res) => {
                     programCache[programName] = programDoc;
                 }
 
+                // 3. Resolve Academic Year
+                let ayId = ayCache[`${academicyear}_${programDoc._id}`];
+                if (!ayId) {
+                    const ay = await AcademicYear.findOne({ year: academicyear, programId: programDoc._id });
+                    if (!ay) {
+                        const fallbackAy = await AcademicYear.findOne({ year: academicyear });
+                        if (!fallbackAy) throw new Error(`Academic Year '${academicyear}' not found`);
+                        ayId = fallbackAy._id;
+                    } else {
+                        ayId = ay._id;
+                    }
+                    ayCache[`${academicyear}_${programDoc._id}`] = ayId;
+                }
+
+                // --- DUPLICATE CHECK ---
+                const trimmedCourseCode = coursecode.trim();
+                const trimmedSection = section.trim();
+                const duplicateKey = `${ayId}_${trimmedCourseCode}_${trimmedSection}`;
+
+                if (processedKeys.has(duplicateKey)) {
+                    throw new Error(`Duplicate entry for Course '${trimmedCourseCode}' Section '${trimmedSection}' in this CSV`);
+                }
+                
+                const existing = await FacultySubjectResult.findOne({
+                    academicYearId: ayId,
+                    courseCode: trimmedCourseCode,
+                    section: trimmedSection
+                });
+                if (existing) {
+                    throw new Error(`Record already exists for Course '${trimmedCourseCode}' Section '${trimmedSection}' in this Academic Year`);
+                }
+                processedKeys.add(duplicateKey);
+                // -----------------------
+
                 // 4. Resolve Branch
                 let branchDoc = branchCache[branchName];
                 if (!branchDoc) {
-                    // Try by name or code
                     branchDoc = await Branch.findOne({ 
                         $or: [
                             { name: { $regex: new RegExp(`^${branchName}$`, "i") } },
@@ -171,9 +193,7 @@ const uploadUnifiedResults = async (req, res) => {
                 const inputStr = String(semester_or_year).trim();
 
                 if (programDoc.programPattern === "SEMESTER") {
-                    // Handle SEM logic
                     if (inputStr.toUpperCase().includes("S")) {
-                        // Summer
                         let st = semTypeCache["SUMMER"];
                         if (!st) {
                             st = await SemesterType.findOne({ name: "SUMMER" });
@@ -181,14 +201,12 @@ const uploadUnifiedResults = async (req, res) => {
                             semTypeCache["SUMMER"] = st;
                         }
                         semesterTypeId = st._id;
-                        // Store the exact string (e.g., "25-S") to preserve the "S"
                         semesterNumber = inputStr.toUpperCase();
                     } else {
-                        // Regular Semester
                         const num = Number(inputStr);
                         if (isNaN(num)) throw new Error(`Invalid semester number '${inputStr}' for SEM program`);
                         
-                        semesterNumber = inputStr; // Store as string "1", "2", etc.
+                        semesterNumber = inputStr; 
                         const typeStr = num % 2 === 0 ? "EVEN" : "ODD";
                         
                         let st = semTypeCache[typeStr];
@@ -200,11 +218,10 @@ const uploadUnifiedResults = async (req, res) => {
                         semesterTypeId = st._id;
                     }
                 } else if (programDoc.programPattern === "YEAR") {
-                    // Handle YEAR logic
                     const num = Number(inputStr);
                     if (isNaN(num)) throw new Error(`Invalid year number '${inputStr}' for YEAR program`);
-                    yearNumber = inputStr; // Store as string "1", "2", etc.
-                    semesterTypeId = null; // As per requirement: termType = null
+                    yearNumber = inputStr; 
+                    semesterTypeId = null; 
                 } else {
                     throw new Error(`Unsupported program pattern '${programDoc.programPattern}'`);
                 }
@@ -214,7 +231,7 @@ const uploadUnifiedResults = async (req, res) => {
 
                 results.push({
                     facultyId: facultyid.trim(),
-                    facultyName: facultyname ? facultyname.trim() : "",
+                    facultyName: faculty.name, // Taken from DB Employee collection
                     programId: programDoc._id,
                     branchId: branchDoc._id,
                     academicYearId: ayId,
@@ -222,18 +239,16 @@ const uploadUnifiedResults = async (req, res) => {
                     semesterNumber,
                     yearNumber,
                     courseName: coursename ? coursename.trim() : "",
-                    courseCode: coursecode.trim(),
+                    courseCode: trimmedCourseCode,
                     courseType: finalCourseType,
                     appeared: app,
                     passed: pas,
                     passPercentage: Number(passPercentage),
                     noOfCos: cos,
                     noOfCosAttained: cosA,
-                    section: section.trim(),
+                    section: trimmedSection,
                     uploadedBy: req.user.userId,
-                    // Legacy fields for compatibility if needed
                     branch: branchDoc.name,
-                    semester: semesterNumber || yearNumber, 
                 });
 
                 successCount++;
@@ -336,7 +351,19 @@ const getResults = async (req, res) => {
 
         if (academicYear || semester) {
             const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
-            if (academicYearId) query.academicYearId = academicYearId;
+            
+            if (academicYearId) {
+                // IMPORTANT: AcademicYear is program-specific. 
+                // For global views (like Exam Section), we must find ALL IDs sharing the same year string.
+                const ayDoc = await AcademicYear.findById(academicYearId);
+                if (ayDoc) {
+                    const allAysForYear = await AcademicYear.find({ year: ayDoc.year }).select("_id");
+                    query.academicYearId = { $in: allAysForYear.map(y => y._id) };
+                } else {
+                    query.academicYearId = academicYearId;
+                }
+            }
+            
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
 
@@ -348,10 +375,22 @@ const getResults = async (req, res) => {
         // Flatten populated fields for frontend consumption
         const formatted = results.map((r) => {
             const obj = r.toObject();
+            const semType = obj.semesterTypeId?.name || "";
+            
+            let semesterDisplay = "";
+            if (semType === "SUMMER") {
+                semesterDisplay = "Summer";
+            } else if (obj.yearNumber) {
+                semesterDisplay = `Year-${obj.yearNumber}`;
+            } else if (obj.semesterNumber) {
+                semesterDisplay = `Sem-${obj.semesterNumber}`;
+            }
+
             return {
                 ...obj,
                 academicYear: obj.academicYearId?.year || "",
-                semesterType: obj.semesterTypeId?.name || "",
+                semesterType: semType,
+                semesterDisplay,
                 // Alias for frontend compatibility
                 subjectName: obj.courseName,
                 subjectCode: obj.courseCode,
@@ -490,14 +529,26 @@ const getCoAttainment = async (req, res) => {
 
         const formatted = results.map((r) => {
             const obj = r.toObject();
+            const semType = obj.semesterTypeId?.name || "";
+
+            let semesterDisplay = "";
+            if (semType === "SUMMER") {
+                semesterDisplay = "Summer";
+            } else if (obj.yearNumber) {
+                semesterDisplay = `Year-${obj.yearNumber}`;
+            } else if (obj.semesterNumber) {
+                semesterDisplay = `Sem-${obj.semesterNumber}`;
+            }
+
             return {
                 _id: obj._id,
                 courseName: obj.courseName,
                 courseCode: obj.courseCode,
-                semester: obj.semester,
+                semester: obj.semesterNumber || obj.yearNumber,
+                semesterDisplay,
                 branch: obj.branch,
                 section: obj.section,
-                semesterType: obj.semesterTypeId?.name || "",
+                semesterType: semType,
                 academicYear: obj.academicYearId?.year || "",
                 noOfCos: obj.noOfCos || 0,
                 noOfCosAttained: obj.noOfCosAttained || 0,
