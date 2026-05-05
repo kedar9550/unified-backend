@@ -7,8 +7,7 @@ const {
     getStudentsForMapping,
     createMapping,
     updateMapping,
-    deleteMapping,
-    deleteSemesterData
+    deleteMapping
 } = require("./ProcterMaping.controller");
 const { protect, authorize } = require("../../middlewares/authMiddleware");
 
@@ -43,12 +42,6 @@ router.post(
     createMapping
 );
 
-router.delete(
-    "/semester",
-    protect,
-    authorize("ADMIN", "HOD"),
-    deleteSemesterData
-);
 
 router.put(
     "/:id",
