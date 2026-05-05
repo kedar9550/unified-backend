@@ -1,15 +1,15 @@
 const mongoose = require('mongoose');
 const AcademicYear = require('./academicYear.model');
 const SemesterType = require('../semesterType/semesterType.model');
+const Program = require('../academics/program.model');
 
 /* ===================================================
    CREATE ACADEMIC YEAR (program-wise)
    POST /api/academic-years
-   Body: { startYear, endYear, program? }
-   
-   program is optional:
-   - If provided: creates year for that specific program (e.g. "B.Tech")
-   - If not provided: creates global year (program: null) — fallback for all programs
+   Body: { startYear, endYear, programId? }
+
+   - If programId provided: adds only that program to the year
+   - If NO programId: creates the year with ALL active programs (all inactive)
 =================================================== */
 const createAcademicYear = async (req, res) => {
     try {
@@ -18,53 +18,73 @@ const createAcademicYear = async (req, res) => {
         if (!startYear || !endYear) {
             return res.status(400).json({ message: 'startYear and endYear are required' });
         }
-        if (!programId) {
-            return res.status(400).json({ message: 'Program is required to create an academic year' });
-        }
 
         const currentYear = new Date().getFullYear();
         if (Number(startYear) < currentYear - 1) {
-            return res.status(400).json({ message: `Cannot create academic year that old. Minimum start year is ${currentYear - 1}.` });
+            return res.status(400).json({ message: `Minimum start year is ${currentYear - 1}.` });
         }
         if (Number(endYear) <= Number(startYear)) {
             return res.status(400).json({ message: 'endYear must be greater than startYear' });
         }
 
-        // Try to drop the legacy year_1_program_1 index if it exists (ignoring errors if it doesn't)
+        // Drop legacy index if exists
         await AcademicYear.collection.dropIndex('year_1_program_1').catch(() => {});
 
         const yearStr = `${startYear}-${endYear}`;
-        const programIdVal = new mongoose.Types.ObjectId(programId);
-
-        const existing = await AcademicYear.findOne({ year: yearStr, programId: programIdVal });
-        if (existing) {
-            return res.status(409).json({ message: `Academic year ${yearStr} already exists for this program` });
-        }
 
         const oddType = await SemesterType.findOne({ name: 'ODD' });
         if (!oddType) {
             return res.status(500).json({ message: 'Semester type ODD not found. Please seed semester types.' });
         }
 
-        // Deactivate only same-program years (don't touch other programs)
-        await AcademicYear.updateMany(
-            { programId: programIdVal },
-            { isActive: false }
-        );
+        // --- SINGLE PROGRAM MODE (used by ADD PROGRAM button) ---
+        if (programId) {
+            const programIdVal = new mongoose.Types.ObjectId(programId);
+            const existing = await AcademicYear.findOne({ year: yearStr, programId: programIdVal });
+            if (existing) {
+                return res.status(409).json({ message: `Academic year ${yearStr} already exists for this program` });
+            }
 
-        const academicYear = await AcademicYear.create({
+            const academicYear = await AcademicYear.create({
+                year: yearStr,
+                programId: programIdVal,
+                isActive: false,           // inactive by default when manually adding
+                activeSemesterTypeId: oddType._id
+            });
+
+            return res.status(201).json({
+                message: `Program added to academic year ${yearStr} (inactive).`,
+                academicYear: await academicYear.populate([
+                    { path: 'activeSemesterTypeId', select: 'name' },
+                    { path: 'programId' }
+                ])
+            });
+        }
+
+        // --- BULK CREATE MODE (used by CREATE ACADEMIC YEAR button) ---
+        // Check if year already exists (any program)
+        const anyExisting = await AcademicYear.findOne({ year: yearStr });
+        if (anyExisting) {
+            return res.status(409).json({ message: `Academic year ${yearStr} already exists` });
+        }
+
+        const allPrograms = await Program.find({ status: true });
+        if (allPrograms.length === 0) {
+            return res.status(400).json({ message: 'No active programs found. Please create programs first.' });
+        }
+
+        const entries = allPrograms.map(p => ({
             year: yearStr,
-            programId: programIdVal,
-            isActive: true,
+            programId: p._id,
+            isActive: false,                // all inactive by default
             activeSemesterTypeId: oddType._id
-        });
+        }));
 
-        res.status(201).json({
-            message: `Academic year created for program. ODD semester activated.`,
-            academicYear: await academicYear.populate([
-                { path: 'activeSemesterTypeId', select: 'name' },
-                { path: 'programId' }
-            ])
+        await AcademicYear.insertMany(entries);
+
+        return res.status(201).json({
+            message: `Academic year ${yearStr} created with ${allPrograms.length} programs (all inactive).`,
+            count: allPrograms.length
         });
 
     } catch (err) {
@@ -128,15 +148,21 @@ const toggleAcademicYear = async (req, res) => {
         if (!year) return res.status(404).json({ message: 'Academic year not found' });
 
         if (isActive) {
-            // Deactivate only same-program years
-            const filterProgId = year.programId ? new mongoose.Types.ObjectId(year.programId) : null;
-            await AcademicYear.updateMany({ programId: filterProgId }, { isActive: false });
+            // Deactivate this program in ALL other academic years (any year string)
+            // so only one year per program is ever active at a time
+            await AcademicYear.updateMany(
+                { programId: year.programId, _id: { $ne: year._id } },
+                { isActive: false }
+            );
         }
 
         year.isActive = isActive;
         await year.save();
 
-        res.json({ message: `${year.year} is now ${isActive ? 'active' : 'inactive'}`, year });
+        res.json({
+            message: `${year.year} — program is now ${isActive ? 'active' : 'inactive'}`,
+            year
+        });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
@@ -217,8 +243,18 @@ const deleteAcademicYear = async (req, res) => {
    Resolves active academic year for a given program.
    Falls back to global (program: null) if no program-specific year found.
 =================================================== */
-const resolveActiveAcademicYear = async (programId) => {
-    if (!programId) return null;
+const resolveActiveAcademicYear = async (programInput) => {
+    if (!programInput) return null;
+
+    let programId = programInput;
+
+    // If input is a program name (not an ObjectId), look up the programId
+    if (!mongoose.Types.ObjectId.isValid(programInput)) {
+        const prog = await Program.findOne({ name: new RegExp(`^${programInput}$`, "i") });
+        if (!prog) return null;
+        programId = prog._id;
+    }
+
     return await AcademicYear.findOne({ programId, isActive: true });
 };
 
