@@ -4,6 +4,7 @@ const { protect, authorize } = require('../../middlewares/authMiddleware');
 const {
     createAcademicYear,
     getAcademicYears,
+    getActiveAcademicYear,
     toggleAcademicYear,
     updateAcademicYear,
     toggleSemesterType,
@@ -12,6 +13,9 @@ const {
 
 // Get all academic years — any authenticated user
 router.get('/', protect, getAcademicYears);
+
+// Get active academic year for a program — any authenticated user
+router.get('/active', protect, getActiveAcademicYear);
 
 // Create academic year — SUPER_ADMIN only
 router.post('/', protect, authorize('UNIPRIME'), createAcademicYear);

@@ -5,246 +5,195 @@ const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 const Student = require("../StudentData/Studentdata.model");
 const Employee = require("../employee/employee.model");
-const { updateProctorSummaries } = require("../StudentResult/StudentResult.controller");
 const { resolveActiveAcademicYear } = require("../academicYear/academicYear.controller");
 
 /**
- * Resolve active academic year for a given program.
- * Falls back to global (program: null) if no program-specific year found.
+ * Resolve current active academic year for a program.
  */
-const resolveActiveIds = async (program) => {
+const getActiveContext = async (program) => {
     const activeAy = await resolveActiveAcademicYear(program);
     if (!activeAy) throw new Error(`No active academic year found${program ? ` for ${program}` : ''}`);
-    if (!activeAy.activeSemesterTypeId) throw new Error("No active semester type set for the current year");
-    return { academicYearId: activeAy._id, semesterTypeId: activeAy.activeSemesterTypeId, program };
+    return activeAy.year;
 };
 
 /**
- * Resolve IDs from provided strings or fallback to active
+ * Internal helper to handle the logic of assigning/changing proctor.
  */
-const resolveTargetIds = async (queryAy, querySem, program) => {
-    if (queryAy && querySem) {
-        const ay = await AcademicYear.findOne({ year: queryAy, program: program || null });
-        if (!ay) {
-            // Try global fallback
-            const globalAy = await AcademicYear.findOne({ year: queryAy, program: null });
-            if (!globalAy) throw new Error(`Academic Year '${queryAy}' not found`);
+const assignProctor = async (student, employee, academicYearLabel, semester, yearName) => {
+    let mapping = await ProcterMaping.findOne({ studentId: student.rollNo });
+
+    if (!mapping) {
+        // Initial Assignment
+        mapping = new ProcterMaping({
+            studentId: student.rollNo,
+            studentName: student.personalInfo.studentName,
+            currentProctorId: employee.institutionId,
+            currentProctorName: employee.name,
+            fromSemester: semester || null,
+            fromYearName: yearName || null,
+            fromAcademicYear: academicYearLabel,
+            history: []
+        });
+    } else {
+        // Check if proctor is different
+        if (mapping.currentProctorId === employee.institutionId) {
+            // No change needed
+            return mapping;
         }
-        const finalAy = await AcademicYear.findOne({ year: queryAy, program: program || null })
-            || await AcademicYear.findOne({ year: queryAy, program: null });
 
-        const st = await SemesterType.findOne({ name: querySem.toUpperCase() });
-        if (!st) throw new Error(`Semester Type '${querySem}' not found`);
+        // Move current to history
+        mapping.history.push({
+            proctorId: mapping.currentProctorId,
+            proctorName: mapping.currentProctorName,
+            fromSemester: mapping.fromSemester,
+            fromYearName: mapping.fromYearName,
+            fromAcademicYear: mapping.fromAcademicYear,
+            toSemester: semester || null,
+            toYearName: yearName || null,
+            toAcademicYear: academicYearLabel,
+            toDate: new Date()
+        });
 
-        return { academicYearId: finalAy._id, semesterTypeId: st._id };
-    }
-    return await resolveActiveIds(program);
-};
-
-/**
- * Determine semesterTypeId from semester number or yearName
- * 
- * For B.Tech/M.Tech: use semester number → ODD or EVEN
- * For Pharma.D:      semType = YEAR
- * For Summer:        semType = SUMMER (passed explicitly in CSV)
- */
-const resolveSemesterType = async (semesterStr, yearName, semTypeCache) => {
-    // Pharma.D case
-    if (yearName) {
-        const key = "YEAR";
-        if (!semTypeCache[key]) {
-            const st = await SemesterType.findOne({ name: "YEAR" });
-            if (!st) throw new Error("Semester type YEAR not found. Please seed it.");
-            semTypeCache[key] = st._id;
-        }
-        return { semesterTypeId: semTypeCache[key], semester: null, semTypeName: "YEAR" };
+        // Update current
+        mapping.currentProctorId = employee.institutionId;
+        mapping.currentProctorName = employee.name;
+        mapping.fromSemester = semester || null;
+        mapping.fromYearName = yearName || null;
+        mapping.fromAcademicYear = academicYearLabel;
     }
 
-    // Summer case — passed as "SUMMER" in CSV semType column
-    if (semesterStr && semesterStr.toString().toUpperCase() === "SUMMER") {
-        const key = "SUMMER";
-        if (!semTypeCache[key]) {
-            const st = await SemesterType.findOne({ name: "SUMMER" });
-            if (!st) throw new Error("Semester type SUMMER not found.");
-            semTypeCache[key] = st._id;
-        }
-        return { semesterTypeId: semTypeCache[key], semester: null, semTypeName: "SUMMER" };
-    }
-
-    // Normal semester number
-    const numericSemester = Number(semesterStr);
-    if (isNaN(numericSemester)) {
-        throw new Error(`Invalid semester '${semesterStr}'. Must be a number, "SUMMER", or leave empty for Pharma.D.`);
-    }
-    const semesterName = numericSemester % 2 !== 0 ? "ODD" : "EVEN";
-    if (!semTypeCache[semesterName]) {
-        const st = await SemesterType.findOne({ name: semesterName });
-        if (!st) throw new Error(`Semester type '${semesterName}' not found.`);
-        semTypeCache[semesterName] = st._id;
-    }
-    return { semesterTypeId: semTypeCache[semesterName], semester: numericSemester, semTypeName: semesterName };
+    await mapping.save();
+    return mapping;
 };
 
 /**
  * Bulk insert from CSV
- * 
- * CSV Headers:
- *   proctorid, studentid, academicyear, semester, yearname (optional)
- * 
- * Examples:
- *   B.Tech:   proctorid=F001, studentid=22B81A0501, academicyear=2025-2026, semester=3, yearname=
- *   Pharma.D: proctorid=F002, studentid=25B14PD001, academicyear=2025-2026, semester=, yearname=I Year
- *   Summer:   proctorid=F001, studentid=22B81A0501, academicyear=2025-2026, semester=SUMMER, yearname=
  */
 const uploadCSV = async (req, res) => {
     try {
-        if (!req.file) {
-            return res.status(400).json({ message: "No CSV file uploaded" });
-        }
+        if (!req.file) return res.status(400).json({ message: "No CSV file uploaded" });
 
         const rows = parseCSV(req.file.buffer);
         const requiredHeaders = ["proctorid", "studentid", "academicyear"];
         validateHeaders(rows, requiredHeaders);
 
-        const mappings = [];
         const errors = [];
-
-        const ayCache = {};
-        const semTypeCache = {};
+        let count = 0;
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
-            const {
-                proctorid,
-                studentid,
-                academicyear,
-                semester,   // number string "1","2"... or "SUMMER" or empty for Pharma.D
-                yearname    // "I Year","II Year"... for Pharma.D, empty for others
-            } = row;
+            const { proctorid, studentid, academicyear, semester, yearname } = row;
 
             const pId = (proctorid || "").trim();
             const sId = (studentid || "").trim();
-            const yearName = (yearname || "").trim() || null;
+            const ayLabel = (academicyear || "").trim();
+            const semNum = parseInt(semester) || null;
+            const yName = (yearname || "").trim() || null;
 
-            if (!pId || !sId) {
-                errors.push(`Row ${i + 2}: Missing proctorId or studentId.`);
+            if (!pId || !sId || !ayLabel) {
+                errors.push(`Row ${i + 2}: Missing required fields.`);
                 continue;
             }
 
-            // Validate Student
-            const student = await Student.findOne({ rollNo: sId, "system.isActive": true });
+            const [student, employee] = await Promise.all([
+                Student.findOne({ rollNo: sId, "system.isActive": true }),
+                Employee.findOne({ institutionId: pId, isActive: true })
+            ]);
+
             if (!student) {
-                errors.push(`Row ${i + 2}: Student '${sId}' not found or inactive.`);
+                errors.push(`Row ${i + 2}: Student '${sId}' not found.`);
                 continue;
             }
-
-            // Validate Employee
-            const employee = await Employee.findOne({ institutionId: pId, isActive: true });
             if (!employee) {
-                errors.push(`Row ${i + 2}: Proctor '${pId}' not found or inactive.`);
+                errors.push(`Row ${i + 2}: Proctor '${pId}' not found.`);
                 continue;
             }
 
-            // Resolve Academic Year (program-wise)
-            const program = student.academicInfo?.programName;
-            const ayKey = `${academicyear}__${program}`;
-            if (!ayCache[ayKey]) {
-                // Try program-specific year first, then global
-                const ay = await AcademicYear.findOne({ year: academicyear, program })
-                    || await AcademicYear.findOne({ year: academicyear, program: null });
-                if (!ay) {
-                    errors.push(`Row ${i + 2}: Academic Year '${academicyear}' not found${program ? ` for ${program}` : ''}.`);
-                    continue;
-                }
-                ayCache[ayKey] = ay._id;
-            }
-            const ayId = ayCache[ayKey];
-
-            // Resolve Semester Type
-            let semResolved;
             try {
-                semResolved = await resolveSemesterType(semester, yearName, semTypeCache);
+                await assignProctor(student, employee, ayLabel, semNum, yName);
+                count++;
             } catch (e) {
                 errors.push(`Row ${i + 2}: ${e.message}`);
-                continue;
             }
-
-            // Duplicate check (FIXED: includes academicYearId)
-            const duplicate = await ProcterMaping.findOne({
-                studentId: sId,
-                semesterTypeId: semResolved.semesterTypeId,
-                academicYearId: ayId
-            });
-
-            if (duplicate) {
-                if (duplicate.proctorId === pId) {
-                    errors.push(`Row ${i + 2}: Assignment already exists (Student ${sId} → Proctor ${pId}). Skipping.`);
-                } else {
-                    errors.push(`Row ${i + 2}: Student ${sId} already assigned to proctor ${duplicate.proctorId} for this semester. Skipping.`);
-                }
-                continue;
-            }
-
-            mappings.push({
-                proctorId: pId,
-                proctorName: employee.name,
-                studentId: sId,
-                studentName: student.personalInfo.studentName,
-                academicYearId: ayId,
-                semesterTypeId: semResolved.semesterTypeId,
-                semester: semResolved.semester,   // null for Pharma.D and Summer
-                yearName: yearName                // "I Year" for Pharma.D, null for others
-            });
-        }
-
-        if (mappings.length > 0) {
-            await ProcterMaping.insertMany(mappings);
-            await updateProctorSummaries(mappings);
         }
 
         res.status(201).json({
-            message: `Processed ${rows.length} rows. Uploaded ${mappings.length} mappings.`,
-            processed: mappings.length,
+            message: `Processed ${rows.length} rows. Updated ${count} assignments.`,
+            processed: count,
             errors: errors.length > 0 ? errors : null
         });
 
     } catch (error) {
-        console.error("CSV Upload Error:", error);
-        res.status(500).json({ message: error.message || "An error occurred during upload." });
+        res.status(500).json({ message: error.message });
     }
 };
 
 /**
- * Get mappings with filters
+ * Get current proctor assignments with filters
+ * Supports looking up proctor for a specific past semester.
+ */
+/**
+ * Get proctor assignments with filters.
+ * If academicYear and (semester or yearName) are provided, it looks up the proctor 
+ * who was active during that specific period by checking history.
  */
 const getMappings = async (req, res) => {
     try {
-        const { academicYear, semester, proctorId, studentId, academicYearId, semesterTypeId, program } = req.query;
-        const query = {};
+        const { studentId, academicYear, semester, yearName } = req.query;
 
-        if (proctorId) query.proctorId = proctorId.trim();
+        let query = {};
         if (studentId) query.studentId = studentId.trim();
-        if (academicYearId) query.academicYearId = academicYearId;
-        if (semesterTypeId) query.semesterTypeId = semesterTypeId;
 
-        if (!academicYearId && !semesterTypeId) {
-            if (academicYear && semester) {
-                const { academicYearId: resolvedAy, semesterTypeId: resolvedSem } = await resolveTargetIds(academicYear, semester, program);
-                query.academicYearId = resolvedAy;
-                query.semesterTypeId = resolvedSem;
-            } else if (!proctorId && !studentId) {
-                const { academicYearId: activeAy, semesterTypeId: activeSem } = await resolveActiveIds(program);
-                query.academicYearId = activeAy;
-                query.semesterTypeId = activeSem;
-            }
+        let mappings = await ProcterMaping.find(query);
+
+        // If a specific period is requested, filter results to show the proctor active at that time
+        if (academicYear && (semester || yearName)) {
+            const targetSem = parseInt(semester) || null;
+            const targetYearName = yearName || null;
+
+            mappings = mappings.map(m => {
+                // 1. Check if current mapping covers this period
+                // Current covers if: 
+                //   targetPeriod >= mapping.fromPeriod
+                
+                // Simple heuristic for "later than" in academic terms:
+                // This is complex because we don't have a global sequence of semesters easily accessible here.
+                // However, the rule is: "Assigned proctor continues... until explicitly changed".
+                // So if targetPeriod is AFTER fromPeriod and NO history record covers targetPeriod, it's current.
+                
+                // Check history first
+                const historical = m.history.find(h => {
+                    if (targetYearName) {
+                        return h.fromYearName === targetYearName && h.fromAcademicYear === academicYear;
+                    }
+                    return h.fromSemester === targetSem && h.fromAcademicYear === academicYear;
+                    // Note: This is a simplified lookup. A more robust one would check ranges.
+                    // But usually, the user queries for exactly what was recorded.
+                });
+
+                if (historical) {
+                    return {
+                        studentId: m.studentId,
+                        studentName: m.studentName,
+                        proctorId: historical.proctorId,
+                        proctorName: historical.proctorName,
+                        isHistorical: true
+                    };
+                }
+
+                // If not in history, and academicYear matches current or is later?
+                // For now, if it matches current start or is not found in history, we return current
+                return {
+                    studentId: m.studentId,
+                    studentName: m.studentName,
+                    proctorId: m.currentProctorId,
+                    proctorName: m.currentProctorName,
+                    isHistorical: false
+                };
+            });
         }
 
-        const data = await ProcterMaping.find(query)
-            .populate("academicYearId", "year program")
-            .populate("semesterTypeId", "name")
-            .sort({ studentId: 1 });
-
-        res.json(data);
+        res.json(mappings);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -252,13 +201,14 @@ const getMappings = async (req, res) => {
 
 /**
  * Fetch students for mapping based on filters
+ * Shows the current active proctor.
  */
 const getStudentsForMapping = async (req, res) => {
     try {
         const { department, program, branch, semester, yearName } = req.query;
 
         if (!department || !program || !branch) {
-            return res.status(400).json({ message: "Missing required filters: department, program, branch" });
+            return res.status(400).json({ message: "Missing required filters" });
         }
 
         const studentQuery = {
@@ -269,24 +219,13 @@ const getStudentsForMapping = async (req, res) => {
             "system.isActive": true
         };
 
-        // Pharma.D: filter by yearName
-        if (yearName) {
-            studentQuery["academicInfo.yearName"] = yearName;
-        } else if (semester) {
-            studentQuery["academicInfo.semester"] = Number(semester);
-        }
+        if (yearName) studentQuery["academicInfo.yearName"] = yearName;
+        else if (semester) studentQuery["academicInfo.semester"] = Number(semester);
 
         const students = await Student.find(studentQuery).select("rollNo personalInfo.studentName academicInfo.programName");
 
-        // Get active semester type for this program
-        const activeAy = await resolveActiveAcademicYear(program);
-        const activeSemTypeId = activeAy?.activeSemesterTypeId;
-        const activeAyId = activeAy?._id;
-
         const mappings = await ProcterMaping.find({
-            studentId: { $in: students.map(s => s.rollNo) },
-            academicYearId: activeAyId,
-            semesterTypeId: activeSemTypeId
+            studentId: { $in: students.map(s => s.rollNo) }
         });
 
         const mappingDict = {};
@@ -297,8 +236,8 @@ const getStudentsForMapping = async (req, res) => {
             return {
                 studentId: s.rollNo,
                 studentName: s.personalInfo?.studentName,
-                proctorId: mapData ? mapData.proctorId : "",
-                proctorName: mapData ? mapData.proctorName : "",
+                proctorId: mapData ? mapData.currentProctorId : "",
+                proctorName: mapData ? mapData.currentProctorName : "",
                 mappingId: mapData ? mapData._id : null
             };
         });
@@ -310,90 +249,43 @@ const getStudentsForMapping = async (req, res) => {
 };
 
 /**
- * Create single mapping
+ * Create or Update mapping (Manual)
  */
 const createMapping = async (req, res) => {
     try {
-        const { studentId, proctorId, academicYearId, semesterTypeId, semester, yearName } = req.body;
+        const { studentId, proctorId, academicYear, semester, yearName } = req.body;
+        const id = req.params.id;
 
-        const student = await Student.findOne({ rollNo: studentId, "system.isActive": true });
+        let sId = studentId;
+        if (!sId && id) {
+            const m = await ProcterMaping.findById(id);
+            if (m) sId = m.studentId;
+        }
+
+        if (!sId) return res.status(400).json({ message: "studentId is required" });
+
+        const [student, employee] = await Promise.all([
+            Student.findOne({ rollNo: sId, "system.isActive": true }),
+            Employee.findOne({ institutionId: proctorId, isActive: true })
+        ]);
+
         if (!student) return res.status(404).json({ message: "Student not found" });
-
-        const employee = await Employee.findOne({ institutionId: proctorId, isActive: true });
         if (!employee) return res.status(404).json({ message: "Proctor not found" });
 
-        // FIXED: Check for existing using correct 3-field index
-        const existing = await ProcterMaping.findOne({
-            studentId,
-            academicYearId,
-            semesterTypeId
-        });
-        if (existing) {
-            return res.status(400).json({ message: "Mapping already exists for this student in this semester and academic year" });
+        let ayLabel = academicYear;
+        if (!ayLabel) {
+            ayLabel = await getActiveContext(student.academicInfo?.programName);
         }
 
-        let finalAcademicYearId = academicYearId;
-        let finalSemesterTypeId = semesterTypeId;
-
-        if (!finalAcademicYearId) {
-            const program = student.academicInfo?.programName;
-            const activeAy = await resolveActiveAcademicYear(program);
-            if (!activeAy) return res.status(400).json({ message: "No active academic year found" });
-            finalAcademicYearId = activeAy._id;
-        }
-
-        if (!finalSemesterTypeId) {
-            const semTypeCache = {};
-            const semResolved = await resolveSemesterType(semester, yearName, semTypeCache);
-            finalSemesterTypeId = semResolved.semesterTypeId;
-        }
-
-        const newMapping = new ProcterMaping({
-            studentId,
-            studentName: student.personalInfo.studentName,
-            proctorId,
-            proctorName: employee.name,
-            academicYearId: finalAcademicYearId,
-            semesterTypeId: finalSemesterTypeId,
-            semester: semester || null,
-            yearName: yearName || null
-        });
-
-        await newMapping.save();
-        await updateProctorSummaries([newMapping]);
-        res.status(201).json({ message: "Created successfully", data: newMapping });
+        const mapping = await assignProctor(student, employee, ayLabel, semester, yearName);
+        res.status(201).json({ message: "Mapping updated successfully", data: mapping });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
 
 /**
- * Update mapping
- */
-const updateMapping = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { proctorId } = req.body;
-
-        let updateData = { ...req.body };
-
-        if (proctorId) {
-            const employee = await Employee.findOne({ institutionId: proctorId, isActive: true });
-            if (!employee) return res.status(404).json({ message: "Proctor not found" });
-            updateData.proctorName = employee.name;
-        }
-
-        const updated = await ProcterMaping.findByIdAndUpdate(id, updateData, { new: true });
-        if (!updated) return res.status(404).json({ message: "Record not found" });
-        await updateProctorSummaries([updated]);
-        res.json({ message: "Updated successfully", data: updated });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
-/**
- * Delete individual mapping
+ * Delete mapping (Clear student's current proctor entirely)
  */
 const deleteMapping = async (req, res) => {
     try {
@@ -406,29 +298,11 @@ const deleteMapping = async (req, res) => {
     }
 };
 
-/**
- * Bulk delete by semester
- */
-const deleteSemesterData = async (req, res) => {
-    try {
-        const { academicYear, semester, program } = req.query;
-        if (!academicYear || !semester) {
-            return res.status(400).json({ message: "academicYear and semester are required" });
-        }
-        const { academicYearId, semesterTypeId } = await resolveTargetIds(academicYear, semester, program);
-        const result = await ProcterMaping.deleteMany({ academicYearId, semesterTypeId });
-        res.json({ message: `Deleted ${result.deletedCount} mappings.`, deletedCount: result.deletedCount });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
-
 module.exports = {
     uploadCSV,
     getMappings,
     getStudentsForMapping,
     createMapping,
-    updateMapping,
+    updateMapping: createMapping, // Re-use createMapping for updates
     deleteMapping,
-    deleteSemesterData
 };
