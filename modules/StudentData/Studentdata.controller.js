@@ -123,12 +123,14 @@ exports.addStudent = async (req, res) => {
  * Updates existing students from the external API (preserves existing department)
  */
 exports.syncStudentData = async (req, res) => {
-  let { rollNos } = req.body;
+  let { rollNos, program } = req.body;
 
   try {
     if (!rollNos || !Array.isArray(rollNos) || rollNos.length === 0) {
-      // If no rollNos provided, fetch all students from DB
-      const allStudents = await Student.find({}, "rollNo");
+      // If no rollNos provided, fetch students from DB
+      const query = {};
+      if (program) query["academicInfo.programName"] = program;
+      const allStudents = await Student.find(query, "rollNo");
       rollNos = allStudents.map(s => s.rollNo);
     }
 
