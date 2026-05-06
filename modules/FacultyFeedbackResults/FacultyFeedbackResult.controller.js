@@ -9,7 +9,7 @@ const mongoose = require("mongoose");
 
 /**
  * Bulk insert from CSV
- * headers: facultyId, facultyName, academicYear, semester, subjectName, subjectCode, branch, section, totalStudents, givenStudents, percentage, overallPercentage
+ * headers: facultyId, academicYear, program, branch, subjectName, subjectCode, section, phase, semester_or_year, totalStudents, givenStudents, percentage, overallPercentage
  */
 const uploadCSV = async (req, res) => {
     try {
@@ -212,7 +212,7 @@ const uploadCSV = async (req, res) => {
 
                 successCount++;
             } catch (err) {
-                errors.push(`Row ${rowNum}: ${err.message}`);
+                errors.push({ row: rowNum, message: err.message });
             }
         }
 
@@ -221,10 +221,9 @@ const uploadCSV = async (req, res) => {
         }
 
         res.json({
-            message: `Successfully uploaded ${successCount} records.`,
             successCount,
             failedCount: errors.length,
-            errors: errors.length > 0 ? errors : null
+            errors
         });
 
     } catch (error) {
