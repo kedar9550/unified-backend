@@ -244,20 +244,28 @@ const deleteAcademicYear = async (req, res) => {
    Falls back to global (program: null) if no program-specific year found.
 =================================================== */
 const resolveActiveAcademicYear = async (programIdentifier) => {
-    if (!programIdentifier) return null;
-
-    let query = {};
-    if (mongoose.Types.ObjectId.isValid(programIdentifier)) {
-        query.programId = programIdentifier;
+    let query = { isActive: true };
+    
+    if (programIdentifier) {
+        if (mongoose.Types.ObjectId.isValid(programIdentifier)) {
+            query.programId = programIdentifier;
+        } else {
+            // Find program by name
+            const Program = mongoose.model('Program');
+            const prog = await Program.findOne({ name: new RegExp(`^${programIdentifier}$`, "i") });
+            if (!prog) return null; // If program name provided but not found, return null
+            query.programId = prog._id;
+        }
     } else {
-        // Find program by name
-        const Program = mongoose.model('Program');
-        const prog = await Program.findOne({ name: new RegExp(`^${programIdentifier}$`, "i") });
-        if (!prog) return null;
-        query.programId = prog._id;
+        // Fallback: If no program specified, try to find a global active year (programId: null)
+        const globalActive = await AcademicYear.findOne({ ...query, programId: null });
+        if (globalActive) return globalActive;
+        
+        // Last resort: Return the first available active year
+        return await AcademicYear.findOne(query);
     }
 
-    return await AcademicYear.findOne({ ...query, isActive: true });
+    return await AcademicYear.findOne(query);
 };
 
 module.exports = {
