@@ -49,11 +49,29 @@ const StudentResultSchema = new mongoose.Schema({
         required: true
     },
 
+    // ── Semester / Year Fields ──────────────────────────────────────────────
+    //
+    //   SEM programs (B.Tech, M.Tech, MBA etc):
+    //     semester = "1", "2", "3" ... (string)
+    //     yearName = null
+    //
+    //   YEAR programs (Pharma.D):
+    //     semester = null
+    //     yearName = "I Year", "II Year", "III Year" etc.
+    //
     semester: {
         type: String,
-        required: true,
+        default: null,
         trim: true
     },
+    yearName: {
+        type: String,
+        default: null,
+        trim: true
+        // e.g. "I Year", "II Year" for Pharma.D
+    },
+    // ────────────────────────────────────────────────────────────────────────
+
     //  Exam Info
     examYear: {
         type: String, // ex: "2025"
@@ -67,18 +85,42 @@ const StudentResultSchema = new mongoose.Schema({
     },
 
     //  Marks / Grades
+    //  For SEM programs: grade, sgpa, cgpa used
+    //  For YEAR programs (Pharma.D): intMarks, extMarks, totalMarks, maxMarks used
     grade: {
         type: String,
-        trim: true
+        trim: true,
+        default: ""
     },
 
     sgpa: {
-        type: Number
+        type: Number,
+        default: 0
     },
 
     cgpa: {
-        type: Number
+        type: Number,
+        default: 0
     },
+
+    // Marks fields for year-based programs (Pharma.D)
+    intMarks: {
+        type: Number,
+        default: null
+    },
+    extMarks: {
+        type: Number,
+        default: null
+    },
+    totalMarks: {
+        type: Number,
+        default: null
+    },
+    maxMarks: {
+        type: Number,
+        default: null
+    },
+
     result: {
         type: String,
         enum: ["PASS", "FAIL"],
