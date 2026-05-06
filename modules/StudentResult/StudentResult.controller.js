@@ -159,12 +159,14 @@ const updateProctorSummaries = async (uploadedResults) => {
 
         console.log(`[ProctorSummary] Starting for ${uploadedResults.length} REGULAR results`);
 
-
+        // ── 1. Load caches ───────────────────────────────────────────────────
         const semTypeCache = await getSemTypeCache();
+        // { ODD: ObjectId, EVEN: ObjectId, SUMMER: ObjectId, YEAR: ObjectId }
+
         const ayCache = await getAYCache();
+        // { "2023-2024": ObjectId, "2024-2025": ObjectId, … }
 
-        const summerTypeId = semTypeCache["SUMMER"];
-
+        // ── 2. Load proctor mappings for uploaded students ───────────────────
         const studentIds = [...new Set(uploadedResults.map(r => r.studentId))];
         const mappings = await ProcterMaping.find({ studentId: { $in: studentIds } });
 
@@ -176,7 +178,16 @@ const updateProctorSummaries = async (uploadedResults) => {
         const mappingByStudent = {};
         mappings.forEach(m => { mappingByStudent[m.studentId] = m; });
 
-
+        // ── 3. Build buckets ─────────────────────────────────────────────────
+        //
+        //  One bucket = one ProctorSummary record (one upsert).
+        //
+        //  periodLabel:
+        //    SEM  programs → exact semester string  e.g. "1", "3", "5"
+        //    YEAR programs → yearName string         e.g. "I Year", "II Year"
+        //
+        //  academicYear comes directly from ProcterMaping — no examYear needed.
+        //
         const buckets = {};
 
         for (const result of uploadedResults) {
@@ -184,62 +195,67 @@ const updateProctorSummaries = async (uploadedResults) => {
             if (!mapping) continue;
 
             const isYear = !!result.yearName;
-
-            let periodLabel, semTypeName, semNum;
+            let semTypeName, periodLabel, semNum;
 
             if (isYear) {
-                periodLabel = result.yearName.trim();
+                // ── Pharma.D ─────────────────────────────────────────────────
                 semTypeName = "YEAR";
+                periodLabel = result.yearName.trim();   // "I Year", "II Year" …
                 semNum = null;
             } else {
-                semNum = parseInt(result.semester);
-                semTypeName = getSemesterTypeName(semNum); // "ODD" or "EVEN"
-                periodLabel = semTypeName;
+                // ── SEM program ──────────────────────────────────────────────
+                const rawSem = (result.semester || "").toString().trim();
+
+                // Skip SUMMER semesters (e.g. "25S", "25s") — no proctor summary
+                if (/^\d+[sS]$/.test(rawSem)) continue;
+
+                semNum = parseInt(rawSem);
+                if (isNaN(semNum)) continue;
+
+                semTypeName = semNum % 2 !== 0 ? "ODD" : "EVEN";
+                periodLabel = semNum.toString();        // "1", "2", "3" …
             }
 
-            if (!semTypeName || !semTypeCache[semTypeName]) {
-                console.log(`[ProctorSummary] Unknown semType for result: ${JSON.stringify(result)}`);
+            if (!semTypeCache[semTypeName]) {
+                console.log(`[ProctorSummary] semType '${semTypeName}' not in DB — skipping`);
                 continue;
             }
 
             const semesterTypeId = semTypeCache[semTypeName];
 
-
+            // ── Resolve proctor from mapping (no examYear needed) ────────────
             const { proctorId, proctorName, academicYear } = resolveProctorForPeriod(
                 mapping, periodLabel, isYear, semNum
             );
 
             if (!proctorId || !academicYear) continue;
 
-            // academicYear label → ObjectId
             const academicYearId = ayCache[academicYear];
             if (!academicYearId) {
-                console.log(`[ProctorSummary] AcademicYear not found for label: ${academicYear}`);
+                console.log(`[ProctorSummary] AcademicYear '${academicYear}' not in DB — skipping`);
                 continue;
             }
 
-            const bucketKey = `${proctorId}|${academicYear}|${semTypeName}|${periodLabel}`;
+            // ── Bucket key ───────────────────────────────────────────────────
+            const bucketKey = `${proctorId}||${academicYear}||${semTypeName}||${periodLabel}`;
 
             if (!buckets[bucketKey]) {
                 buckets[bucketKey] = {
                     proctorId,
                     proctorName,
-                    academicYear,      // string label
-                    academicYearId,    // ObjectId
-                    semTypeName,
-                    semesterTypeId,    // ObjectId
-                    periodLabel,
-                    isYear,
-                    uploadedStudentIds: new Set()
+                    academicYear,       // e.g. "2024-2025"
+                    academicYearId,     // ObjectId
+                    semTypeName,        // "ODD" | "EVEN" | "YEAR"
+                    semesterTypeId,     // ObjectId
+                    periodLabel,        // "1" | "3" | "I Year" …
+                    isYear
                 };
             }
-
-            buckets[bucketKey].uploadedStudentIds.add(result.studentId);
         }
 
-        console.log(`[ProctorSummary] Buckets: ${Object.keys(buckets).length}`);
+        console.log(`[ProctorSummary] ${Object.keys(buckets).length} bucket(s) to process`);
 
-
+        // ── 4. Process each bucket ───────────────────────────────────────────
         for (const key of Object.keys(buckets)) {
             const {
                 proctorId, proctorName,
@@ -248,13 +264,18 @@ const updateProctorSummaries = async (uploadedResults) => {
                 periodLabel, isYear
             } = buckets[key];
 
+            const semNumForResolve = isYear ? null : parseInt(periodLabel);
 
+            // ── 4a. Find ALL students mapped to this proctor for this period ─
+            //  Scan all ProcterMaping docs, resolveProctorForPeriod for each.
+            //  totalMapped = students whose proctor for this period = proctorId
+            //                AND academicYear matches.
             const allMappings = await ProcterMaping.find({});
             const mappedStudentIds = [];
 
             for (const m of allMappings) {
                 const { proctorId: pid, academicYear: pay } = resolveProctorForPeriod(
-                    m, periodLabel, isYear, null
+                    m, periodLabel, isYear, semNumForResolve
                 );
                 if (pid === proctorId && pay === academicYear) {
                     mappedStudentIds.push(m.studentId);
@@ -262,27 +283,32 @@ const updateProctorSummaries = async (uploadedResults) => {
             }
 
             const totalMapped = mappedStudentIds.length;
-            if (totalMapped === 0) continue;
+            if (totalMapped === 0) {
+                console.log(`[ProctorSummary] No mapped students for ${proctorId} | ${academicYear} | ${periodLabel} — skipping`);
+                continue;
+            }
 
-
+            // ── 4b. Fetch REGULAR results for mapped students ────────────────
+            //  Filter by exact semester OR exact yearName.
+            //  No examYear filter — mapping's academicYear is the source of truth.
+            //  resultType: "REGULAR" only (SUPPLY results excluded).
             const resultFilter = {
                 studentId: { $in: mappedStudentIds },
                 resultType: "REGULAR"
             };
 
             if (isYear) {
-                resultFilter.yearName = periodLabel;
+                resultFilter.yearName = periodLabel;        // "I Year"
             } else {
-                // ODD → semester 1,3,5,7 | EVEN → 2,4,6,8
-                const semNums = semTypeName === "ODD"
-                    ? ["1", "3", "5", "7"]
-                    : ["2", "4", "6", "8"];
-                resultFilter.semester = { $in: semNums };
+                resultFilter.semester = periodLabel;        // "3"  (exact)
             }
 
             const periodResults = await StudentResult.find(resultFilter);
 
-
+            // ── 4c. Aggregate per student ────────────────────────────────────
+            //  appeared → student has at least 1 result
+            //  passed   → ALL subjects PASS
+            //  failed   → ANY subject FAIL
             const resultsByStudent = {};
             for (const r of periodResults) {
                 if (!resultsByStudent[r.studentId]) resultsByStudent[r.studentId] = [];
@@ -304,10 +330,10 @@ const updateProctorSummaries = async (uploadedResults) => {
 
             console.log(
                 `[ProctorSummary] ${proctorId} | ${academicYear} | ${semTypeName} | ${periodLabel}` +
-                ` → Mapped=${totalMapped}, Appeared=${appeared}, Passed=${passed}, Failed=${failed}, %=${passPercentage}`
+                ` → Mapped=${totalMapped}, Appeared=${appeared}, Passed=${passed}, Failed=${failed}, Pass%=${passPercentage}`
             );
 
-            // Upsert
+            // ── 4d. Upsert ProctorSummary ────────────────────────────────────
             await ProctorSummary.findOneAndUpdate(
                 { proctorId, academicYearId, semesterTypeId, periodLabel },
                 {
@@ -325,7 +351,7 @@ const updateProctorSummaries = async (uploadedResults) => {
             );
         }
 
-        console.log(`[ProctorSummary] Done`);
+        console.log(`[ProctorSummary] Done ✓`);
 
     } catch (error) {
         console.error("[ProctorSummary] Error:", error);
