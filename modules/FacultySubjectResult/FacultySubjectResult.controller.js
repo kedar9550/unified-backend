@@ -7,6 +7,7 @@ const Employee = require("../employee/employee.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 const ProcterMaping = require("../ProcterMaping/ProcterMaping.model");
+const FacultyFeedResult = require("../FacultyFeedbackResults/FacultyFeedResult.model");
 
 /**
  * Bulk insert from CSV
@@ -594,10 +595,42 @@ const getAvailableSemesters = async (req, res) => {
         }
         const proctoringSemesters = await ProcterMaping.distinct("semester", proctorQuery);
 
+        // Also check Feedback results
+        const feedQuery = {};
+        if (facultyId) feedQuery.facultyId = facultyId.trim();
+        if (academicYear) {
+            const { academicYearId } = await resolveAcademicIds({ academicYear });
+            if (academicYearId) {
+                // Same logic as getResults: find all IDs for that year
+                const ayDoc = await AcademicYear.findById(academicYearId);
+                if (ayDoc) {
+                    const allAysForYear = await AcademicYear.find({ year: ayDoc.year }).select("_id");
+                    feedQuery.academicYearId = { $in: allAysForYear.map(y => y._id) };
+                } else {
+                    feedQuery.academicYearId = academicYearId;
+                }
+            }
+        }
+        const feedSems = await FacultyFeedResult.distinct("semesterNumber", feedQuery);
+        const feedYears = await FacultyFeedResult.distinct("yearNumber", feedQuery);
+
         // Merge and unique
-        const allSemesters = [...new Set([...teachingSemesters, ...proctoringSemesters])];
+        const allSemesters = [
+            ...new Set([
+                ...teachingSemesters, 
+                ...proctoringSemesters, 
+                ...feedSems, 
+                ...feedYears
+            ])
+        ];
         
-        res.json(allSemesters.filter(s => s != null).sort((a, b) => a - b));
+        res.json(allSemesters.filter(s => s != null && s !== "").sort((a, b) => {
+            // Handle numeric or string sorting (basic)
+            const numA = parseFloat(a);
+            const numB = parseFloat(b);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return String(a).localeCompare(String(b));
+        }));
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
