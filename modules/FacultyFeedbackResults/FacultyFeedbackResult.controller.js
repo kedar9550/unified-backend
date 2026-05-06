@@ -1,12 +1,15 @@
 const FacultyFeedResult = require("./FacultyFeedResult.model");
 const AcademicYear = require("../academicYear/academicYear.model");
 const SemesterType = require("../semesterType/semesterType.model");
+const Program = require("../academics/program.model");
+const Branch = require("../academics/branch.model");
+const Employee = require("../employee/employee.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 
 /**
  * Bulk insert from CSV
- * headers: facultyId, facultyName, academicYear, semester, subjectName, subjectCode, branch, section, totalStudents, givenStudents, percentage, overallPercentage
+ * headers: facultyId, academicYear, program, branch, subjectName, subjectCode, section, phase, semester_or_year, totalStudents, givenStudents, percentage, overallPercentage
  */
 const uploadCSV = async (req, res) => {
     try {
@@ -17,14 +20,14 @@ const uploadCSV = async (req, res) => {
         const rows = parseCSV(req.file.buffer);
         const requiredHeaders = [
             "facultyid",
-            "facultyname",
             "academicyear",
-            "semester",
+            "program",
+            "branch",
             "subjectname",
             "subjectcode",
-            "branch",
             "section",
             "phase",
+            "semester_or_year",
             "totalstudents",
             "givenstudents",
             "percentage",
@@ -35,130 +38,196 @@ const uploadCSV = async (req, res) => {
 
         const results = [];
         const errors = [];
+        let successCount = 0;
 
-        // Cache for academic years and semester types to avoid multiple queries
         const ayCache = {};
+        const programCache = {};
+        const branchCache = {};
         const semTypeCache = {};
+
+        const processedKeys = new Set();
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
+            const rowNum = i + 2;
             const {
                 facultyid,
-                facultyname,
                 academicyear,
-                semester,
+                program: programName,
+                branch: branchName,
                 subjectname,
                 subjectcode,
-                branch,
                 section,
                 phase,
+                semester_or_year,
                 totalstudents,
                 givenstudents,
                 percentage,
                 overallpercentage
             } = row;
 
-            // 1. Resolve Academic Year
-            let ayId = ayCache[academicyear];
-            if (!ayId) {
-                const ay = await AcademicYear.findOne({ year: academicyear });
-                if (!ay) {
-                    errors.push(`Row ${i + 2}: Academic Year '${academicyear}' not found in the system.`);
-                    continue;
+            try {
+                if (!facultyid) throw new Error("Faculty ID is missing");
+                
+                const faculty = await Employee.findOne({ institutionId: facultyid.trim() });
+                if (!faculty) throw new Error(`Faculty with ID '${facultyid}' not found in system`);
+
+                if (!academicyear) throw new Error("Academic Year is missing");
+                if (!programName) throw new Error("Program is missing");
+                if (!branchName) throw new Error("Branch is missing");
+                if (!subjectcode) throw new Error("Subject Code is missing");
+                if (semester_or_year === undefined || semester_or_year === "") throw new Error("Semester/Year is missing");
+                if (phase === undefined || phase === "") throw new Error("Phase is missing");
+
+                const total = Number(totalstudents);
+                const given = Number(givenstudents);
+                const perc = Number(percentage);
+                const overallPerc = Number(overallpercentage);
+                const phs = Number(phase);
+
+                if (isNaN(total)) throw new Error(`Invalid totalStudents count: ${totalstudents}`);
+                if (isNaN(given)) throw new Error(`Invalid givenStudents count: ${givenstudents}`);
+                if (isNaN(perc)) throw new Error(`Invalid percentage: ${percentage}`);
+                if (isNaN(overallPerc)) throw new Error(`Invalid overallPercentage: ${overallpercentage}`);
+                if (isNaN(phs) || (phs !== 1 && phs !== 2)) throw new Error(`Invalid phase '${phase}' (must be 1 or 2)`);
+
+                // Resolve Program
+                let programDoc = programCache[programName];
+                if (!programDoc) {
+                    const escapedName = programName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    programDoc = await Program.findOne({ 
+                        $or: [
+                            { name: { $regex: new RegExp(`^${escapedName}$`, "i") } },
+                            { code: programName.toUpperCase() }
+                        ]
+                    });
+                    if (!programDoc) throw new Error(`Program '${programName}' not found`);
+                    programCache[programName] = programDoc;
                 }
-                ayId = ay._id;
-                ayCache[academicyear] = ayId;
-            }
 
-            // 2. Resolve Semester - auto-calculate ODD/EVEN from semester number
-            const semNo = Number(semester);
-            if (isNaN(semNo)) {
-                errors.push(`Row ${i + 2}: Invalid Semester number '${semester}' (must be a number).`);
-                continue;
-            }
-            const calculatedSemType = semNo % 2 === 0 ? "EVEN" : "ODD";
- 
-            let semTypeId = semTypeCache[calculatedSemType];
-            if (!semTypeId) {
-                const st = await SemesterType.findOne({ name: calculatedSemType });
-                if (!st) {
-                    errors.push(`Row ${i + 2}: Global Semester Type '${calculatedSemType}' not found.`);
-                    continue;
+                // Resolve Academic Year
+                let ayId = ayCache[`${academicyear}_${programDoc._id}`];
+                if (!ayId) {
+                    const ay = await AcademicYear.findOne({ year: academicyear, programId: programDoc._id });
+                    if (!ay) {
+                        const fallbackAy = await AcademicYear.findOne({ year: academicyear });
+                        if (!fallbackAy) throw new Error(`Academic Year '${academicyear}' not found`);
+                        ayId = fallbackAy._id;
+                    } else {
+                        ayId = ay._id;
+                    }
+                    ayCache[`${academicyear}_${programDoc._id}`] = ayId;
                 }
-                semTypeId = st._id;
-                semTypeCache[calculatedSemType] = semTypeId;
+
+                // Resolve Branch
+                let branchDoc = branchCache[branchName];
+                if (!branchDoc) {
+                    branchDoc = await Branch.findOne({ 
+                        $or: [
+                            { name: { $regex: new RegExp(`^${branchName}$`, "i") } },
+                            { code: branchName.toUpperCase() }
+                        ],
+                        programId: programDoc._id 
+                    });
+                    if (!branchDoc) throw new Error(`Branch '${branchName}' not found for program '${programName}'`);
+                    branchCache[branchName] = branchDoc;
+                }
+
+                // Program Logic (SEM vs YEAR)
+                let semesterNumber = null;
+                let yearNumber = null;
+                let semesterTypeId = null;
+
+                const inputStr = String(semester_or_year).trim();
+
+                if (programDoc.programPattern === "SEMESTER") {
+                    if (inputStr.toUpperCase().includes("S")) {
+                        let st = semTypeCache["SUMMER"];
+                        if (!st) {
+                            st = await SemesterType.findOne({ name: "SUMMER" });
+                            if (!st) throw new Error("Semester Type 'SUMMER' not found in system");
+                            semTypeCache["SUMMER"] = st;
+                        }
+                        semesterTypeId = st._id;
+                        semesterNumber = inputStr.toUpperCase();
+                    } else {
+                        const num = Number(inputStr);
+                        if (isNaN(num)) throw new Error(`Invalid semester number '${inputStr}' for SEM program`);
+                        semesterNumber = inputStr; 
+                        const typeStr = num % 2 === 0 ? "EVEN" : "ODD";
+                        let st = semTypeCache[typeStr];
+                        if (!st) {
+                            st = await SemesterType.findOne({ name: typeStr });
+                            if (!st) throw new Error(`Semester Type '${typeStr}' not found in system`);
+                            semTypeCache[typeStr] = st;
+                        }
+                        semesterTypeId = st._id;
+                    }
+                } else if (programDoc.programPattern === "YEAR") {
+                    const num = Number(inputStr);
+                    if (isNaN(num)) throw new Error(`Invalid year number '${inputStr}' for YEAR program`);
+                    yearNumber = inputStr; 
+                }
+
+                // Duplicate Check
+                const trimmedSubjectCode = subjectcode.trim();
+                const trimmedSection = (section || "").trim();
+                const duplicateKey = `${ayId}_${trimmedSubjectCode}_${trimmedSection}_${phs}`;
+
+                if (processedKeys.has(duplicateKey)) {
+                    throw new Error(`Duplicate entry for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in this CSV`);
+                }
+                
+                const existing = await FacultyFeedResult.findOne({
+                    academicYearId: ayId,
+                    subjectCode: trimmedSubjectCode,
+                    section: trimmedSection,
+                    phase: phs
+                });
+                if (existing) {
+                    throw new Error(`Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in this Academic Year`);
+                }
+                processedKeys.add(duplicateKey);
+
+                results.push({
+                    facultyId: facultyid.trim(),
+                    facultyName: faculty.name,
+                    programId: programDoc._id,
+                    branchId: branchDoc._id,
+                    academicYearId: ayId,
+                    semesterTypeId,
+                    semesterNumber,
+                    yearNumber,
+                    subjectName: subjectname ? subjectname.trim() : "",
+                    subjectCode: trimmedSubjectCode,
+                    branch: branchDoc.name,
+                    section: trimmedSection,
+                    phase: phs,
+                    totalStudents: total,
+                    givenStudents: given,
+                    percentage: perc,
+                    overallPercentage: overallPerc,
+                    uploadedBy: req.user.userId
+                });
+
+                successCount++;
+            } catch (err) {
+                errors.push({ row: rowNum, message: err.message });
             }
-
-            const facId = (facultyid || "").trim();
-            const phs = Number(phase);
-            const total = Number(totalstudents);
-            const given = Number(givenstudents);
-            const perc = Number(percentage);
-            const overallPerc = Number(overallpercentage);
-
-            if (!facId) errors.push(`Row ${i + 2}: Faculty ID is missing.`);
-            if (isNaN(phs) || (phs !== 1 && phs !== 2)) errors.push(`Row ${i + 2}: Invalid phase '${phase}' (must be 1 or 2).`);
-            if (isNaN(total)) errors.push(`Row ${i + 2}: Invalid totalStudents count '${totalstudents}' (must be a number).`);
-            if (isNaN(given)) errors.push(`Row ${i + 2}: Invalid givenStudents count '${givenstudents}' (must be a number).`);
-            if (isNaN(perc)) errors.push(`Row ${i + 2}: Invalid percentage '${percentage}' (must be a number).`);
-            if (isNaN(overallPerc)) errors.push(`Row ${i + 2}: Invalid overallPercentage '${overallpercentage}' (must be a number).`);
-
-            if (!facId || isNaN(phs) || (phs !== 1 && phs !== 2) || isNaN(total) || isNaN(given) || isNaN(perc) || isNaN(overallPerc)) continue;
-
-            // 3. Duplicate Prevention
-            const duplicate = await FacultyFeedResult.findOne({
-                facultyId: facId,
-                subjectCode: subjectcode,
-                section: section,
-                phase: phs,
-                semester: semNo,
-                academicYearId: ayId
-            });
-
-            if (duplicate) {
-                errors.push(`Row ${i + 2}: Record already exists for Faculty ID ${facId}, Subject ${subjectcode}, Section ${section}, and Phase ${phs}. Skipping.`);
-                continue;
-            }
-
-            results.push({
-                facultyId: facId,
-                facultyName: facultyname,
-                subjectName: subjectname,
-                subjectCode: subjectcode,
-                branch: branch,
-                section: section,
-                phase: phs,
-                academicYearId: ayId,
-                semesterTypeId: semTypeId,
-                semester: semNo,
-                semType: calculatedSemType,
-                totalStudents: total,
-                givenStudents: given,
-                percentage: perc,
-                overallPercentage: overallPerc,
-                uploadedBy: req.user.userId
-            });
         }
 
         if (results.length > 0) {
             await FacultyFeedResult.insertMany(results);
         }
 
-        if (results.length === 0 && errors.length > 0) {
-            return res.status(400).json({
-                message: "No records were uploaded. Please check the errors below.",
-                errors: errors
-            });
-        }
-
-        res.status(201).json({
-            message: `Successfully uploaded ${results.length} records.`,
-            processed: results.length,
-            errors: errors.length > 0 ? errors : null
+        res.json({
+            successCount,
+            failedCount: errors.length,
+            errors
         });
 
     } catch (error) {
-        console.error("CSV Upload Error:", error);
+        console.error("Unified Upload Error:", error);
         res.status(500).json({ message: error.message || "An error occurred during upload." });
     }
 };
@@ -235,7 +304,19 @@ const getResults = async (req, res) => {
 
         if (academicYear || semester) {
             const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
-            if (academicYearId) query.academicYearId = academicYearId;
+            
+            if (academicYearId) {
+                // IMPORTANT: AcademicYear is program-specific. 
+                // For global views (like Feedback Section), we must find ALL IDs sharing the same year string.
+                const ayDoc = await AcademicYear.findById(academicYearId);
+                if (ayDoc) {
+                    const allAysForYear = await AcademicYear.find({ year: ayDoc.year }).select("_id");
+                    query.academicYearId = { $in: allAysForYear.map(y => y._id) };
+                } else {
+                    query.academicYearId = academicYearId;
+                }
+            }
+            
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
  
@@ -244,7 +325,28 @@ const getResults = async (req, res) => {
             .populate("semesterTypeId", "name")
             .sort({ createdAt: -1 });
 
-        res.json(results);
+        const formatted = results.map((r) => {
+            const obj = r.toObject();
+            const semType = obj.semesterTypeId?.name || "";
+            
+            let semesterDisplay = "";
+            if (semType === "SUMMER") {
+                semesterDisplay = "Summer";
+            } else if (obj.yearNumber) {
+                semesterDisplay = `Year-${obj.yearNumber}`;
+            } else if (obj.semesterNumber) {
+                semesterDisplay = `Sem-${obj.semesterNumber}`;
+            }
+
+            return {
+                ...obj,
+                academicYear: obj.academicYearId?.year || "",
+                semesterType: semType,
+                semesterDisplay
+            };
+        });
+
+        res.json(formatted);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -302,7 +404,8 @@ const createResult = async (req, res) => {
     try {
         const {
             facultyId, facultyName, subjectName, subjectCode, branch, section, phase,
-            academicYearId, semesterTypeId, totalStudents, givenStudents, percentage, overallPercentage
+            academicYearId, semesterTypeId, totalStudents, givenStudents, percentage, overallPercentage,
+            programId, branchId, semesterNumber, yearNumber
         } = req.body;
  
         if (!facultyId || !subjectName || !academicYearId || !semesterTypeId) {
@@ -314,7 +417,11 @@ const createResult = async (req, res) => {
             facultyName,
             subjectName,
             subjectCode,
-            branch,
+            branch, // legacy string
+            programId,
+            branchId,
+            semesterNumber: semesterNumber ? Number(semesterNumber) : undefined,
+            yearNumber: yearNumber ? Number(yearNumber) : undefined,
             section,
             phase: phase ? Number(phase) : undefined,
             academicYearId,
