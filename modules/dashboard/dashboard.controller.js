@@ -24,10 +24,11 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             Branch.countDocuments(),
             Employee.countDocuments(),
             Role.countDocuments(),
-            AcademicYear.findOne({ isActive: true })
+            AcademicYear.findOne({ isActive: true }).populate('activeSemesterTypeId', 'name')
         ]);
 
-        const activeYear = activeYearObj ? activeYearObj.year : 'None';
+        const activeYear = activeYearObj ? activeYearObj.year : 'N/A';
+        const activeSemester = activeYearObj?.activeSemesterTypeId?.name || 'N/A';
 
         // Parallel lists (top 5)
         const [
@@ -127,6 +128,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             data: {
                 academicYearsCount,
                 activeYear,
+                activeSemester,
                 departmentsCount,
                 programsCount,
                 branchesCount,
