@@ -16,7 +16,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             branchesCount,
             usersCount,
             rolesCount,
-            activeYearObj
+            allYearObjs
         ] = await Promise.all([
             AcademicYear.countDocuments(),
             Department.countDocuments(),
@@ -24,11 +24,26 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             Branch.countDocuments(),
             Employee.countDocuments(),
             Role.countDocuments(),
-            AcademicYear.findOne({ isActive: true }).populate('activeSemesterTypeId', 'name')
+            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean()
         ]);
 
-        const activeYear = activeYearObj ? activeYearObj.year : 'N/A';
-        const activeSemester = activeYearObj?.activeSemesterTypeId?.name || 'N/A';
+        // Filter for active years in JS
+        const activeYearObjs = allYearObjs.filter(ay => ay.programs && ay.programs.some(p => p.isActive));
+
+        // Format years from 2025-2026 to 2025-26
+        const formatYear = (y) => {
+            if (!y || !y.includes('-')) return y;
+            const parts = y.split('-');
+            const startYear = parts[0];
+            const endYear = parts[1].length === 4 ? parts[1].substring(2) : parts[1];
+            return `${startYear}-${endYear}`;
+        };
+
+        const activeYear = activeYearObjs.length > 0 
+            ? activeYearObjs.map(ay => formatYear(ay.year)).join(' & ') 
+            : 'N/A';
+        
+        const activeSemester = activeYearObjs[0]?.programs?.find(p => p.isActive)?.activeSemesterTypeId?.name || 'N/A';
 
         // Parallel lists (top 5)
         const [
