@@ -3,7 +3,7 @@
  * Run this ONCE after deploying the new code to:
  * 1. Seed new "YEAR" semester type (for Pharma.D)
  * 2. Populate semType and yearName fields on existing students
- * 3. Fix the ProcterMaping unique index
+ * 3. Fix the ProctorMapping unique index
  *
  * Run: node scripts/migrate.js
  */
@@ -13,7 +13,7 @@ const mongoose = require('mongoose');
 
 const SemesterType = require('../modules/semesterType/semesterType.model');
 const Student = require('../modules/StudentData/Studentdata.model');
-const ProcterMaping = require('../modules/ProcterMaping/ProcterMaping.model');
+const ProctorMapping = require('../modules/ProctorMapping/ProctorMapping.model');
 
 const connectDB = async () => {
     await mongoose.connect(process.env.MONGO_URI);
@@ -75,9 +75,9 @@ const migrateStudentSemFields = async () => {
     console.log(`  ✓ Migrated ${updated} students`);
 };
 
-// ── Step 3: Fix ProcterMaping unique index ───────────────────────────────────
-const fixProcterMapingIndex = async () => {
-    console.log('\n[3/3] Fixing ProcterMaping unique index...');
+// ── Step 3: Fix ProctorMapping unique index ───────────────────────────────────
+const fixProctorMappingIndex = async () => {
+    console.log('\n[3/3] Fixing ProctorMapping unique index...');
 
     const collection = mongoose.connection.collection('proctermapings');
 
@@ -107,7 +107,7 @@ const runMigration = async () => {
         await connectDB();
         await seedYearSemesterType();
         await migrateStudentSemFields();
-        await fixProcterMapingIndex();
+        await fixProctorMappingIndex();
         console.log('\n✅ Migration completed successfully!');
         console.log('\nNext steps:');
         console.log('  1. Run student sync (bulkUpdateStudentCSV) to populate yearName for Pharma.D students from eCap');

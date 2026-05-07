@@ -6,7 +6,7 @@ const Branch = require("../academics/branch.model");
 const Employee = require("../employee/employee.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
-const ProcterMaping = require("../ProcterMaping/ProcterMaping.model");
+const ProctorMapping = require("../ProctorMapping/ProctorMapping.model");
 const FacultyFeedResult = require("../FacultyFeedbackResults/FacultyFeedResult.model");
 
 /**
@@ -571,7 +571,7 @@ const getAvailableSemesters = async (req, res) => {
             const { academicYearId } = await resolveAcademicIds({ academicYear });
             if (academicYearId) proctorQuery.academicYearId = academicYearId;
         }
-        const proctoringSemesters = await ProcterMaping.distinct("semester", proctorQuery);
+        const proctoringSemesters = await ProctorMapping.distinct("semester", proctorQuery);
 
         // Also check Feedback results
         const feedQuery = {};

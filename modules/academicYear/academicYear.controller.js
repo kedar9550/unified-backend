@@ -298,7 +298,7 @@ const deleteAcademicYear = async (req, res) => {
 };
 
 /* ─────────────────────────────────────────────────────────────
-   SHARED HELPER — used by ProcterMaping and other controllers
+   SHARED HELPER — used by ProctorMapping and other controllers
    Finds the AcademicYear doc where a given program's isActive = true.
    Returns the full year doc (caller can read .year string from it).
 ───────────────────────────────────────────────────────────── */
@@ -335,5 +335,6 @@ module.exports = {
     toggleSemesterType,
     removeProgramFromYear,
     deleteAcademicYear,
-    resolveActiveAcademicYear   // exported — used by ProcterMaping controller
+    resolveActiveAcademicYear   // exported — used by ProctorMapping controller
 };
+

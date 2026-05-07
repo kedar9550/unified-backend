@@ -1,7 +1,7 @@
 const StudentResult = require("./StudentResult.model");
 const Program = require("../academics/program.model");
 const Branch = require("../academics/branch.model");
-const ProcterMaping = require("../ProcterMaping/ProcterMaping.model");
+const ProctorMapping = require("../ProctorMapping/ProctorMapping.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
 const SemesterType = require("../semesterType/semesterType.model");
@@ -92,7 +92,7 @@ const downloadYearTemplate = (req, res) => {
 /**
  
  *
- * @param {Object}  mapping      - ProcterMaping document
+ * @param {Object}  mapping      - ProctorMapping document
  * @param {String}  periodLabel  - "ODD"/"EVEN" for SEM, "I Year" for YEAR
  * @param {Boolean} isYear       - true if Pharma.D
  * @param {Number|null} semNum   - actual semester number (1,2,3...) for SEM programs
@@ -168,7 +168,7 @@ const updateProctorSummaries = async (uploadedResults) => {
 
         // ── 2. Load proctor mappings for uploaded students ───────────────────
         const studentIds = [...new Set(uploadedResults.map(r => r.studentId))];
-        const mappings = await ProcterMaping.find({ studentId: { $in: studentIds } });
+        const mappings = await ProctorMapping.find({ studentId: { $in: studentIds } });
 
         if (mappings.length === 0) {
             console.log(`[ProctorSummary] No proctor mappings found — skipping`);
@@ -186,7 +186,7 @@ const updateProctorSummaries = async (uploadedResults) => {
         //    SEM  programs → exact semester string  e.g. "1", "3", "5"
         //    YEAR programs → yearName string         e.g. "I Year", "II Year"
         //
-        //  academicYear comes directly from ProcterMaping — no examYear needed.
+        //  academicYear comes directly from ProctorMapping — no examYear needed.
         //
         const buckets = {};
 
@@ -267,10 +267,10 @@ const updateProctorSummaries = async (uploadedResults) => {
             const semNumForResolve = isYear ? null : parseInt(periodLabel);
 
             // ── 4a. Find ALL students mapped to this proctor for this period ─
-            //  Scan all ProcterMaping docs, resolveProctorForPeriod for each.
+            //  Scan all ProctorMapping docs, resolveProctorForPeriod for each.
             //  totalMapped = students whose proctor for this period = proctorId
             //                AND academicYear matches.
-            const allMappings = await ProcterMaping.find({});
+            const allMappings = await ProctorMapping.find({});
             const mappedStudentIds = [];
 
             for (const m of allMappings) {
@@ -764,7 +764,7 @@ const getProctorDepartments = async (req, res) => {
             return res.status(400).json({ message: "facultyId and academicYear are required." });
         }
 
-        const mappings = await ProcterMaping.find({
+        const mappings = await ProctorMapping.find({
             currentProctorId: facultyId,
             fromAcademicYear: academicYear
         }).select("studentId");

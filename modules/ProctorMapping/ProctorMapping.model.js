@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const procterMapingSchema = new mongoose.Schema({
+const proctorMappingSchema = new mongoose.Schema({
     studentId: {
         type: String,
         required: true,
@@ -56,4 +56,5 @@ const procterMapingSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-module.exports = mongoose.model("ProcterMaping", procterMapingSchema);
+module.exports = mongoose.model("ProctorMapping", proctorMappingSchema, "proctermapings");
+

@@ -192,4 +192,42 @@ const resolveDiscrepancy = async (req, res) => {
     }
 };
 
-module.exports = { raiseDiscrepancy, getDiscrepancies, getDiscrepancyById, resolveDiscrepancy };
+/**
+ * DELETE /api/discrepancies/:id
+ * Faculty can delete their own PENDING discrepancy
+ */
+const deleteDiscrepancy = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const disc = await Discrepancy.findById(id);
+
+        if (!disc) {
+            return res.status(404).json({ message: "Discrepancy not found." });
+        }
+
+        // Only the creator can delete it
+        if (disc.raisedBy.toString() !== req.user.userId.toString()) {
+            return res.status(403).json({ message: "You can only delete your own discrepancies." });
+        }
+
+        // Only PENDING can be deleted
+        if (disc.status !== "PENDING") {
+            return res.status(400).json({ message: "Only pending discrepancies can be deleted." });
+        }
+
+        await Discrepancy.findByIdAndDelete(id);
+        res.json({ message: "Discrepancy deleted successfully." });
+    } catch (err) {
+        console.error("deleteDiscrepancy error:", err);
+        res.status(500).json({ message: err.message });
+    }
+};
+
+module.exports = { 
+    raiseDiscrepancy, 
+    getDiscrepancies, 
+    getDiscrepancyById, 
+    resolveDiscrepancy,
+    deleteDiscrepancy
+};
+

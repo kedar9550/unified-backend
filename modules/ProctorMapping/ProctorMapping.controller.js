@@ -1,4 +1,4 @@
-const ProcterMaping = require("./ProcterMaping.model");
+const ProctorMapping = require("./ProctorMapping.model");
 const AcademicYear = require("../academicYear/academicYear.model");
 const SemesterType = require("../semesterType/semesterType.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
@@ -20,11 +20,11 @@ const getActiveContext = async (program) => {
  * Internal helper to handle the logic of assigning/changing proctor.
  */
 const assignProctor = async (student, employee, academicYearLabel, semester, yearName) => {
-    let mapping = await ProcterMaping.findOne({ studentId: student.rollNo });
+    let mapping = await ProctorMapping.findOne({ studentId: student.rollNo });
 
     if (!mapping) {
         // Initial Assignment
-        mapping = new ProcterMaping({
+        mapping = new ProctorMapping({
             studentId: student.rollNo,
             studentName: student.personalInfo.studentName,
             currentProctorId: employee.institutionId,
@@ -144,7 +144,7 @@ const getMappings = async (req, res) => {
         let query = {};
         if (studentId) query.studentId = studentId.trim();
 
-        let mappings = await ProcterMaping.find(query);
+        let mappings = await ProctorMapping.find(query);
 
         // If a specific period is requested, filter results to show the proctor active at that time
         if (academicYear && (semester || yearName)) {
@@ -224,7 +224,7 @@ const getStudentsForMapping = async (req, res) => {
 
         const students = await Student.find(studentQuery).select("rollNo personalInfo.studentName academicInfo.programName");
 
-        const mappings = await ProcterMaping.find({
+        const mappings = await ProctorMapping.find({
             studentId: { $in: students.map(s => s.rollNo) }
         });
 
@@ -258,7 +258,7 @@ const createMapping = async (req, res) => {
 
         let sId = studentId;
         if (!sId && id) {
-            const m = await ProcterMaping.findById(id);
+            const m = await ProctorMapping.findById(id);
             if (m) sId = m.studentId;
         }
 
@@ -290,7 +290,7 @@ const createMapping = async (req, res) => {
 const deleteMapping = async (req, res) => {
     try {
         const { id } = req.params;
-        const deleted = await ProcterMaping.findByIdAndDelete(id);
+        const deleted = await ProctorMapping.findByIdAndDelete(id);
         if (!deleted) return res.status(404).json({ message: "Record not found" });
         res.json({ message: "Deleted successfully" });
     } catch (error) {
@@ -306,3 +306,4 @@ module.exports = {
     updateMapping: createMapping, // Re-use createMapping for updates
     deleteMapping,
 };
+

@@ -19,7 +19,7 @@ const mongoose = require("mongoose");
  */
 const ProctorSummarySchema = new mongoose.Schema({
     proctorId: {
-        type: String,           // institutionId — matches ProcterMaping.currentProctorId
+        type: String,           // institutionId — matches ProctorMapping.currentProctorId
         required: true
     },
     proctorName: {
