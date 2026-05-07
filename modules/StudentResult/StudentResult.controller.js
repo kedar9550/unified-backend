@@ -90,21 +90,22 @@ const downloadYearTemplate = (req, res) => {
 // ── Proctor for Period Resolution ─────────────────────────────────────────────
 
 /**
- 
- *
+ * Resolve which proctor was active for a student during a specific period.
+ * 
  * @param {Object}  mapping      - ProctorMapping document
- * @param {String}  periodLabel  - "ODD"/"EVEN" for SEM, "I Year" for YEAR
+ * @param {String}  targetAY     - Target Academic Year (e.g. "2024-2025")
+ * @param {String}  periodLabel  - Semester number string ("1", "2"...) or Year Name ("I Year"...)
  * @param {Boolean} isYear       - true if Pharma.D
- * @param {Number|null} semNum   - actual semester number (1,2,3...) for SEM programs
+ * @param {Number|null} semNum   - actual semester number for SEM programs
  */
-const resolveProctorForPeriod = (mapping, periodLabel, isYear, semNum) => {
+const resolveProctorForPeriod = (mapping, targetAY, periodLabel, isYear, semNum) => {
     if (!isYear) {
-        // SEM program: history లో fromSemester match చేయి
+        // SEM program
         if (semNum) {
+            // 1. Check history for exact semester + year match
             const hist = mapping.history.find(h =>
-                h.fromSemester !== null &&
-                getSemesterTypeName(h.fromSemester) === periodLabel &&
-                h.fromSemester === semNum
+                h.fromSemester === semNum &&
+                h.fromAcademicYear === targetAY
             );
             if (hist) {
                 return {
@@ -114,21 +115,38 @@ const resolveProctorForPeriod = (mapping, periodLabel, isYear, semNum) => {
                 };
             }
 
-            // history లో లేదు → currentProctor కి అర్హత ఉందా check చేయి
-            if (mapping.fromSemester && semNum < mapping.fromSemester) {
-                return { proctorId: null, proctorName: null, academicYear: null };
+            // 2. Check if current assignment covers this period
+            // Current proctor is active if (targetAY, semNum) >= (fromAcademicYear, fromSemester)
+            // Comparison: Year first, then semester
+            const isAfterStart = (targetAY > mapping.fromAcademicYear) || 
+                                 (targetAY === mapping.fromAcademicYear && (mapping.fromSemester === null || semNum >= mapping.fromSemester));
+
+            if (isAfterStart) {
+                return {
+                    proctorId: mapping.currentProctorId,
+                    proctorName: mapping.currentProctorName,
+                    academicYear: mapping.fromAcademicYear
+                };
             }
         } else {
-            // semNum ఇవ్వలేదు (totalMapped calculation కోసం)
-            // కనీసం semester type మ్యాచ్ అవుతుందో లేదో చూడాలి
+            // No semNum provided (fallback)
             const assignedSemType = getSemesterTypeName(mapping.fromSemester);
-            if (assignedSemType !== periodLabel) {
-                return { proctorId: null, proctorName: null, academicYear: null };
+            const targetSemType = periodLabel; // Assuming "ODD"/"EVEN" passed here
+            if (assignedSemType === targetSemType && targetAY >= mapping.fromAcademicYear) {
+                return {
+                    proctorId: mapping.currentProctorId,
+                    proctorName: mapping.currentProctorName,
+                    academicYear: mapping.fromAcademicYear
+                };
             }
         }
-    } else if (isYear) {
-        // YEAR program: history లో fromYearName match చేయి
-        const hist = mapping.history.find(h => h.fromYearName === periodLabel);
+    } else {
+        // YEAR program (Pharma.D)
+        // 1. Check history
+        const hist = mapping.history.find(h => 
+            h.fromYearName === periodLabel && 
+            h.fromAcademicYear === targetAY
+        );
         if (hist) {
             return {
                 proctorId: hist.proctorId,
@@ -137,20 +155,23 @@ const resolveProctorForPeriod = (mapping, periodLabel, isYear, semNum) => {
             };
         }
 
-        if (mapping.fromYearName && periodLabel) {
-            const requestedVal = convertRomanToNumber(periodLabel);
-            const assignedVal = convertRomanToNumber(mapping.fromYearName);
-            if (requestedVal && assignedVal && requestedVal < assignedVal) {
-                return { proctorId: null, proctorName: null, academicYear: null };
-            }
+        // 2. Check current
+        const requestedVal = convertRomanToNumber(periodLabel);
+        const assignedVal = convertRomanToNumber(mapping.fromYearName);
+        
+        const isAfterStart = (targetAY > mapping.fromAcademicYear) ||
+                             (targetAY === mapping.fromAcademicYear && (!assignedVal || requestedVal >= assignedVal));
+
+        if (isAfterStart) {
+            return {
+                proctorId: mapping.currentProctorId,
+                proctorName: mapping.currentProctorName,
+                academicYear: mapping.fromAcademicYear
+            };
         }
     }
 
-    return {
-        proctorId: mapping.currentProctorId,
-        proctorName: mapping.currentProctorName,
-        academicYear: mapping.fromAcademicYear
-    };
+    return { proctorId: null, proctorName: null, academicYear: null };
 };
 
 const updateProctorSummaries = async (uploadedResults) => {
@@ -223,9 +244,12 @@ const updateProctorSummaries = async (uploadedResults) => {
 
             const semesterTypeId = semTypeCache[semTypeName];
 
-            // ── Resolve proctor from mapping (no examYear needed) ────────────
+            // ── Resolve proctor from mapping ────────────────────────────────
+            // We use the examYear or current context to determine the target academic year.
+            // Since we're processing uploaded results, we assume the target year is the mapping's year 
+            // or we use the mapping to see if they are the current proctor.
             const { proctorId, proctorName, academicYear } = resolveProctorForPeriod(
-                mapping, periodLabel, isYear, semNum
+                mapping, mapping.fromAcademicYear, periodLabel, isYear, semNum
             );
 
             if (!proctorId || !academicYear) continue;
@@ -274,10 +298,10 @@ const updateProctorSummaries = async (uploadedResults) => {
             const mappedStudentIds = [];
 
             for (const m of allMappings) {
-                const { proctorId: pid, academicYear: pay } = resolveProctorForPeriod(
-                    m, periodLabel, isYear, semNumForResolve
+                const { proctorId: pid } = resolveProctorForPeriod(
+                    m, academicYear, periodLabel, isYear, semNumForResolve
                 );
-                if (pid === proctorId && pay === academicYear) {
+                if (pid === proctorId) {
                     mappedStudentIds.push(m.studentId);
                 }
             }
@@ -720,10 +744,10 @@ const getProctorPassPercentage = async (req, res) => {
         let totalAppeared = 0, totalPassed = 0, totalFailed = 0, totalMapped = 0;
 
         const details = summaries.map(s => {
-            totalAppeared = Math.max(totalAppeared, s.studentsAppeared);
-            totalPassed = Math.max(totalPassed, s.studentsPassed);
-            totalFailed = Math.max(totalFailed, s.studentsFailed);
-            totalMapped = Math.max(totalMapped, s.totalMappedStudents);
+            totalAppeared += s.studentsAppeared;
+            totalPassed += s.studentsPassed;
+            totalFailed += s.studentsFailed;
+            totalMapped += s.totalMappedStudents;
 
             return {
                 semesterType: s.semesterTypeId?.name || "UNKNOWN",

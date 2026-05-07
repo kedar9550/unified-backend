@@ -558,61 +558,75 @@ const getAvailableSemesters = async (req, res) => {
         if (facultyId) query.facultyId = facultyId.trim();
 
         if (academicYear) {
-            const { academicYearId } = await resolveAcademicIds({ academicYear });
-            if (academicYearId) query.academicYearId = academicYearId;
+            // Find all academic year documents that match the year string (e.g. "2024-2025")
+            // This is necessary because AcademicYear is per-program.
+            const ayDocs = await AcademicYear.find({ year: academicYear }).select("_id");
+            if (ayDocs.length > 0) {
+                query.academicYearId = { $in: ayDocs.map(y => y._id) };
+            }
         }
 
-        const teachingSemesters = await FacultySubjectResult.distinct("semester", query);
+        const teachingSems  = (await FacultySubjectResult.distinct("semesterNumber", query)).filter(Boolean);
+        const teachingYears = (await FacultySubjectResult.distinct("yearNumber", query)).filter(Boolean);
 
         // Also check proctoring assignments
         const proctorQuery = {};
-        if (facultyId) proctorQuery.proctorId = facultyId.trim();
-        if (academicYear) {
-            const { academicYearId } = await resolveAcademicIds({ academicYear });
-            if (academicYearId) proctorQuery.academicYearId = academicYearId;
-        }
-        const proctoringSemesters = await ProctorMapping.distinct("semester", proctorQuery);
+        if (facultyId) proctorQuery.currentProctorId = facultyId.trim();
+        if (academicYear) proctorQuery.fromAcademicYear = academicYear; 
+        
+        const proctoringSems  = (await ProctorMapping.distinct("fromSemester", proctorQuery)).filter(Boolean);
+        const proctoringYears = (await ProctorMapping.distinct("fromYearName", proctorQuery)).filter(Boolean);
 
         // Also check Feedback results
         const feedQuery = {};
         if (facultyId) feedQuery.facultyId = facultyId.trim();
         if (academicYear) {
-            const { academicYearId } = await resolveAcademicIds({ academicYear });
-            if (academicYearId) {
-                // Same logic as getResults: find all IDs for that year
-                const ayDoc = await AcademicYear.findById(academicYearId);
-                if (ayDoc) {
-                    const allAysForYear = await AcademicYear.find({ year: ayDoc.year }).select("_id");
-                    feedQuery.academicYearId = { $in: allAysForYear.map(y => y._id) };
-                } else {
-                    feedQuery.academicYearId = academicYearId;
-                }
+            const ayDocs = await AcademicYear.find({ year: academicYear }).select("_id");
+            if (ayDocs.length > 0) {
+                feedQuery.academicYearId = { $in: ayDocs.map(y => y._id) };
             }
         }
-        const feedSems = await FacultyFeedResult.distinct("semesterNumber", feedQuery);
-        const feedYears = await FacultyFeedResult.distinct("yearNumber", feedQuery);
+        const feedSems = (await FacultyFeedResult.distinct("semesterNumber", feedQuery)).filter(Boolean);
+        const feedYears = (await FacultyFeedResult.distinct("yearNumber", feedQuery)).filter(Boolean);
 
-        // Merge and unique
-        const allSemesters = [
-            ...new Set([
-                ...teachingSemesters, 
-                ...proctoringSemesters, 
-                ...feedSems, 
-                ...feedYears
-            ])
-        ];
+        // Format and Merge
+        const allItems = new Set();
         
-        res.json(allSemesters.filter(s => s != null && s !== "").sort((a, b) => {
-            // Handle numeric or string sorting (basic)
-            const numA = parseFloat(a);
-            const numB = parseFloat(b);
-            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-            return String(a).localeCompare(String(b));
-        }));
+        // Helper to format
+        const addSems = (list) => list.forEach(s => {
+            const str = String(s);
+            if (str.includes('-S') || str.includes('Year')) {
+                allItems.add(str);
+            } else {
+                allItems.add(`Sem-${str}`);
+            }
+        });
+        const addYears = (list) => list.forEach(y => {
+            const str = String(y);
+            if (str.includes('Year')) {
+                allItems.add(str);
+            } else {
+                allItems.add(`Year-${str}`);
+            }
+        });
+
+        addSems(teachingSems);
+        addSems(proctoringSems);
+        addSems(feedSems);
+        
+        addYears(teachingYears);
+        addYears(proctoringYears);
+        addYears(feedYears);
+        
+        const sorted = Array.from(allItems).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+        res.json(sorted);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
 };
+
+
 
 module.exports = {
     uploadCSV,
