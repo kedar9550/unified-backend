@@ -8,7 +8,7 @@ const {
     createMapping,
     updateMapping,
     deleteMapping
-} = require("./ProcterMaping.controller");
+} = require("./ProctorMapping.controller");
 const { protect, authorize } = require("../../middlewares/authMiddleware");
 
 // Multer setup for memory storage

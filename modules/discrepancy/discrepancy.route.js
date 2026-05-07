@@ -10,7 +10,9 @@ const {
     getDiscrepancies,
     getDiscrepancyById,
     resolveDiscrepancy,
+    deleteDiscrepancy,
 } = require("./discrepancy.controller");
+
 
 // ── Multer — proof document upload ──────────────────────────────────
 const uploadDir = path.join(__dirname, "../../uploads/discrepancies");
@@ -47,6 +49,10 @@ router.get("/",     protect, getDiscrepancies);
 router.get("/:id",  protect, getDiscrepancyById);
 
 // Resolver team resolves — requires proof file upload
-router.put("/:id",  protect, upload.single("proof"), resolveDiscrepancy);
+router.put("/:id",    protect, upload.single("proof"), resolveDiscrepancy);
+
+// Faculty deletes their own pending discrepancy
+router.delete("/:id", protect, deleteDiscrepancy);
 
 module.exports = router;
+
