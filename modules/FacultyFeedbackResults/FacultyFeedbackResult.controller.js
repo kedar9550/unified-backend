@@ -323,6 +323,8 @@ const getResults = async (req, res) => {
         const results = await FacultyFeedResult.find(query)
             .populate("academicYearId", "year")
             .populate("semesterTypeId", "name")
+            .populate("programId", "name")
+            .populate("branchId", "name")
             .sort({ createdAt: -1 });
 
         const formatted = results.map((r) => {
