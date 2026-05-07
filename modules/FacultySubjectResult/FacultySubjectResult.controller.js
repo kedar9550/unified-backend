@@ -132,17 +132,12 @@ const uploadUnifiedResults = async (req, res) => {
                 }
 
                 // 3. Resolve Academic Year
-                let ayId = ayCache[`${academicyear}_${programDoc._id}`];
+                let ayId = ayCache[academicyear];
                 if (!ayId) {
-                    const ay = await AcademicYear.findOne({ year: academicyear, programId: programDoc._id });
-                    if (!ay) {
-                        const fallbackAy = await AcademicYear.findOne({ year: academicyear });
-                        if (!fallbackAy) throw new Error(`Academic Year '${academicyear}' not found`);
-                        ayId = fallbackAy._id;
-                    } else {
-                        ayId = ay._id;
-                    }
-                    ayCache[`${academicyear}_${programDoc._id}`] = ayId;
+                    const ay = await AcademicYear.findOne({ year: academicyear });
+                    if (!ay) throw new Error(`Academic Year '${academicyear}' not found`);
+                    ayId = ay._id;
+                    ayCache[academicyear] = ayId;
                 }
 
                 // --- DUPLICATE CHECK ---
@@ -352,17 +347,8 @@ const getResults = async (req, res) => {
         if (academicYear || semester) {
             const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
             
-            if (academicYearId) {
-                // IMPORTANT: AcademicYear is program-specific. 
-                // For global views (like Exam Section), we must find ALL IDs sharing the same year string.
-                const ayDoc = await AcademicYear.findById(academicYearId);
-                if (ayDoc) {
-                    const allAysForYear = await AcademicYear.find({ year: ayDoc.year }).select("_id");
-                    query.academicYearId = { $in: allAysForYear.map(y => y._id) };
-                } else {
-                    query.academicYearId = academicYearId;
-                }
-            }
+            // New schema: one doc per year, so direct match is correct
+            if (academicYearId) query.academicYearId = academicYearId;
             
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
@@ -519,15 +505,7 @@ const getCoAttainment = async (req, res) => {
         if (academicYear || semester) {
             const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
             
-            if (academicYearId) {
-                const ayDoc = await AcademicYear.findById(academicYearId);
-                if (ayDoc) {
-                    const allAysForYear = await AcademicYear.find({ year: ayDoc.year }).select("_id");
-                    query.academicYearId = { $in: allAysForYear.map(y => y._id) };
-                } else {
-                    query.academicYearId = academicYearId;
-                }
-            }
+            if (academicYearId) query.academicYearId = academicYearId;
             
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }

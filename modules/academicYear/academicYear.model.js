@@ -1,36 +1,44 @@
 const mongoose = require('mongoose');
 
-const AcademicYearSchema = new mongoose.Schema({
-    year: {
-        type: String,
-        required: true,
-        trim: true,
-        // e.g. "2024-2025"
-        match: [/^\d{4}-\d{4}$/, 'Format must be YYYY-YYYY']
-    },
+/*
+ * NEW SCHEMA — one document per academic year string (e.g. "2025-2026").
+ * Programs are stored as a sub-array so every faculty / module that touches
+ * "2025-2026" always gets the SAME _id, regardless of which program they belong to.
+ *
+ * Migration: run scripts/migrate-academicYear.js once to collapse the old
+ * 24 program-scoped records into 3 year-level documents and fix all refs.
+ */
 
-    // e.g. "B.Tech", "M.Tech", "Pharma.D", "MBA"
-    // null means it applies to ALL programs (global fallback container)
+const ProgramEntrySchema = new mongoose.Schema({
     programId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Program',
-        default: null
+        required: true
     },
-
     isActive: {
         type: Boolean,
         default: false
     },
-
-    // Active semester for this program's academic year
+    // Which semester / year period is currently active for this program
     activeSemesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'SemesterType'
+        ref: 'SemesterType',
+        default: null
+    }
+}, { _id: false });          // no separate _id per array entry — not needed
+
+const AcademicYearSchema = new mongoose.Schema({
+    year: {
+        type: String,
+        required: true,
+        unique: true,           // ONE doc per year string — this is the key constraint
+        trim: true,
+        match: [/^\d{4}-\d{4}$/, 'Format must be YYYY-YYYY']
+    },
+    programs: {
+        type: [ProgramEntrySchema],
+        default: []
     }
 }, { timestamps: true });
-
-// Unique per program+year combination
-// (null programId = global fallback for programs not explicitly set)
-AcademicYearSchema.index({ year: 1, programId: 1 }, { unique: true });
 
 module.exports = mongoose.model('AcademicYear', AcademicYearSchema);

@@ -6,30 +6,36 @@ const {
     getAcademicYears,
     getActiveAcademicYear,
     toggleAcademicYear,
-    updateAcademicYear,
     toggleSemesterType,
+    removeProgramFromYear,
     deleteAcademicYear
 } = require('./academicYear.controller');
 
-// Get all academic years — any authenticated user
+// ── READ ──────────────────────────────────────────────────────────────
+// Get all academic years (year-level docs with programs[] inside)
 router.get('/', protect, getAcademicYears);
 
-// Get active academic year for a program — any authenticated user
+// Get active academic year for a specific program
 router.get('/active', protect, getActiveAcademicYear);
 
-// Create academic year — SUPER_ADMIN only
+// ── CREATE ────────────────────────────────────────────────────────────
+// Bulk create (all programs) or add single program to a year
 router.post('/', protect, authorize('UNIPRIME'), createAcademicYear);
 
-// Update an academic year name — SUPER_ADMIN only
-router.put('/:id', protect, authorize('UNIPRIME'), updateAcademicYear);
-
-// Toggle active status of an academic year — SUPER_ADMIN only
+// ── UPDATE ────────────────────────────────────────────────────────────
+// Toggle isActive for one program inside a year
+// Body: { isActive: bool, programId }
 router.put('/:id/toggle-status', protect, authorize('UNIPRIME'), toggleAcademicYear);
 
-// Toggle active semester type for a year — SUPER_ADMIN only
+// Toggle activeSemesterTypeId for one program inside a year
+// Body: { semesterTypeId, programId }
 router.put('/:id/semester-type', protect, authorize('UNIPRIME'), toggleSemesterType);
 
-// Delete an academic year — SUPER_ADMIN only
+// ── DELETE ────────────────────────────────────────────────────────────
+// Remove a single program from a year
+router.delete('/:id/program/:programId', protect, authorize('UNIPRIME'), removeProgramFromYear);
+
+// Delete the entire academic year document
 router.delete('/:id', protect, authorize('UNIPRIME'), deleteAcademicYear);
 
 module.exports = router;

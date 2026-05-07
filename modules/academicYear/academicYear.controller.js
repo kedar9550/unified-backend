@@ -3,88 +3,108 @@ const AcademicYear = require('./academicYear.model');
 const SemesterType = require('../semesterType/semesterType.model');
 const Program = require('../academics/program.model');
 
-/* ===================================================
-   CREATE ACADEMIC YEAR (program-wise)
-   POST /api/academic-years
-   Body: { startYear, endYear, programId? }
+/* ─────────────────────────────────────────────────────────────
+   HELPER — populate programs[].programId & activeSemesterTypeId
+   Returns the document after lean-friendly virtual population.
+───────────────────────────────────────────────────────────── */
+const populateYear = (doc) =>
+    doc.populate([
+        { path: 'programs.programId' },
+        { path: 'programs.activeSemesterTypeId', select: 'name' }
+    ]);
 
-   - If programId provided: adds only that program to the year
-   - If NO programId: creates the year with ALL active programs (all inactive)
-=================================================== */
+/* ─────────────────────────────────────────────────────────────
+   CREATE ACADEMIC YEAR
+   POST /api/academic-years
+   Body: { startYear, endYear }            → bulk create with ALL active programs
+   Body: { startYear, endYear, programId } → add single program to existing/new year
+───────────────────────────────────────────────────────────── */
 const createAcademicYear = async (req, res) => {
     try {
         const { startYear, endYear, programId } = req.body;
 
-        if (!startYear || !endYear) {
+        if (!startYear || !endYear)
             return res.status(400).json({ message: 'startYear and endYear are required' });
-        }
 
         const currentYear = new Date().getFullYear();
-        if (Number(startYear) < currentYear - 1) {
+        if (Number(startYear) < currentYear - 1)
             return res.status(400).json({ message: `Minimum start year is ${currentYear - 1}.` });
-        }
-        if (Number(endYear) <= Number(startYear)) {
+        if (Number(endYear) <= Number(startYear))
             return res.status(400).json({ message: 'endYear must be greater than startYear' });
-        }
-
-        // Drop legacy index if exists
-        await AcademicYear.collection.dropIndex('year_1_program_1').catch(() => {});
 
         const yearStr = `${startYear}-${endYear}`;
 
         const oddType = await SemesterType.findOne({ name: 'ODD' });
-        if (!oddType) {
+        if (!oddType)
             return res.status(500).json({ message: 'Semester type ODD not found. Please seed semester types.' });
-        }
 
-        // --- SINGLE PROGRAM MODE (used by ADD PROGRAM button) ---
+        // ── SINGLE PROGRAM MODE (ADD PROGRAM button) ──────────────────
         if (programId) {
             const programIdVal = new mongoose.Types.ObjectId(programId);
-            const existing = await AcademicYear.findOne({ year: yearStr, programId: programIdVal });
-            if (existing) {
-                return res.status(409).json({ message: `Academic year ${yearStr} already exists for this program` });
+
+            // Check program exists
+            const prog = await Program.findById(programIdVal);
+            if (!prog)
+                return res.status(404).json({ message: 'Program not found' });
+
+            // Try to find existing year doc
+            let yearDoc = await AcademicYear.findOne({ year: yearStr });
+
+            if (yearDoc) {
+                // Year exists — check if program already added
+                const alreadyIn = yearDoc.programs.some(
+                    p => p.programId.toString() === programIdVal.toString()
+                );
+                if (alreadyIn)
+                    return res.status(409).json({ message: `Program already exists in academic year ${yearStr}` });
+
+                yearDoc.programs.push({
+                    programId: programIdVal,
+                    isActive: false,
+                    activeSemesterTypeId: oddType._id
+                });
+                await yearDoc.save();
+            } else {
+                // Year doesn't exist yet — create with just this program
+                yearDoc = await AcademicYear.create({
+                    year: yearStr,
+                    programs: [{
+                        programId: programIdVal,
+                        isActive: false,
+                        activeSemesterTypeId: oddType._id
+                    }]
+                });
             }
 
-            const academicYear = await AcademicYear.create({
-                year: yearStr,
-                programId: programIdVal,
-                isActive: false,           // inactive by default when manually adding
-                activeSemesterTypeId: oddType._id
-            });
-
+            const populated = await populateYear(yearDoc);
             return res.status(201).json({
-                message: `Program added to academic year ${yearStr} (inactive).`,
-                academicYear: await academicYear.populate([
-                    { path: 'activeSemesterTypeId', select: 'name' },
-                    { path: 'programId' }
-                ])
+                message: `Program added to academic year ${yearStr}.`,
+                academicYear: populated
             });
         }
 
-        // --- BULK CREATE MODE (used by CREATE ACADEMIC YEAR button) ---
-        // Check if year already exists (any program)
-        const anyExisting = await AcademicYear.findOne({ year: yearStr });
-        if (anyExisting) {
+        // ── BULK CREATE MODE (CREATE ACADEMIC YEAR button) ────────────
+        const existing = await AcademicYear.findOne({ year: yearStr });
+        if (existing)
             return res.status(409).json({ message: `Academic year ${yearStr} already exists` });
-        }
 
         const allPrograms = await Program.find({ status: true });
-        if (allPrograms.length === 0) {
+        if (allPrograms.length === 0)
             return res.status(400).json({ message: 'No active programs found. Please create programs first.' });
-        }
 
-        const entries = allPrograms.map(p => ({
+        const yearDoc = await AcademicYear.create({
             year: yearStr,
-            programId: p._id,
-            isActive: false,                // all inactive by default
-            activeSemesterTypeId: oddType._id
-        }));
-
-        await AcademicYear.insertMany(entries);
+            programs: allPrograms.map(p => ({
+                programId: p._id,
+                isActive: false,
+                activeSemesterTypeId: oddType._id
+            }))
+        });
 
         return res.status(201).json({
             message: `Academic year ${yearStr} created with ${allPrograms.length} programs (all inactive).`,
-            count: allPrograms.length
+            count: allPrograms.length,
+            academicYear: yearDoc
         });
 
     } catch (err) {
@@ -92,172 +112,219 @@ const createAcademicYear = async (req, res) => {
     }
 };
 
-/* ===================================================
-   GET ALL ACADEMIC YEARS
-   GET /api/academic-years?program=B.Tech
-=================================================== */
+/* ─────────────────────────────────────────────────────────────
+   GET ALL ACADEMIC YEARS  (flat list for dropdowns)
+   GET /api/academic-years
+   Returns: { count, years: [ { _id, year, programs:[...] } ] }
+   NOTE: _id here is year-level — one per "2025-2026" etc.
+───────────────────────────────────────────────────────────── */
 const getAcademicYears = async (req, res) => {
     try {
-        const { programId } = req.query;
-        const query = {};
-        if (programId) query.programId = programId;
-
-        const years = await AcademicYear.find(query)
-            .populate('activeSemesterTypeId', 'name')
-            .populate('programId')
+        const years = await AcademicYear.find({})
+            .populate('programs.programId')
+            .populate('programs.activeSemesterTypeId', 'name')
             .sort({ year: -1 });
+
         res.json({ count: years.length, years });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-/* ===================================================
+/* ─────────────────────────────────────────────────────────────
    GET ACTIVE ACADEMIC YEAR for a given program
-   GET /api/academic-years/active?program=B.Tech
-   
-   Lookup priority:
-   1. Active year for that specific program
-   2. Active global year (program: null) as fallback
-=================================================== */
+   GET /api/academic-years/active?programId=xxx  OR  ?program=B.Tech
+───────────────────────────────────────────────────────────── */
 const getActiveAcademicYear = async (req, res) => {
     try {
         const { programId, program } = req.query;
         const activeYear = await resolveActiveAcademicYear(programId || program);
-        if (!activeYear) {
-            return res.status(404).json({ message: `No active academic year found` });
-        }
-        const populated = await activeYear.populate([
-            { path: 'activeSemesterTypeId', select: 'name' },
-            { path: 'programId' }
-        ]);
-        res.json({ success: true, data: populated });
+        if (!activeYear)
+            return res.status(404).json({ message: 'No active academic year found' });
+
+        const populated = await populateYear(activeYear);
+
+        // Find the specific program entry for the response
+        const progEntry = populated.programs.find(p => {
+            const pId = p.programId?._id?.toString() || p.programId?.toString();
+            const queried = programId || program;
+            if (mongoose.Types.ObjectId.isValid(queried))
+                return pId === queried.toString();
+            return p.programId?.name?.toLowerCase() === queried?.toLowerCase() ||
+                   p.programId?.code?.toLowerCase() === queried?.toLowerCase();
+        });
+
+        res.json({
+            success: true,
+            data: {
+                _id: populated._id,
+                year: populated.year,
+                isActive: progEntry?.isActive ?? false,
+                activeSemesterTypeId: progEntry?.activeSemesterTypeId ?? null,
+                programId: progEntry?.programId ?? null
+            }
+        });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-/* ===================================================
-   TOGGLE ACTIVE YEAR
+/* ─────────────────────────────────────────────────────────────
+   TOGGLE ACTIVE STATUS — for a specific program inside a year
    PUT /api/academic-years/:id/toggle-status
-=================================================== */
+   Body: { isActive, programId }
+───────────────────────────────────────────────────────────── */
 const toggleAcademicYear = async (req, res) => {
     try {
-        const { isActive } = req.body;
-        const year = await AcademicYear.findById(req.params.id);
-        if (!year) return res.status(404).json({ message: 'Academic year not found' });
+        const { isActive, programId } = req.body;
+        if (!programId)
+            return res.status(400).json({ message: 'programId is required' });
+
+        const yearDoc = await AcademicYear.findById(req.params.id);
+        if (!yearDoc)
+            return res.status(404).json({ message: 'Academic year not found' });
+
+        const entry = yearDoc.programs.find(p => p.programId.toString() === programId.toString());
+        if (!entry)
+            return res.status(404).json({ message: 'Program not found in this academic year' });
 
         if (isActive) {
-            // Deactivate this program in ALL other academic years (any year string)
-            // so only one year per program is ever active at a time
+            // Deactivate this program in ALL other year documents
             await AcademicYear.updateMany(
-                { programId: year.programId, _id: { $ne: year._id } },
-                { isActive: false }
+                { _id: { $ne: yearDoc._id }, 'programs.programId': programId },
+                { $set: { 'programs.$.isActive': false } }
             );
         }
 
-        year.isActive = isActive;
-        await year.save();
+        entry.isActive = isActive;
+        await yearDoc.save();
 
         res.json({
-            message: `${year.year} — program is now ${isActive ? 'active' : 'inactive'}`,
-            year
+            message: `${yearDoc.year} — program is now ${isActive ? 'active' : 'inactive'}`,
+            year: yearDoc
         });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-/* ===================================================
-   UPDATE ACADEMIC YEAR (Rename)
-   PUT /api/academic-years/:id
-=================================================== */
-const updateAcademicYear = async (req, res) => {
-    try {
-        const { year } = req.body;
-        if (!year) return res.status(400).json({ message: 'year is required' });
-
-        const existing = await AcademicYear.findOne({ year, _id: { $ne: req.params.id } });
-        if (existing) return res.status(409).json({ message: `Academic year ${year} already exists` });
-
-        const updatedYear = await AcademicYear.findByIdAndUpdate(
-            req.params.id,
-            { year },
-            { new: true }
-        );
-        if (!updatedYear) return res.status(404).json({ message: 'Academic year not found' });
-
-        res.json({ message: 'Academic year updated', year: updatedYear });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-};
-
-/* ===================================================
-   TOGGLE ACTIVE SEMESTER TYPE FOR A YEAR
+/* ─────────────────────────────────────────────────────────────
+   TOGGLE ACTIVE SEMESTER TYPE — for a specific program inside a year
    PUT /api/academic-years/:id/semester-type
-=================================================== */
+   Body: { semesterTypeId, programId }
+───────────────────────────────────────────────────────────── */
 const toggleSemesterType = async (req, res) => {
     try {
-        const { semesterTypeId } = req.body;
-        if (!semesterTypeId) return res.status(400).json({ message: 'semesterTypeId is required' });
+        const { semesterTypeId, programId } = req.body;
+        if (!semesterTypeId)
+            return res.status(400).json({ message: 'semesterTypeId is required' });
+        if (!programId)
+            return res.status(400).json({ message: 'programId is required' });
 
-        const academicYear = await AcademicYear.findByIdAndUpdate(
-            req.params.id,
-            { activeSemesterTypeId: semesterTypeId },
-            { new: true }
-        ).populate([
-            { path: 'activeSemesterTypeId', select: 'name' },
-            { path: 'programId' }
-        ]);
+        const yearDoc = await AcademicYear.findById(req.params.id);
+        if (!yearDoc)
+            return res.status(404).json({ message: 'Academic year not found' });
 
-        if (!academicYear) return res.status(404).json({ message: 'Academic year not found' });
+        const entry = yearDoc.programs.find(p => p.programId.toString() === programId.toString());
+        if (!entry)
+            return res.status(404).json({ message: 'Program not found in this academic year' });
+
+        entry.activeSemesterTypeId = semesterTypeId;
+        await yearDoc.save();
+
+        const populated = await populateYear(yearDoc);
+        const updatedEntry = populated.programs.find(p =>
+            p.programId?._id?.toString() === programId.toString()
+        );
 
         res.json({
-            message: `Active semester for ${academicYear.year} changed to ${academicYear.activeSemesterTypeId.name}`,
-            academicYear
+            message: `Active semester updated for ${yearDoc.year}`,
+            academicYear: populated,
+            program: updatedEntry
         });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-/* ===================================================
-   DELETE ACADEMIC YEAR
+/* ─────────────────────────────────────────────────────────────
+   REMOVE A PROGRAM from an academic year
+   DELETE /api/academic-years/:id/program/:programId
+───────────────────────────────────────────────────────────── */
+const removeProgramFromYear = async (req, res) => {
+    try {
+        const { id, programId } = req.params;
+
+        const yearDoc = await AcademicYear.findById(id);
+        if (!yearDoc)
+            return res.status(404).json({ message: 'Academic year not found' });
+
+        const before = yearDoc.programs.length;
+        yearDoc.programs = yearDoc.programs.filter(
+            p => p.programId.toString() !== programId.toString()
+        );
+
+        if (yearDoc.programs.length === before)
+            return res.status(404).json({ message: 'Program not found in this academic year' });
+
+        // If no programs left, delete the whole year doc
+        if (yearDoc.programs.length === 0) {
+            await yearDoc.deleteOne();
+            return res.json({ message: 'Academic year deleted (no programs remaining)' });
+        }
+
+        await yearDoc.save();
+        res.json({ message: 'Program removed from academic year', year: yearDoc });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+/* ─────────────────────────────────────────────────────────────
+   DELETE ENTIRE ACADEMIC YEAR
    DELETE /api/academic-years/:id
-=================================================== */
+───────────────────────────────────────────────────────────── */
 const deleteAcademicYear = async (req, res) => {
     try {
-        const year = await AcademicYear.findById(req.params.id);
-        if (!year) return res.status(404).json({ message: 'Academic year not found' });
+        const yearDoc = await AcademicYear.findById(req.params.id);
+        if (!yearDoc)
+            return res.status(404).json({ message: 'Academic year not found' });
 
-        await year.deleteOne();
+        await yearDoc.deleteOne();
         res.json({ message: 'Academic year deleted successfully' });
     } catch (err) {
         res.status(500).json({ message: err.message });
     }
 };
 
-/* ===================================================
-   SHARED HELPER — used by other controllers
-   Resolves active academic year for a given program.
-   Falls back to global (program: null) if no program-specific year found.
-=================================================== */
+/* ─────────────────────────────────────────────────────────────
+   SHARED HELPER — used by ProcterMaping and other controllers
+   Finds the AcademicYear doc where a given program's isActive = true.
+   Returns the full year doc (caller can read .year string from it).
+───────────────────────────────────────────────────────────── */
 const resolveActiveAcademicYear = async (programIdentifier) => {
     if (!programIdentifier) return null;
 
-    let query = {};
+    let programId;
     if (mongoose.Types.ObjectId.isValid(programIdentifier)) {
-        query.programId = programIdentifier;
+        programId = programIdentifier;
     } else {
-        // Find program by name
-        const Program = mongoose.model('Program');
-        const prog = await Program.findOne({ name: new RegExp(`^${programIdentifier}$`, "i") });
+        const prog = await Program.findOne({
+            $or: [
+                { name: new RegExp(`^${programIdentifier}$`, 'i') },
+                { code: new RegExp(`^${programIdentifier}$`, 'i') }
+            ]
+        });
         if (!prog) return null;
-        query.programId = prog._id;
+        programId = prog._id;
     }
 
-    return await AcademicYear.findOne({ ...query, isActive: true });
+    // Find any year doc that has this program marked active
+    return await AcademicYear.findOne({
+        programs: {
+            $elemMatch: { programId, isActive: true }
+        }
+    });
 };
 
 module.exports = {
@@ -265,8 +332,8 @@ module.exports = {
     getAcademicYears,
     getActiveAcademicYear,
     toggleAcademicYear,
-    updateAcademicYear,
     toggleSemesterType,
+    removeProgramFromYear,
     deleteAcademicYear,
-    resolveActiveAcademicYear  // exported for use in other controllers
+    resolveActiveAcademicYear   // exported — used by ProcterMaping controller
 };
