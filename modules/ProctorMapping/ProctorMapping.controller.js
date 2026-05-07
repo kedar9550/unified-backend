@@ -181,13 +181,26 @@ const getMappings = async (req, res) => {
                     };
                 }
 
-                // If not in history, and academicYear matches current or is later?
-                // For now, if it matches current start or is not found in history, we return current
+                // If not in history, check if current assignment started on or before requested period
+                const isAfterStart = (academicYear > m.fromAcademicYear) || 
+                                     (academicYear === m.fromAcademicYear && (!targetSem || m.fromSemester === null || targetSem >= m.fromSemester));
+
+                if (isAfterStart) {
+                    return {
+                        studentId: m.studentId,
+                        studentName: m.studentName,
+                        proctorId: m.currentProctorId,
+                        proctorName: m.currentProctorName,
+                        isHistorical: false
+                    };
+                }
+
+                // If before current and not in history, they had no proctor (or unrecorded)
                 return {
                     studentId: m.studentId,
                     studentName: m.studentName,
-                    proctorId: m.currentProctorId,
-                    proctorName: m.currentProctorName,
+                    proctorId: "",
+                    proctorName: "",
                     isHistorical: false
                 };
             });
