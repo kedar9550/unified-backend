@@ -151,7 +151,7 @@ const getActiveAcademicYear = async (req, res) => {
             if (mongoose.Types.ObjectId.isValid(queried))
                 return pId === queried.toString();
             return p.programId?.name?.toLowerCase() === queried?.toLowerCase() ||
-                   p.programId?.code?.toLowerCase() === queried?.toLowerCase();
+                p.programId?.code?.toLowerCase() === queried?.toLowerCase();
         });
 
         res.json({

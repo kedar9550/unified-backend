@@ -12,8 +12,20 @@ const FacultyFeedResultSchema = new mongoose.Schema({
     academicYearId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "AcademicYear",
+        required: true,
     },
-    semester: Number,
+    programId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Program",
+        required: true,
+    },
+    branchId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Branch",
+        required: true,
+    },
+    semesterNumber: { type: String }, // For SEM programs
+    yearNumber: { type: String },     // For YEAR programs
     semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "SemesterType",
