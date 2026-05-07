@@ -56,21 +56,27 @@ const raiseDiscrepancy = async (req, res) => {
  */
 const getDiscrepancies = async (req, res) => {
     try {
+        const { role } = req.query; // Optional role from query params
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
-        const resolverRoles = userRoles.filter(r => !["FACULTY", "STUDENT"].includes(r));
-        const isFaculty = userRoles.includes("FACULTY");
+        
+        // Determine which role to use for filtering
+        let activeRole = role?.toUpperCase();
+        if (!activeRole || !userRoles.includes(activeRole)) {
+            // Fallback to current logic if no valid role provided
+            activeRole = userRoles.find(r => !["FACULTY", "STUDENT"].includes(r)) || (userRoles.includes("FACULTY") ? "FACULTY" : null);
+        }
 
         let query = {};
 
-        if (resolverRoles.length > 0) {
-            // User is a resolver (HOD, ADMIN, EXAMSECTION, etc.)
-            const rolesToQuery = [...resolverRoles];
-            if (rolesToQuery.includes("FEEDBACK COORDINATOR")) {
+        if (activeRole && !["FACULTY", "STUDENT"].includes(activeRole)) {
+            // User is acting as a resolver (HOD, ADMIN, EXAMSECTION, etc.)
+            const rolesToQuery = [activeRole];
+            if (activeRole === "FEEDBACK COORDINATOR") {
                 rolesToQuery.push("FEEDBACK");
             }
 
             // If user has HOD role, filter by department for HOD-assigned ones
-            if (rolesToQuery.includes("HOD")) {
+            if (activeRole === "HOD") {
                 const hodDeptIds = [];
                 (req.user.roles || []).forEach(r => {
                     if (r.role?.toUpperCase() === "HOD" && r.departments) {
@@ -85,15 +91,13 @@ const getDiscrepancies = async (req, res) => {
                     hodDeptIds.push(employee.department);
                 }
 
-                query.$or = [
-                    { assignedRole: { $in: rolesToQuery.filter(r => r !== "HOD") } },
-                    { assignedRole: "HOD", studentDepartmentId: { $in: hodDeptIds } }
-                ];
+                query.assignedRole = "HOD";
+                query.studentDepartmentId = { $in: hodDeptIds };
             } else {
                 query.assignedRole = { $in: rolesToQuery };
             }
-        } else if (isFaculty) {
-            // User is ONLY a faculty, see only raised discrepancies
+        } else if (activeRole === "FACULTY") {
+            // User is acting as faculty, see only raised discrepancies
             query.raisedBy = req.user.userId;
         } else {
             // Student or role with no resolver permissions
