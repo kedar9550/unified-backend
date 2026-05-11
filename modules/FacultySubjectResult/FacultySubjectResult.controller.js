@@ -297,8 +297,9 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
             semesterTypeId = semester;
         } else {
             const st = await SemesterType.findOne({ name: semester.toUpperCase() });
-            if (!st) throw new Error(`Semester Type '${semester}' not found`);
-            semesterTypeId = st._id;
+            if (st) {
+                semesterTypeId = st._id;
+            }
         }
     }
 
@@ -311,21 +312,36 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
  */
 const deleteSemesterData = async (req, res) => {
     try {
-        const { academicYear, semester } = req.query;
+        const { academicYear, academicYearId, semester, programId, facultyId } = req.query;
 
-        if (!academicYear || !semester) {
-            return res.status(400).json({ message: "academicYear and semester are required" });
+        const filter = {};
+
+        // Resolve Academic Year
+        if (academicYearId) {
+            filter.academicYearId = academicYearId;
+        } else if (academicYear) {
+            const ay = await AcademicYear.findOne({ year: academicYear });
+            if (ay) filter.academicYearId = ay._id;
         }
 
-        const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
+        if (!filter.academicYearId) {
+            return res.status(400).json({ message: "Academic Year is required for bulk deletion" });
+        }
 
-        const result = await FacultySubjectResult.deleteMany({
-            academicYearId,
-            semesterTypeId
-        });
+        // Resolve Semester if provided
+        if (semester) {
+            const st = await SemesterType.findOne({ name: semester.toUpperCase() });
+            if (st) filter.semesterTypeId = st._id;
+        }
+
+        // Add optional filters
+        if (programId) filter.programId = programId;
+        if (facultyId) filter.facultyId = facultyId.trim();
+
+        const result = await FacultySubjectResult.deleteMany(filter);
 
         res.json({
-            message: `Deleted ${result.deletedCount} records for ${academicYear} - ${semester.toUpperCase()} semester.`,
+            message: `Deleted ${result.deletedCount} records matching the criteria.`,
             deletedCount: result.deletedCount
         });
     } catch (error) {
@@ -339,18 +355,19 @@ const deleteSemesterData = async (req, res) => {
  */
 const getResults = async (req, res) => {
     try {
-        const { facultyId, academicYear, semester } = req.query;
+        const { facultyId, academicYear, academicYearId, semester, programId } = req.query;
         const query = {};
 
-        // facultyId is the institutional ID string (e.g. FAC2024001)
         if (facultyId) query.facultyId = facultyId.trim();
+        if (programId) query.programId = programId;
 
-        if (academicYear || semester) {
-            const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
+        if (academicYearId || academicYear || semester) {
+            const { academicYearId: resolvedAyId, semesterTypeId } = await resolveAcademicIds({ 
+                academicYear: academicYearId || academicYear, 
+                semester 
+            });
             
-            // New schema: one doc per year, so direct match is correct
-            if (academicYearId) query.academicYearId = academicYearId;
-            
+            if (resolvedAyId) query.academicYearId = resolvedAyId;
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
 

@@ -8,7 +8,9 @@ const {
     uploadYearCSV,
     getResults,
     getProctorPassPercentage,
-    getProctorDepartments
+    getProctorDepartments,
+    deleteResult,
+    deleteBulkResults
 } = require("./StudentResult.controller");
 const { protect, authorize } = require("../../middlewares/authMiddleware");
 
@@ -98,5 +100,29 @@ router.get("/proctor-departments", protect, getProctorDepartments);
  * @access  Private
  */
 router.get("/", protect, getResults);
+
+/**
+ * @route   DELETE /api/student-results/bulk
+ * @desc    Delete results by programId, examYear, or studentId
+ * @access  Private (ADMIN, EXAMSECTION)
+ */
+router.delete(
+    "/bulk",
+    protect,
+    authorize("ADMIN", "EXAMSECTION"),
+    deleteBulkResults
+);
+
+/**
+ * @route   DELETE /api/student-results/:id
+ * @desc    Delete a single result record
+ * @access  Private (ADMIN, EXAMSECTION)
+ */
+router.delete(
+    "/:id",
+    protect,
+    authorize("ADMIN", "EXAMSECTION"),
+    deleteResult
+);
 
 module.exports = router;

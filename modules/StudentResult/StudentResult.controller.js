@@ -813,6 +813,41 @@ const getProctorDepartments = async (req, res) => {
     }
 };
 
+// ── Individual Delete ────────────────────────────────────────────────────────
+const deleteResult = async (req, res) => {
+    try {
+        const result = await StudentResult.findByIdAndDelete(req.params.id);
+        if (!result) return res.status(404).json({ message: "Result not found" });
+        res.status(200).json({ message: "Result deleted successfully" });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+// ── Bulk Delete ─────────────────────────────────────────────────────────────
+const deleteBulkResults = async (req, res) => {
+    try {
+        const { programId, examYear, studentId } = req.query;
+        const filter = {};
+        
+        if (programId) filter.programId = programId;
+        if (examYear) filter.examYear = examYear;
+        if (studentId) filter.studentId = studentId;
+
+        // Ensure at least one filter is provided to prevent accidental full wipe
+        if (Object.keys(filter).length === 0) {
+            return res.status(400).json({ message: "At least one filter (Program, Year, or Student ID) is required for bulk deletion." });
+        }
+        
+        const count = await StudentResult.countDocuments(filter);
+        await StudentResult.deleteMany(filter);
+        
+        res.status(200).json({ message: `Deleted ${count} results successfully.` });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 // ── Exports ───────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -823,5 +858,7 @@ module.exports = {
     getResults,
     getProctorPassPercentage,
     getProctorDepartments,
-    updateProctorSummaries
+    updateProctorSummaries,
+    deleteResult,
+    deleteBulkResults
 };
