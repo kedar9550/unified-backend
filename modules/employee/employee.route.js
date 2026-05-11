@@ -17,7 +17,8 @@ const {
     bulkRegisterUser,
     bulkUpdateEmployees,
     adminUpdateEmployee,
-    changePassword
+    changePassword,
+    getStaffData
 } = require('./employee.controller');
 
 // --- Multer Setup ---
@@ -57,6 +58,7 @@ router.post('/me/profile-image', protect, upload.single('image'), profileImage);
 
 // --- Admin / Discovery ---
 router.get('/search', protect, searchUser);
+router.get('/staff/:id', protect, getStaffData);
 router.post('/ecap-data', getecapdata);
 router.post('/bulk-upload', protect, uploadCsv.single('file'), bulkRegisterUser);
 router.put('/bulk-sync', protect, bulkUpdateEmployees);

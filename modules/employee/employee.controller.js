@@ -152,7 +152,7 @@ const getMe = async (req, res) => {
         const isNumeric = /^\d+$/.test(req.user.institutionId);
 
         if (isNumeric) {
-            user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name');
+            user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name').populate('coreDepartment', 'name');
         } else {
             user = await Student.findOne({ rollNo: req.user.institutionId.toUpperCase() });
         }
@@ -189,7 +189,7 @@ const logoutUser = (req, res) => {
  */
 const updateProfile = async (req, res) => {
     try {
-        const allowedFields = ["name", "phone", "department", "institutionId", "designation", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college"];
+        const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college"];
         const updates = {};
         allowedFields.forEach((field) => {
             if (req.body[field]) updates[field] = req.body[field];
@@ -204,7 +204,7 @@ const updateProfile = async (req, res) => {
             { institutionId },
             { $set: updates },
             { new: true }
-        ).populate('department', 'name');
+        ).populate('department', 'name').populate('coreDepartment', 'name');
         
         if (!user) return res.status(404).json({ message: "User not found" });
 
@@ -626,6 +626,26 @@ const changePassword = async (req, res) => {
     }
 };
 
+/**
+ * Get Staff Data from ECAP (Aditya API)
+ */
+const getStaffData = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const response = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${id}`);
+        const data = response.data;
+        
+        if (!data || data.length === 0) {
+            return res.status(404).json({ message: "Staff not found" });
+        }
+        
+        res.json({ success: true, data: data[0] });
+    } catch (err) {
+        console.error("Fetch Staff Error:", err.message);
+        res.status(500).json({ message: "Failed to fetch staff data" });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -638,5 +658,6 @@ module.exports = {
     bulkRegisterUser,
     bulkUpdateEmployees,
     adminUpdateEmployee,
-    changePassword
+    changePassword,
+    getStaffData
 };

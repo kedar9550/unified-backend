@@ -59,24 +59,11 @@ const EmployeeSchema = new mongoose.Schema({
     },
 
 
-    scopusId: {
-        type: String,
-        trim: true,
-        default: null,
-        unique: true,
-    },
-
-    webOfScienceId: {
-        type: String,
-        trim: true,
-        default: null,
-        unique: true,
-    },
-
-    orcid: {
-        type: String,
-        trim: true,
-        unique: true,
+    scopusId: { type: String, default: "" },
+    wosId: { type: String, default: "" },
+    orcidId: { 
+        type: String, 
+        default: "",
         validate: {
             validator: function (v) {
                 return !v || /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(v);
@@ -84,25 +71,23 @@ const EmployeeSchema = new mongoose.Schema({
             message: "Invalid ORCID format"
         }
     },
-
-    googleScholarId: {
-        type: String,
-        trim: true,
-        default: null,
-        unique: true,
-    },
-
-    panNumber: {
-        type: String,
-        uppercase: true,
-        trim: true,
-        unique: true,
+    googleScholarId: { type: String, default: "" },
+    panNumber: { 
+        type: String, 
+        uppercase: true, 
+        trim: true, 
+        default: "",
         validate: {
             validator: function (v) {
                 return !v || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(v);
             },
             message: "Invalid PAN format"
         }
+    },
+    college: { 
+        type: String, 
+        enum: ["Aditya University", "Aditya college of engineering and technology", "Aditya College of Pharmacy", ""],
+        default: "" 
     },
 
     isActive: {
@@ -117,16 +102,6 @@ const EmployeeSchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    scopusId: { type: String, default: "" },
-    wosId: { type: String, default: "" },
-    orcidId: { type: String, default: "" },
-    googleScholarId: { type: String, default: "" },
-    panNumber: { type: String, default: "" },
-    college: { 
-        type: String, 
-        enum: ["Aditya University", "Aditya college of engineering and technology", "Aditya College of Pharmacy", ""],
-        default: "" 
-    }
 
 }, { timestamps: true });
 
