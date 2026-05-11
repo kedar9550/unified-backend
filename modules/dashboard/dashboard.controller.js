@@ -5,6 +5,8 @@ const Branch = require('../academics/branch.model');
 const Employee = require('../employee/employee.model');
 const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
+const FacultyFeedResult = require('../FacultyFeedbackResults/FacultyFeedResult.model');
+const Discrepancy = require('../discrepancy/discrepancy.model');
 
 exports.getUniprimeDashboardData = async (req, res, next) => {
     try {
@@ -159,6 +161,102 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
 
     } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        next(error);
+    }
+};
+
+exports.getFeedbackDashboardData = async (req, res, next) => {
+    try {
+        // Format years from 2025-2026 to 2025-26
+        const formatYear = (y) => {
+            if (!y || !y.includes('-')) return y;
+            const parts = y.split('-');
+            const startYear = parts[0];
+            const endYear = parts[1].length === 4 ? parts[1].substring(2) : parts[1];
+            return `${startYear}-${endYear}`;
+        };
+
+        const [
+            totalFacultiesCount,
+            processedFeedbacksCount,
+            avgRatingData,
+            lowRatingsCount,
+            recentFeedbacks,
+            discrepancies,
+            allYearObjs
+        ] = await Promise.all([
+            // Total Faculties
+            Employee.countDocuments(),
+            // Processed Feedbacks
+            FacultyFeedResult.countDocuments(),
+            // Avg Rating
+            FacultyFeedResult.aggregate([
+                { $group: { _id: null, avg: { $avg: "$overallPercentage" } } }
+            ]),
+            // Low Ratings
+            FacultyFeedResult.countDocuments({ overallPercentage: { $lt: 60 } }),
+            // Recent Feedbacks
+            FacultyFeedResult.find()
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .populate('academicYearId', 'year')
+                .populate('semesterTypeId', 'name')
+                .lean(),
+            // Recent Discrepancies
+            Discrepancy.find({ section: 'FEEDBACK', status: 'PENDING' })
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .lean(),
+            // Active Academic Years
+            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean()
+        ]);
+
+        const avgRatingValue = avgRatingData.length > 0 ? (avgRatingData[0].avg / 20).toFixed(1) : "0.0";
+        const activeYearObjs = allYearObjs.filter(ay => ay.programs && ay.programs.some(p => p.isActive));
+        
+        const activeYearStr = activeYearObjs.length > 0 
+            ? [...new Set(activeYearObjs.map(ay => formatYear(ay.year)))].join(' & ') 
+            : 'N/A';
+            
+        const activeSemester = activeYearObjs.length > 0
+            ? [...new Set(activeYearObjs.flatMap(ay => ay.programs.filter(p => p.isActive).map(p => p.activeSemesterTypeId?.name)))].filter(Boolean).join(' / ')
+            : 'N/A';
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                totalFaculties: totalFacultiesCount,
+                processedFeedbacks: processedFeedbacksCount,
+                pendingFeedbacks: totalFacultiesCount > processedFeedbacksCount ? totalFacultiesCount - processedFeedbacksCount : 0,
+                lowRatings: lowRatingsCount,
+                avgRating: `${avgRatingValue}/5`,
+                activeYear: activeYearStr,
+                activeSemester,
+                recentFeedbacks: recentFeedbacks.map(f => ({
+                    name: f.facultyName,
+                    dept: f.branch,
+                    subject: `${f.subjectName} (${f.subjectCode})`,
+                    rating: (f.overallPercentage / 20).toFixed(1),
+                    status: "Processed",
+                    time: f.createdAt,
+                    avatar: ""
+                })),
+                discrepancies: discrepancies.map(d => ({
+                    name: d.facultyName,
+                    subject: d.semester || "N/A",
+                    issue: d.note,
+                    detail: `Raised by ${d.raisedBy}`, // Should populate raisedBy if needed
+                    time: d.createdAt
+                })),
+                chartData: [
+                    { name: "Processed", value: processedFeedbacksCount, color: "#10B981" },
+                    { name: "Pending", value: totalFacultiesCount > processedFeedbacksCount ? totalFacultiesCount - processedFeedbacksCount : 0, color: "#F59E0B" },
+                    { name: "Low Ratings", value: lowRatingsCount, color: "#EF4444" }
+                ]
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching feedback dashboard data:', error);
         next(error);
     }
 };
