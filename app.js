@@ -64,6 +64,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/auth', require('./modules/auth/auth.route'));
 app.use('/api/employees', require('./modules/employee/employee.route'));
 app.use('/api/academic-years', require('./modules/academicYear/academicYear.route'));
 app.use('/api/faculty-subject-results', require('./modules/FacultySubjectResult/FacultySubjectResult.route'));
