@@ -673,7 +673,7 @@ const uploadYearCSV = async (req, res) => {
 
 const getResults = async (req, res) => {
     try {
-        const { departmentId, semester, yearName, programId, branchId, examYear, resultType } = req.query;
+        const { departmentId, semester, yearName, programId, branchId, examYear, resultType, studentId } = req.query;
         const filter = {};
         if (departmentId) filter.departmentId = departmentId;
         if (semester) filter.semester = semester;
@@ -682,6 +682,7 @@ const getResults = async (req, res) => {
         if (branchId) filter.branchId = branchId;
         if (examYear) filter.examYear = examYear;
         if (resultType) filter.resultType = resultType;
+        if (studentId) filter.studentId = studentId;
 
         const results = await StudentResult.find(filter)
             .sort({ studentId: 1 })
@@ -827,16 +828,24 @@ const deleteResult = async (req, res) => {
 // ── Bulk Delete ─────────────────────────────────────────────────────────────
 const deleteBulkResults = async (req, res) => {
     try {
-        const { programId, examYear, studentId } = req.query;
+        const payload = { ...req.query, ...req.body };
+        const { programId, examYear, studentId, ids } = payload;
         const filter = {};
         
-        if (programId) filter.programId = programId;
-        if (examYear) filter.examYear = examYear;
-        if (studentId) filter.studentId = studentId;
+        let idArray = ids;
+        if (ids && !Array.isArray(ids)) idArray = [ids];
+
+        if (idArray && idArray.length > 0) {
+            filter._id = { $in: idArray };
+        } else {
+            if (programId) filter.programId = programId;
+            if (examYear) filter.examYear = examYear;
+            if (studentId) filter.studentId = studentId;
+        }
 
         // Ensure at least one filter is provided to prevent accidental full wipe
         if (Object.keys(filter).length === 0) {
-            return res.status(400).json({ message: "At least one filter (Program, Year, or Student ID) is required for bulk deletion." });
+            return res.status(400).json({ message: "At least one filter (Selected IDs, Program, Exam Year, or Student ID) is required for bulk deletion." });
         }
         
         const count = await StudentResult.countDocuments(filter);
