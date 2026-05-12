@@ -400,6 +400,29 @@ const deleteResult = async (req, res) => {
 };
 
 /**
+ * Bulk delete records by IDs
+ */
+const deleteBulk = async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ message: "No IDs provided for deletion" });
+        }
+
+        const result = await FacultyFeedResult.deleteMany({
+            _id: { $in: ids }
+        });
+
+        res.json({
+            message: `Deleted ${result.deletedCount} records successfully.`,
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/**
  * Create a single result record
  */
 const createResult = async (req, res) => {
@@ -447,5 +470,6 @@ module.exports = {
     getResults,
     updateResult,
     deleteResult,
+    deleteBulk,
     createResult
 };
