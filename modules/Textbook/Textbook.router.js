@@ -44,6 +44,7 @@ router.post('/', protect, upload.fields([
 ]), textbookController.createTextbook);
 
 router.get('/', protect, textbookController.getMyTextbooks);
+router.get('/:id', protect, textbookController.getTextbookById);
 
 // HOD: View pending and Action
 router.get('/pending-hod', protect, textbookController.getPendingAtHOD);

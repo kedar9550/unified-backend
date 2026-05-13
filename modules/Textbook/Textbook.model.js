@@ -75,10 +75,7 @@ const TextbookSchema = new mongoose.Schema({
         required: true,
         min: 1
     },
-    chaptersContributed: {
-        type: Number,
-        default: 1
-    },
+
     edition: {
         type: String,
         required: true
@@ -107,9 +104,9 @@ const TextbookSchema = new mongoose.Schema({
     },
     
     // Files
-    coverPage: { type: String },
-    authorAffiliation: { type: String },
-    index: { type: String },
+    coverPage: { type: String, required: true },
+    authorAffiliation: { type: String, required: true },
+    index: { type: String, required: true },
     
     // Workflow Status
     status: {
