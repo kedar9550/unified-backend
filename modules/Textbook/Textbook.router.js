@@ -20,16 +20,21 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 500 * 1024 }, // 500KB limit
     fileFilter: (req, file, cb) => {
         const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowed.includes(ext)) return cb(null, true);
-        cb(new Error('Only PDF and image files are allowed.'));
+        cb(new Error('Only PDF and image files are allowed. Max size 500KB.'));
     }
 });
 
 // --- Routes ---
+
+// New Endpoints
+router.get('/isbn/:isbn', protect, textbookController.fetchISBN);
+router.get('/editions', protect, textbookController.getEditions);
+router.post('/editions', protect, textbookController.addEdition);
 
 // Faculty: Submit and View own
 router.post('/', protect, upload.fields([

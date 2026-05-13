@@ -1,5 +1,37 @@
 const mongoose = require('mongoose');
 
+const AuthorSchema = new mongoose.Schema({
+    authorPosition: {
+        type: Number,
+        required: true
+    },
+    authorName: {
+        type: String,
+        required: true
+    },
+    affiliationType: {
+        type: String,
+        enum: ['Aditya University', 'Others'],
+        required: true
+    },
+    employeeId: {
+        type: String,
+        default: null
+    },
+    affiliationName: {
+        type: String,
+        required: true
+    },
+    isIncentiveApplicant: {
+        type: Boolean,
+        default: false
+    },
+    contributorOnly: {
+        type: Boolean,
+        default: true
+    }
+}, { _id: false });
+
 const TextbookSchema = new mongoose.Schema({
     facultyId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -18,7 +50,7 @@ const TextbookSchema = new mongoose.Schema({
     title: {
         type: String,
         required: true,
-        maxlength: 60
+        maxlength: 200 // Increased maxlength to accommodate real textbook titles
     },
     publisher: {
         type: String,
@@ -26,24 +58,26 @@ const TextbookSchema = new mongoose.Schema({
     },
     isbn: {
         type: String,
-        required: true
+        required: true,
+        trim: true
     },
     yearOfPublication: {
         type: String,
         required: true
     },
-    firstAuthor: {
-        type: String,
-        enum: ['Yes', 'No'],
-        required: true
-    },
-    authorPosition: {
+    totalAuthors: {
         type: Number,
-        default: null
+        required: true,
+        min: 1
+    },
+    userAuthorPosition: {
+        type: Number,
+        required: true,
+        min: 1
     },
     chaptersContributed: {
         type: Number,
-        required: true
+        default: 1
     },
     edition: {
         type: String,
@@ -51,12 +85,9 @@ const TextbookSchema = new mongoose.Schema({
     },
     cost: {
         type: String,
-        required: true
+        default: ""
     },
-    coAuthors: [{
-        name: String,
-        affiliation: String
-    }],
+    authors: [AuthorSchema], // Embedded authors array
     month: {
         type: String,
         required: true
@@ -74,6 +105,7 @@ const TextbookSchema = new mongoose.Schema({
         type: String,
         default: "10,000"
     },
+    
     // Files
     coverPage: { type: String },
     authorAffiliation: { type: String },
@@ -82,7 +114,7 @@ const TextbookSchema = new mongoose.Schema({
     // Workflow Status
     status: {
         type: String,
-        enum: ['Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
+        enum: ['Draft', 'Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
         default: 'Pending at HOD'
     },
     
