@@ -57,13 +57,19 @@ const raiseDiscrepancy = async (req, res) => {
 const getDiscrepancies = async (req, res) => {
     try {
         const { role } = req.query; // Optional role from query params
-        const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
+        const userRoles = (req.user.roles || []).map(r => {
+            const rname = r.role?.toUpperCase();
+            return rname === "STAFF" ? "FACULTY" : rname;
+        });
         
         // Determine which role to use for filtering
         let activeRole = role?.toUpperCase();
+        if (activeRole === "STAFF") activeRole = "FACULTY";
+
         if (!activeRole || !userRoles.includes(activeRole)) {
-            // Fallback to current logic if no valid role provided
-            activeRole = userRoles.find(r => !["FACULTY", "STUDENT"].includes(r)) || (userRoles.includes("FACULTY") ? "FACULTY" : null);
+            // Fallback: Pick first role that isn't FACULTY/STUDENT
+            activeRole = userRoles.find(r => !["FACULTY", "STUDENT"].includes(r)) || 
+                         (userRoles.includes("FACULTY") ? "FACULTY" : null);
         }
 
         let query = {};
@@ -73,6 +79,10 @@ const getDiscrepancies = async (req, res) => {
             const rolesToQuery = [activeRole];
             if (activeRole === "FEEDBACK COORDINATOR") {
                 rolesToQuery.push("FEEDBACK");
+            }
+
+            if (activeRole === "EXAMSECTION") {
+                rolesToQuery.push("TEACHING", "PROCTORING");
             }
 
             // If user has HOD role, filter by department for HOD-assigned ones

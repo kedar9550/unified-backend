@@ -43,8 +43,10 @@ const studentSchema = new mongoose.Schema({
     //     yearName = "I Year"      ← directly from eCap semestername field
     //
     semester: { type: Number, default: null },     // 1,2,3... or null
-    semType:  { type: String, default: null,       // "ODD"|"EVEN"|"SUMMER"|"YEAR"
-                enum: ["ODD", "EVEN", "SUMMER", "YEAR", null] },
+    semType: {
+      type: String, default: null,       // "ODD"|"EVEN"|"SUMMER"|"YEAR"
+      enum: ["ODD", "EVEN", "SUMMER", "YEAR", null]
+    },
     yearName: { type: String, default: null },     // only for Pharma.D: "I Year","II Year"...
     // ────────────────────────────────────────────────────────────────
 
@@ -130,7 +132,9 @@ const studentSchema = new mongoose.Schema({
 
   system: {
     isActive: { type: Boolean, default: true },
-    password: { type: String, required: true }
+    password: { type: String, required: true },
+    otp: String,
+    otpExpiry: Date
   }
 
 }, {
