@@ -149,9 +149,12 @@ const validateUser = async (req, res) => {
 const getMe = async (req, res) => {
     try {
         let user;
+        const userType = req.user.userType;
         const isNumeric = /^\d+$/.test(req.user.institutionId);
+        
+        const isEmployee = userType === 'Employee' || (!userType && isNumeric);
 
-        if (isNumeric) {
+        if (isEmployee) {
             user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name').populate('coreDepartment', 'name');
         } else {
             user = await Student.findOne({ rollNo: req.user.institutionId.toUpperCase() });
@@ -159,7 +162,7 @@ const getMe = async (req, res) => {
 
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        const normalizedUser = authService.normalizeUser(user, isNumeric ? 'Employee' : 'Student');
+        const normalizedUser = authService.normalizeUser(user, isEmployee ? 'Employee' : 'Student');
 
         res.json({
             user: {
