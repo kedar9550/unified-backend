@@ -1,20 +1,20 @@
 const express = require("express");
 const router = express.Router();
-const sgdController = require("../sgd.controller");
+const sdgController = require("./Sdg.controller");
 
-// Create SGD
-router.post("/", sgdController.createSgd);
+// Create SDG
+router.post("/", sdgController.createSdg);
 
-// Get All SGDs
-router.get("/", sgdController.getAllSgds);
+// Get All SDGs
+router.get("/", sdgController.getAllSdgs);
 
 // Get Single SDG by ID
-router.get("/:id", sgdController.getSgdById);
+router.get("/:id", sdgController.getSdgById);
 
-// Update SGD
-router.put("/:id", sgdController.updateSgd);
+// Update SDG
+router.put("/:id", sdgController.updateSdg);
 
-// Delete SGD
-router.delete("/:id", sgdController.deleteSgd);
+// Delete SDG
+router.delete("/:id", sdgController.deleteSdg);
 
 module.exports = router;
