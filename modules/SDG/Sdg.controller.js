@@ -1,7 +1,7 @@
-const Sgd = require("../models/Sgd");
+const Sdg = require("./Sdg.model");
 
 // 1. Create SGD
-exports.createSgd = async (req, res) => {
+exports.createSdg = async (req, res) => {
     try {
         const { sdgNumber, sdgTitle, keywords } = req.body;
 
@@ -11,20 +11,20 @@ exports.createSgd = async (req, res) => {
         }
 
         // Check if SDG Number already exists
-        const existingSgd = await Sgd.findOne({ sdgNumber });
-        if (existingSgd) {
+        const existingSdg = await Sdg.findOne({ sdgNumber });
+        if (existingSdg) {
             return res.status(400).json({ message: "SDG Number already exists" });
         }
 
         // Create new SGD
-        const newSgd = new Sgd({
+        const newSdg = new Sdg({
             sdgNumber,
             sdgTitle,
             keywords
         });
 
-        await newSgd.save();
-        res.status(201).json({ message: "SDG created successfully", sgd: newSgd });
+        await newSdg.save();
+        res.status(201).json({ message: "SDG created successfully", sgd: newSdg });
 
     } catch (error) {
         console.error("Error creating SGD:", error);
@@ -33,10 +33,10 @@ exports.createSgd = async (req, res) => {
 };
 
 // 2. Get All SGDs with Search and Pagination
-exports.getAllSgds = async (req, res) => {
+exports.getAllSdgs = async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 100;
         const search = req.query.search || "";
 
         const skip = (page - 1) * limit;
@@ -53,13 +53,13 @@ exports.getAllSgds = async (req, res) => {
         }
 
         // Fetch all SGDs with pagination
-        const sgds = await Sgd.find(query)
+        const sgds = await Sdg.find(query)
             .skip(skip)
             .limit(limit)
             .sort({ sdgNumber: 1 });
 
         // Get total count for pagination metadata
-        const total = await Sgd.countDocuments(query);
+        const total = await Sdg.countDocuments(query);
 
         res.status(200).json({
             success: true,
@@ -77,9 +77,9 @@ exports.getAllSgds = async (req, res) => {
 };
 
 // 3. Get Single SDG by ID
-exports.getSgdById = async (req, res) => {
+exports.getSdgById = async (req, res) => {
     try {
-        const sgd = await Sgd.findById(req.params.id);
+        const sgd = await Sdg.findById(req.params.id);
 
         if (!sgd) {
             return res.status(404).json({ message: "SDG not found" });
@@ -94,12 +94,12 @@ exports.getSgdById = async (req, res) => {
 };
 
 // 4. Update SGD
-exports.updateSgd = async (req, res) => {
+exports.updateSdg = async (req, res) => {
     try {
         const { sdgNumber, sdgTitle, keywords } = req.body;
 
         // Find SDG by ID
-        const sgd = await Sgd.findById(req.params.id);
+        const sgd = await Sdg.findById(req.params.id);
 
         if (!sgd) {
             return res.status(404).json({ message: "SDG not found" });
@@ -108,11 +108,11 @@ exports.updateSgd = async (req, res) => {
         // Update fields if provided
         if (sdgNumber) {
             // Check if SDG Number already exists (excluding current SDG)
-            const existingSgd = await Sgd.findOne({
+            const existingSdg = await Sdg.findOne({
                 sdgNumber,
                 _id: { $ne: req.params.id }
             });
-            if (existingSgd) {
+            if (existingSdg) {
                 return res.status(400).json({ message: "SDG Number already exists" });
             }
             sgd.sdgNumber = sdgNumber;
@@ -137,9 +137,9 @@ exports.updateSgd = async (req, res) => {
 };
 
 // 5. Delete SDG
-exports.deleteSgd = async (req, res) => {
+exports.deleteSdg = async (req, res) => {
     try {
-        const sgd = await Sgd.findByIdAndDelete(req.params.id);
+        const sgd = await Sdg.findByIdAndDelete(req.params.id);
 
         if (!sgd) {
             return res.status(404).json({ message: "SDG not found" });
