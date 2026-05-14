@@ -7,6 +7,7 @@ const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
 const FacultyFeedResult = require('../FacultyFeedbackResults/FacultyFeedResult.model');
 const Discrepancy = require('../discrepancy/discrepancy.model');
+const FacultySubjectResult = require('../FacultySubjectResult/FacultySubjectResult.model');
 
 exports.getUniprimeDashboardData = async (req, res, next) => {
     try {
@@ -257,6 +258,117 @@ exports.getFeedbackDashboardData = async (req, res, next) => {
         });
     } catch (error) {
         console.error('Error fetching feedback dashboard data:', error);
+        next(error);
+    }
+};
+
+exports.getExamDashboardData = async (req, res, next) => {
+    try {
+        const formatYear = (y) => {
+            if (!y || !y.includes('-')) return y;
+            const parts = y.split('-');
+            const startYear = parts[0];
+            const endYear = parts[1].length === 4 ? parts[1].substring(2) : parts[1];
+            return `${startYear}-${endYear}`;
+        };
+
+        const [
+            totalFacultiesCount,
+            submittedResultsCount,
+            uniqueSubmittedFaculties,
+            avgPassRateData,
+            discrepancies,
+            recentSubmissions,
+            allYearObjs
+        ] = await Promise.all([
+            // Total Faculties
+            Employee.countDocuments(),
+            // Total Submitted Subject Results
+            FacultySubjectResult.countDocuments(),
+            // Unique Faculties who submitted
+            FacultySubjectResult.distinct('facultyId'),
+            // Avg Pass Rate
+            FacultySubjectResult.aggregate([
+                { $group: { _id: null, avg: { $avg: "$passPercentage" } } }
+            ]),
+            // Pending Discrepancies (Exam relevant)
+            Discrepancy.find({ 
+                status: 'PENDING',
+                $or: [
+                    { section: 'TEACHING' },
+                    { section: 'PROCTORING', proctoringType: 'PASS_COUNT' },
+                    { section: 'OTHER' }
+                ]
+            }).sort({ createdAt: -1 }).limit(5).lean(),
+            // Recent Submissions
+            FacultySubjectResult.find()
+                .sort({ updatedAt: -1 })
+                .limit(5)
+                .populate('uploadedBy', 'name profileImage')
+                .lean(),
+            // Active Academic Years
+            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean()
+        ]);
+
+        const submittedFacultiesCount = uniqueSubmittedFaculties.length;
+        
+        let avgPassRate = "0.0";
+        if (avgPassRateData.length > 0 && avgPassRateData[0].avg !== null) {
+            avgPassRate = Number(avgPassRateData[0].avg).toFixed(1);
+        }
+        
+        const activeYearObjs = allYearObjs.filter(ay => ay.programs && ay.programs.some(p => p.isActive));
+        const activeYearStr = activeYearObjs.length > 0 
+            ? [...new Set(activeYearObjs.map(ay => formatYear(ay.year)))].join(' & ') 
+            : 'N/A';
+        const activeSemester = activeYearObjs.length > 0
+            ? [...new Set(activeYearObjs.flatMap(ay => ay.programs.filter(p => p.isActive).map(p => p.activeSemesterTypeId?.name)))].filter(Boolean).join(' / ')
+            : 'N/A';
+
+        // Discrepancy count
+        const totalDiscrepancies = await Discrepancy.countDocuments({
+            status: 'PENDING',
+            $or: [
+                { section: 'TEACHING' },
+                { section: 'PROCTORING', proctoringType: 'PASS_COUNT' },
+                { section: 'OTHER' }
+            ]
+        });
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                totalFaculties: totalFacultiesCount,
+                submittedFaculties: submittedFacultiesCount,
+                pendingSubmissions: totalFacultiesCount > submittedFacultiesCount ? totalFacultiesCount - submittedFacultiesCount : 0,
+                submittedResults: submittedResultsCount,
+                discrepanciesCount: totalDiscrepancies,
+                overallPassRate: `${avgPassRate}%`,
+                activeYear: activeYearStr,
+                activeSemester,
+                recentSubmissions: recentSubmissions.map(s => ({
+                    name: s.facultyName || "Unknown",
+                    institutionId: s.facultyId,
+                    dept: s.branch || "N/A",
+                    subject: `${s.courseName || "N/A"} (${s.courseCode || "N/A"})`,
+                    status: "Submitted",
+                    time: s.updatedAt,
+                    avatar: s.uploadedBy?.profileImage ? `/uploads/profile/${s.uploadedBy.profileImage}` : ""
+                })),
+                discrepancies: discrepancies.map(d => ({
+                    name: d.facultyName || "Unknown",
+                    subject: d.semester || "N/A",
+                    issue: d.note || "No note",
+                    time: d.createdAt
+                })),
+                submissionChart: [
+                    { name: "Submitted", value: submittedFacultiesCount, color: "#2563EB" },
+                    { name: "Pending", value: totalFacultiesCount > submittedFacultiesCount ? totalFacultiesCount - submittedFacultiesCount : 0, color: "#F59E0B" },
+                ]
+            }
+        });
+    } catch (error) {
+        console.error('EXAM DASHBOARD ERROR:', error);
         next(error);
     }
 };

@@ -139,74 +139,87 @@ const uploadCSV = async (req, res) => {
  */
 const getMappings = async (req, res) => {
     try {
-        const { studentId, academicYear, semester, yearName } = req.query;
+        const { studentId, proctorId, academicYear, semester, yearName } = req.query;
 
         let query = {};
         if (studentId) query.studentId = studentId.trim();
+        if (proctorId) query.currentProctorId = proctorId.trim();
 
         let mappings = await ProctorMapping.find(query);
 
-        // If a specific period is requested, filter results to show the proctor active at that time
-        if (academicYear && (semester || yearName)) {
-            const targetSem = parseInt(semester) || null;
-            const targetYearName = yearName || null;
+        // Fetch student details for these mappings to get department/semester
+        const studentIds = mappings.map(m => m.studentId);
+        const students = await Student.find({ rollNo: { $in: studentIds } })
+            .select("rollNo academicInfo.department academicInfo.semester academicInfo.yearName")
+            .populate("academicInfo.department", "name code");
+        
+        const studentMap = {};
+        students.forEach(s => {
+            studentMap[s.rollNo] = s;
+        });
 
-            mappings = mappings.map(m => {
-                // 1. Check if current mapping covers this period
-                // Current covers if: 
-                //   targetPeriod >= mapping.fromPeriod
-                
-                // Simple heuristic for "later than" in academic terms:
-                // This is complex because we don't have a global sequence of semesters easily accessible here.
-                // However, the rule is: "Assigned proctor continues... until explicitly changed".
-                // So if targetPeriod is AFTER fromPeriod and NO history record covers targetPeriod, it's current.
-                
+        // If a specific period is requested, filter results to show the proctor active at that time
+        let results = mappings.map(m => {
+            const studentInfo = studentMap[m.studentId];
+            const baseData = {
+                _id: m._id,
+                studentId: m.studentId,
+                studentName: m.studentName,
+                department: studentInfo?.academicInfo?.department?.name || studentInfo?.academicInfo?.department || "—",
+                currentSemester: studentInfo?.academicInfo?.semester || "—",
+                currentYearName: studentInfo?.academicInfo?.yearName || "—",
+                fromAcademicYear: m.fromAcademicYear,
+                currentProctorId: m.currentProctorId,
+                currentProctorName: m.currentProctorName,
+                isHistorical: false
+            };
+
+            if (academicYear && (semester || yearName)) {
+                const targetSem = parseInt(semester) || null;
+                const targetYearName = yearName || null;
+
                 // Check history first
                 const historical = m.history.find(h => {
                     if (targetYearName) {
                         return h.fromYearName === targetYearName && h.fromAcademicYear === academicYear;
                     }
                     return h.fromSemester === targetSem && h.fromAcademicYear === academicYear;
-                    // Note: This is a simplified lookup. A more robust one would check ranges.
-                    // But usually, the user queries for exactly what was recorded.
                 });
 
                 if (historical) {
                     return {
-                        studentId: m.studentId,
-                        studentName: m.studentName,
+                        ...baseData,
                         proctorId: historical.proctorId,
                         proctorName: historical.proctorName,
                         isHistorical: true
                     };
                 }
 
-                // If not in history, check if current assignment started on or before requested period
+                // Check if current assignment covers it
                 const isAfterStart = (academicYear > m.fromAcademicYear) || 
                                      (academicYear === m.fromAcademicYear && (!targetSem || m.fromSemester === null || targetSem >= m.fromSemester));
 
                 if (isAfterStart) {
                     return {
-                        studentId: m.studentId,
-                        studentName: m.studentName,
+                        ...baseData,
                         proctorId: m.currentProctorId,
                         proctorName: m.currentProctorName,
                         isHistorical: false
                     };
                 }
 
-                // If before current and not in history, they had no proctor (or unrecorded)
                 return {
-                    studentId: m.studentId,
-                    studentName: m.studentName,
+                    ...baseData,
                     proctorId: "",
                     proctorName: "",
                     isHistorical: false
                 };
-            });
-        }
+            }
 
-        res.json(mappings);
+            return baseData;
+        });
+
+        res.json(results);
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
