@@ -80,7 +80,7 @@ app.use('/api/student-data', require('./modules/StudentData/Studentdata.route'))
 app.use('/api/semester-types', require('./modules/semesterType/semesterType.route'));
 app.use('/api/dashboard', require('./modules/dashboard/dashboard.route'));
 app.use('/api/research/textbook', require('./modules/Textbook/Textbook.router'));
-app.use('/api/hod/research-requests', require('./modules/hodResearch/hodResearch.route'));
+app.use('/api/hod/research-requests', require('./modules/researchApproval/researchApproval.route'));
 
 // --- Error Handling ---
 

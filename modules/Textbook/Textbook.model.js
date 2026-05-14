@@ -118,6 +118,7 @@ const TextbookSchema = new mongoose.Schema({
     // Feedback
     hodComment: { type: String },
     rndComment: { type: String },
+    approvedAmount: { type: Number },
     
     // Discrepancy
     discrepancyRaised: {

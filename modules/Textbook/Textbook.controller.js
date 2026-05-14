@@ -293,13 +293,19 @@ exports.getPendingAtRND = async (req, res) => {
 exports.rndAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment } = req.body;
+        const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const textbook = await Textbook.findByIdAndUpdate(id, { 
+        const updates = { 
             status, 
             rndComment: comment 
-        }, { new: true });
+        };
+        
+        if (approvedAmount !== undefined) {
+            updates.approvedAmount = approvedAmount;
+        }
+
+        const textbook = await Textbook.findByIdAndUpdate(id, updates, { new: true });
 
         res.json({ success: true, data: textbook });
     } catch (err) {

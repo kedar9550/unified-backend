@@ -1,17 +1,9 @@
 const Employee = require('../employee/employee.model');
 const Textbook = require('../Textbook/Textbook.model');
 
-// Optional other models if they exist. We'll wrap in try/catch or conditionally use them.
-// const Journal = require('../Journal/Journal.model');
-// const Patent = require('../Patent/Patent.model');
-// const Conference = require('../Conference/Conference.model');
-// const BookChapter = require('../BookChapter/BookChapter.model');
-// const Consultancy = require('../Consultancy/Consultancy.model');
-// const ProjectGrant = require('../ProjectGrant/ProjectGrant.model');
-
-// @desc    Get all research requests for HOD departments
-// @route   GET /api/hod/research-requests
-// @access  Private (HOD)
+// @desc    Get all research requests for HOD departments or Research Admin
+// @route   GET /api/research-approval
+// @access  Private (HOD, Research Dean, Research Coordinator)
 exports.getResearchRequests = async (req, res) => {
     try {
         const { 
@@ -28,16 +20,15 @@ exports.getResearchRequests = async (req, res) => {
         const isResearchAdmin = userRoleNames.includes('RESEARCH_DEAN') || userRoleNames.includes('RESEARCH_COORDINATOR');
         const isHOD = userRoleNames.includes('HOD');
 
-        console.log(`[DEBUG] User: ${req.user.userId}, Roles: ${userRoleNames}, isResearchAdmin: ${isResearchAdmin}`);
+        console.log(`[DEBUG] Research Approval Access - User: ${req.user.userId}, isResearchAdmin: ${isResearchAdmin}`);
 
         let facultyIds = [];
         let facultyMap = {};
 
         if (isResearchAdmin) {
-            // Deans and Coordinators see everything, so we don't filter by faculty department initially
-            // We'll fetch faculty as needed or just skip faculty filtering if not searching
+            // Deans and Coordinators see everything at institutional level
         } else if (isHOD) {
-            // 1. Get HOD Departments
+            // Get HOD Departments
             let deptIds = req.user.hodDepartments || [];
             
             if (deptIds.length === 0) {
@@ -59,7 +50,7 @@ exports.getResearchRequests = async (req, res) => {
                 return res.json({ success: true, data: [] });
             }
 
-            // 2. Fetch faculty for these departments
+            // Fetch faculty for these departments
             const facultyDocs = await Employee.find({ coreDepartment: { $in: deptIds } }).select('_id name institutionId department coreDepartment profileImage');
             facultyIds = facultyDocs.map(f => f._id);
             facultyMap = facultyDocs.reduce((acc, f) => {
@@ -70,13 +61,13 @@ exports.getResearchRequests = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized access to research requests." });
         }
 
-        // 3. Build Base Query for Research Requests
+        // Build Base Query for Research Requests
         let query = {};
         if (!isResearchAdmin) {
             query.facultyId = { $in: facultyIds };
         }
 
-        // Status Filter
+        // Status Filter Logic
         if (status && status !== 'All') {
             if (status === 'Pending') {
                 if (isResearchAdmin) query.status = 'Pending at R&D';
@@ -96,7 +87,6 @@ exports.getResearchRequests = async (req, res) => {
             if (isResearchAdmin) query.status = 'Pending at R&D';
             else if (isHOD) query.status = 'Pending at HOD';
         }
-        // If status === 'All', we don't add query.status, so it fetches everything.
 
         // Date Filter
         if (duration && duration !== 'All') {
@@ -125,28 +115,21 @@ exports.getResearchRequests = async (req, res) => {
 
         let allRequests = [];
 
-        // 4. Fetch from specific collections based on 'type' parameter
+        // Fetch from specific collections based on 'type' parameter
         const typesToFetch = type && type !== 'All' ? [type] : ['Text Book']; 
 
         if (typesToFetch.includes('Text Book')) {
             let textbookQuery = { ...query };
             
-            // If search is present and we are Research Admin, we might need to find faculty first 
-            // but for simplicity, we'll fetch and filter if needed, or match title directly in query
             if (searchRegex && !isResearchAdmin) {
                 textbookQuery.$or = [{ title: searchRegex }];
-            } else if (searchRegex && isResearchAdmin) {
-                 // For admin search, we'll fetch more and filter in memory to match faculty name/id
             }
             
-            console.log(`[DEBUG] Textbook Query: ${JSON.stringify(textbookQuery)}`);
             const textbooks = await Textbook.find(textbookQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
                 .sort({ createdAt: -1 })
                 .lean();
-            
-            console.log(`[DEBUG] Textbooks Found: ${textbooks.length}`);
 
             for (const item of textbooks) {
                 const fac = item.facultyId;
@@ -168,7 +151,8 @@ exports.getResearchRequests = async (req, res) => {
                     createdAt: item.createdAt,
                     academicYear: item.academicYear,
                     hodComment: item.hodComment,
-                    rndComment: item.rndComment
+                    rndComment: item.rndComment,
+                    approvedAmount: item.approvedAmount
                 });
             }
         }
