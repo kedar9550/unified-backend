@@ -58,6 +58,66 @@ const getAYCache = async () => {
     return _ayCache;
 };
 
+/**
+ * Helper to check if a student result is deletable.
+ * Returns { deletable: boolean, reason?: string }
+ */
+/**
+ * Helper to check if a student result is deletable.
+ * Returns { deletable: boolean, reason?: string }
+ */
+const checkDeletability = async (programId, examYear, semesterNum) => {
+    const recordYear = Number(examYear);
+
+    // 1. Find the AcademicYear document that covers this record's examYear
+    // Searching for documents where the year range (e.g. "2024-2025") matches the examYear
+    const recordYearDoc = await AcademicYear.findOne({
+        year: { $regex: recordYear.toString() }
+    }).populate("programs.activeSemesterTypeId");
+
+    if (!recordYearDoc) {
+        return { deletable: false, reason: `No academic year record found covering the year ${examYear}.` };
+    }
+
+    const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
+
+    // 2. If the program is marked as Active in this year doc, check the semester
+    if (progEntry && progEntry.isActive) {
+        const activeSemType = progEntry.activeSemesterTypeId;
+        
+        if (!activeSemType) return { deletable: true };
+
+        const semNum = Number(semesterNum);
+        if (isNaN(semNum)) return { deletable: true }; // YEAR format Pharma.D
+
+        if (activeSemType.name === "ODD" && semNum % 2 === 0) {
+            return { 
+                deletable: false, 
+                reason: `The program is currently in the ODD semester of ${recordYearDoc.year}. Records from EVEN semesters (Sem-${semNum}) cannot be deleted.` 
+            };
+        } else if (activeSemType.name === "EVEN" && semNum % 2 !== 0) {
+            return { 
+                deletable: false, 
+                reason: `The program is currently in the EVEN semester of ${recordYearDoc.year}. Records from ODD semesters (Sem-${semNum}) cannot be deleted.` 
+            };
+        }
+
+        return { deletable: true };
+    }
+
+    // 3. If the program is NOT active in this specific year doc, find the currently active one
+    const activeYearDoc = await AcademicYear.findOne({
+        programs: {
+            $elemMatch: { programId, isActive: true }
+        }
+    });
+
+    return { 
+        deletable: false, 
+        reason: `This record is from the year ${examYear}, but the program's currently active year is ${activeYearDoc?.year || 'a different year'}. Historical data cannot be deleted.` 
+    };
+};
+
 // ── Download CSV Templates ────────────────────────────────────────────────────
 
 const downloadTemplate = (req, res) => {
@@ -817,8 +877,18 @@ const getProctorDepartments = async (req, res) => {
 // ── Individual Delete ────────────────────────────────────────────────────────
 const deleteResult = async (req, res) => {
     try {
-        const result = await StudentResult.findByIdAndDelete(req.params.id);
-        if (!result) return res.status(404).json({ message: "Result not found" });
+        const record = await StudentResult.findById(req.params.id);
+        if (!record) return res.status(404).json({ message: "Result not found" });
+
+        // Check if deletable
+        const { deletable, reason } = await checkDeletability(record.programId, record.examYear, record.semester);
+        if (!deletable) {
+            return res.status(403).json({ 
+                message: `Deletion Denied: ${reason}` 
+            });
+        }
+
+        await StudentResult.findByIdAndDelete(req.params.id);
         res.status(200).json({ message: "Result deleted successfully" });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -849,6 +919,19 @@ const deleteBulkResults = async (req, res) => {
         }
         
         const count = await StudentResult.countDocuments(filter);
+        if (count === 0) return res.status(200).json({ message: "No records found matching filters." });
+
+        // Check all records in the selection
+        const allRecords = await StudentResult.find(filter);
+        for (const record of allRecords) {
+            const { deletable, reason } = await checkDeletability(record.programId, record.examYear, record.semester);
+            if (!deletable) {
+                return res.status(403).json({ 
+                    message: `Bulk Deletion Denied: One or more records are outside the active period. (e.g., Student: ${record.studentId}, Subject: ${record.subjectCode} - ${reason})` 
+                });
+            }
+        }
+
         await StudentResult.deleteMany(filter);
         
         res.status(200).json({ message: `Deleted ${count} results successfully.` });
