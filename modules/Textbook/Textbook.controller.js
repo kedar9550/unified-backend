@@ -18,6 +18,11 @@ exports.createTextbook = async (req, res) => {
             return res.status(400).json({ success: false, message: "ISBN and Title are required." });
         }
 
+        // 2. Mandatory Documents Validation
+        if (!req.files || !req.files.coverPage || !req.files.authorAffiliation || !req.files.index) {
+            return res.status(400).json({ success: false, message: "Cover Page, Author Affiliation, and Index documents are mandatory." });
+        }
+
         const existingRecord = await Textbook.findOne({
             $or: [
                 { isbn: data.isbn },
@@ -57,7 +62,7 @@ exports.createTextbook = async (req, res) => {
                 authorPosition: author.authorPosition,
                 authorName: isUser ? loggedInUser.name : author.authorName,
                 affiliationType: isUser ? 'Aditya University' : author.affiliationType,
-                employeeId: isUser ? loggedInUser.institutionId : author.employeeId,
+                employeeId: isUser ? loggedInUser.institutionId : (author.employeeId || author.empId),
                 affiliationName: isUser ? 'Aditya University' : author.affiliationName,
                 isIncentiveApplicant: isUser ? (data.applyIncentive === 'Yes') : false,
                 contributorOnly: isUser ? (data.applyIncentive === 'No') : true
@@ -113,7 +118,8 @@ exports.getMyTextbooks = async (req, res) => {
         const query = {
             $or: [
                 { facultyId: req.user.userId },
-                { 'authors.employeeId': institutionId }
+                { 'authors.employeeId': institutionId },
+                ...(user && user.name ? [{ 'authors.authorName': new RegExp(`^${user.name.trim()}$`, 'i') }] : [])
             ]
         };
 
@@ -125,7 +131,7 @@ exports.getMyTextbooks = async (req, res) => {
         // Add a field to indicate if the user is just a co-author for dashboard visibility
         const textbooksWithVisibility = textbooks.map(tb => {
             const tbObj = tb.toObject();
-            if (tb.facultyId.toString() !== req.user.userId.toString()) {
+            if (tb.facultyId && tb.facultyId._id.toString() !== req.user.userId.toString()) {
                 tbObj.visibilityRole = "Co-Author Only";
             } else {
                 tbObj.visibilityRole = "Applicant";
@@ -242,6 +248,31 @@ exports.hodAction = async (req, res) => {
     }
 };
 
+// @desc    Get textbook by ID
+// @route   GET /api/research/textbook/:id
+// @access  Private
+exports.getTextbookById = async (req, res) => {
+    try {
+        const textbook = await Textbook.findById(req.params.id)
+            .populate({
+                path: 'facultyId',
+                select: 'name institutionId department coreDepartment designation phone contactNumber college profileImage',
+                populate: [
+                    { path: 'department', select: 'name' },
+                    { path: 'coreDepartment', select: 'name' }
+                ]
+            })
+            .populate('academicYear', 'year');
+            
+        if (!textbook) {
+            return res.status(404).json({ success: false, message: 'Textbook not found' });
+        }
+        res.json({ success: true, data: textbook });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 // @desc    Get textbooks pending at R&D
 // @route   GET /api/research/textbook/pending-rnd
 // @access  Private (R&D)
@@ -262,13 +293,19 @@ exports.getPendingAtRND = async (req, res) => {
 exports.rndAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment } = req.body;
+        const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const textbook = await Textbook.findByIdAndUpdate(id, { 
+        const updates = { 
             status, 
             rndComment: comment 
-        }, { new: true });
+        };
+        
+        if (approvedAmount !== undefined) {
+            updates.approvedAmount = approvedAmount;
+        }
+
+        const textbook = await Textbook.findByIdAndUpdate(id, updates, { new: true });
 
         res.json({ success: true, data: textbook });
     } catch (err) {
