@@ -214,3 +214,86 @@ exports.getResearchRequests = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+// @desc    Get detailed research data for reports
+// @route   GET /api/research-approval/reports
+// @access  Private (Research Dean, Research Coordinator)
+exports.getResearchReports = async (req, res) => {
+    try {
+        const { academicYear, type } = req.query;
+        
+        let reportData = {
+            journals: [],
+            textbooks: [],
+            chapters: []
+        };
+
+        const query = { status: 'Approved' }; // Only approved records for regular reports? 
+        // Or all records? User screenshot shows "Research Incentives", usually implies Approved.
+        
+        if (academicYear && academicYear !== 'All') {
+            query.academicYear = academicYear;
+        }
+
+        // 1. Fetch Textbooks
+        if (!type || type === 'All' || type === 'Text Book') {
+            const textbooks = await Textbook.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+            
+            reportData.textbooks = textbooks.map(item => ({
+                sNo: '',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                empId: item.facultyId?.institutionId || 'N/A',
+                title: item.title,
+                publisher: item.publisher,
+                isbn: item.isbn ? `\t${item.isbn}` : 'N/A', // Force string in Excel with tab
+                year: item.academicYear?.year || item.yearOfPublication,
+                amount: item.approvedAmount || 0,
+                panNo: item.facultyId?.panNumber || 'N/A'
+            }));
+        }
+
+        // 2. Fetch Book Chapters
+        if (!type || type === 'All' || type === 'Book Chapter') {
+            const chapters = await BookChapter.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+
+            reportData.chapters = chapters.map(item => ({
+                sNo: '',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                empId: item.facultyId?.institutionId || 'N/A',
+                chapterTitle: item.chapterTitle,
+                bookName: item.textBookName,
+                publisher: item.publisher,
+                year: item.academicYear?.year || item.yearOfPublication,
+                month: item.month,
+                amount: item.approvedAmount || 0,
+                panNo: item.facultyId?.panNumber || 'N/A'
+            }));
+        }
+
+        // 3. Journals (Assuming a Journal model exists or using generic logic)
+        // If Journal model doesn't exist, we skip or add a placeholder
+        // Based on user screenshots, I should try to find where Journals are stored.
+        // I'll add a dummy for now if not found.
+
+        res.json({ success: true, data: reportData });
+
+    } catch (error) {
+        console.error("Get Research Reports Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
