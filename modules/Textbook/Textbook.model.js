@@ -61,6 +61,11 @@ const TextbookSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    publicationType: {
+        type: String,
+        required: true,
+        default: 'National'
+    },
     yearOfPublication: {
         type: String,
         required: true
@@ -100,7 +105,7 @@ const TextbookSchema = new mongoose.Schema({
     },
     expectedAmount: {
         type: String,
-        default: "10,000"
+        default: "5,000"
     },
     
     // Files
