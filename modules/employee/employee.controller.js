@@ -148,18 +148,29 @@ const validateUser = async (req, res) => {
  */
 const getMe = async (req, res) => {
     try {
-        let user;
-        const isNumeric = /^\d+$/.test(req.user.institutionId);
+        const userId = req.user.userId;
+        const userType = req.user.userType;
 
-        if (isNumeric) {
-            user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name').populate('coreDepartment', 'name');
+        let user;
+        if (userType === 'Student') {
+            user = await Student.findById(userId).populate('academicInfo.department', 'name');
         } else {
-            user = await Student.findOne({ rollNo: req.user.institutionId.toUpperCase() });
+            user = await Employee.findById(userId).populate('department', 'name').populate('coreDepartment', 'name');
+        }
+
+        if (!user) {
+            // Fallback to institutionId if findById fails (for older tokens or edge cases)
+            const isNumeric = /^\d+$/.test(req.user.institutionId);
+            if (isNumeric) {
+                user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name').populate('coreDepartment', 'name');
+            } else {
+                user = await Student.findOne({ rollNo: req.user.institutionId?.toUpperCase() }).populate('academicInfo.department', 'name');
+            }
         }
 
         if (!user) return res.status(404).json({ message: "User not found" });
 
-        const normalizedUser = authService.normalizeUser(user, isNumeric ? 'Employee' : 'Student');
+        const normalizedUser = authService.normalizeUser(user, userType);
 
         res.json({
             user: {
