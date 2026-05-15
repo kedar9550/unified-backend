@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { protect } = require('../../middlewares/authMiddleware');
+const { protect, authorize } = require('../../middlewares/authMiddleware');
 const textbookController = require('./Textbook.controller');
 
 // Multer setup
@@ -20,16 +20,21 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    limits: { fileSize: 500 * 1024 }, // 500KB limit
     fileFilter: (req, file, cb) => {
         const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowed.includes(ext)) return cb(null, true);
-        cb(new Error('Only PDF and image files are allowed.'));
+        cb(new Error('Only PDF and image files are allowed. Max size 500KB.'));
     }
 });
 
 // --- Routes ---
+
+// New Endpoints
+router.get('/isbn/:isbn', protect, textbookController.fetchISBN);
+router.get('/editions', protect, textbookController.getEditions);
+router.post('/editions', protect, textbookController.addEdition);
 
 // Faculty: Submit and View own
 router.post('/', protect, upload.fields([
@@ -39,20 +44,21 @@ router.post('/', protect, upload.fields([
 ]), textbookController.createTextbook);
 
 router.get('/', protect, textbookController.getMyTextbooks);
+router.get('/:id', protect, textbookController.getTextbookById);
 
 // HOD: View pending and Action
-router.get('/pending-hod', protect, textbookController.getPendingAtHOD);
-router.put('/hod-action/:id', protect, textbookController.hodAction);
+router.get('/pending-hod', protect, authorize('HOD'), textbookController.getPendingAtHOD);
+router.put('/hod-action/:id', protect, authorize('HOD'), textbookController.hodAction);
 
 // R&D: View pending and Action
-router.get('/pending-rnd', protect, textbookController.getPendingAtRND);
-router.put('/rnd-action/:id', protect, textbookController.rndAction);
+router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), textbookController.getPendingAtRND);
+router.put('/rnd-action/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), textbookController.rndAction);
 
 // Faculty: Raise discrepancy
 router.put('/raise-discrepancy/:id', protect, upload.single('discrepancyProof'), textbookController.raiseDiscrepancy);
 
 // R&D: Edit after discrepancy
-router.put('/rnd-edit/:id', protect, upload.fields([
+router.put('/rnd-edit/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), upload.fields([
     { name: 'coverPage', maxCount: 1 },
     { name: 'authorAffiliation', maxCount: 1 },
     { name: 'index', maxCount: 1 }

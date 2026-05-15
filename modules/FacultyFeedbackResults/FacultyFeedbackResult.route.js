@@ -7,7 +7,7 @@ const {
     getResults,
     updateResult,
     deleteResult,
-    createResult
+    createResult, deleteBulk
 } = require("./FacultyFeedbackResult.controller");
 const { protect, authorize } = require("../../middlewares/authMiddleware");
 
@@ -97,6 +97,18 @@ router.delete(
     protect,
     authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
     deleteResult
+);
+
+/**
+ * @route   POST /api/faculty-feedback-results/bulk-delete
+ * @desc    Bulk delete records by IDs
+ * @access  Private (Admin, Feedback Admin)
+ */
+router.post(
+    "/bulk-delete",
+    protect,
+    authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
+    deleteBulk
 );
 
 module.exports = router;

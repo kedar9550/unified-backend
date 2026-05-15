@@ -129,12 +129,12 @@ const validateUser = async (req, res) => {
 
         const data = await authService.loginUser(id, password, app);
 
-        generateToken({ 
-            userId: data.user._id, 
+        generateToken({
+            userId: data.user._id,
             institutionId: data.user.institutionId,
             userType: data.user.userType,
-            app, 
-            roles: data.roles 
+            app,
+            roles: data.roles
         }, res);
 
         res.json({ message: "Login success", user: { ...data.user, roles: data.roles } });
@@ -148,12 +148,14 @@ const validateUser = async (req, res) => {
  */
 const getMe = async (req, res) => {
     try {
-        const userId = req.user.userId;
-        const userType = req.user.userType;
-
         let user;
-        if (userType === 'Student') {
-            user = await Student.findById(userId).populate('academicInfo.department', 'name');
+        const userType = req.user.userType;
+        const isNumeric = /^\d+$/.test(req.user.institutionId);
+
+        const isEmployee = userType === 'Employee' || (!userType && isNumeric);
+
+        if (isEmployee) {
+            user = await Employee.findOne({ institutionId: req.user.institutionId }).populate('department', 'name').populate('coreDepartment', 'name');
         } else {
             user = await Employee.findById(userId).populate('department', 'name').populate('coreDepartment', 'name');
         }
@@ -216,7 +218,7 @@ const updateProfile = async (req, res) => {
             { $set: updates },
             { new: true }
         ).populate('department', 'name').populate('coreDepartment', 'name');
-        
+
         if (!user) return res.status(404).json({ message: "User not found" });
 
         // Refresh token with updated user data
@@ -296,7 +298,7 @@ const searchUser = async (req, res) => {
                 }
             }
         ]);
-        
+
         res.status(200).json(users);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -402,17 +404,17 @@ const bulkRegisterUser = async (req, res) => {
 
                 const password = "Aditya@123"; // Default password
 
-                const user = await Employee.create({ 
-                    name: ecapName, 
-                    institutionId, 
-                    department: deptRecord._id, 
+                const user = await Employee.create({
+                    name: ecapName,
+                    institutionId,
+                    department: deptRecord._id,
                     coreDepartment: deptRecord._id,
-                    designation: ecapDesig, 
-                    email, 
-                    phone: ecapPhone, 
-                    password 
+                    designation: ecapDesig,
+                    email,
+                    phone: ecapPhone,
+                    password
                 });
-                
+
                 let roleName = "STAFF";
                 const checkDesig = (ecapDesig || "").toLowerCase();
                 if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) roleName = "FACULTY";
@@ -485,7 +487,7 @@ const bulkUpdateEmployees = async (req, res) => {
                 }
 
                 // Check if changed
-                const isChanged = 
+                const isChanged =
                     (ecapName && ecapName !== employee.name) ||
                     (deptId && employee.department && deptId.toString() !== employee.department.toString()) ||
                     (ecapDesig && ecapDesig !== employee.designation) ||
@@ -547,7 +549,7 @@ const adminUpdateEmployee = async (req, res) => {
         }
 
         const updates = {};
-        
+
         if (email) {
             // Check if email is already taken by another user
             const existingEmail = await Employee.findOne({ email: email.toLowerCase(), _id: { $ne: id } });
@@ -570,9 +572,9 @@ const adminUpdateEmployee = async (req, res) => {
             .populate('department', 'name')
             .populate('coreDepartment', 'name');
 
-        res.json({ 
-            success: true, 
-            message: "Employee updated successfully", 
+        res.json({
+            success: true,
+            message: "Employee updated successfully",
             employee: updatedEmployee
         });
     } catch (error) {
@@ -588,14 +590,14 @@ const changePassword = async (req, res) => {
     try {
         const { oldPassword, newPassword } = req.body;
         const userId = req.user?.userId;
-        const userType = req.user?.userType || ( /^\d+$/.test(req.user?.institutionId) ? 'Employee' : 'Student');
+        const userType = req.user?.userType || (/^\d+$/.test(req.user?.institutionId) ? 'Employee' : 'Student');
 
         console.log("Change Password Attempt for User ID:", userId, "Type:", userType);
 
         if (!oldPassword || !newPassword) {
             return res.status(400).json({ message: 'Old and new password are required' });
         }
-        
+
         let user;
         if (userType === 'Student') {
             user = await Student.findById(userId).select('+system.password');
@@ -608,7 +610,7 @@ const changePassword = async (req, res) => {
                 user = await Employee.findOne({ institutionId: req.user.institutionId }).select('+password');
             }
         }
-        
+
         if (!user) {
             return res.status(404).json({ message: `${userType} not found` });
         }
@@ -626,7 +628,7 @@ const changePassword = async (req, res) => {
         } else {
             user.password = newPassword;
         }
-        
+
         await user.save();
 
         console.log("Change Password: Password updated successfully for:", userType, userId);
@@ -645,11 +647,11 @@ const getStaffData = async (req, res) => {
         const { id } = req.params;
         const response = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${id}`);
         const data = response.data;
-        
+
         if (!data || data.length === 0) {
             return res.status(404).json({ message: "Staff not found" });
         }
-        
+
         res.json({ success: true, data: data[0] });
     } catch (err) {
         console.error("Fetch Staff Error:", err.message);

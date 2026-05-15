@@ -23,11 +23,6 @@ const raiseDiscrepancy = async (req, res) => {
 
         let assignedRole = SECTION_ROLE_MAP[section] || "ADMIN";
 
-        // Specialized routing for Proctoring Assigned Count -> HOD
-        if (section === "PROCTORING" && proctoringType === "ASSIGNED_COUNT") {
-            assignedRole = "HOD";
-        }
-
         const disc = await Discrepancy.create({
             raisedBy:             req.user.userId,
             facultyInstitutionId: facultyInstitutionId || "",
@@ -86,26 +81,7 @@ const getDiscrepancies = async (req, res) => {
             }
 
             // If user has HOD role, filter by department for HOD-assigned ones
-            if (activeRole === "HOD") {
-                const hodDeptIds = [];
-                (req.user.roles || []).forEach(r => {
-                    if (r.role?.toUpperCase() === "HOD" && r.departments) {
-                        const depts = r.departments.map(d => typeof d === 'object' ? d._id : d);
-                        hodDeptIds.push(...depts);
-                    }
-                });
-
-                const Employee = require("../employee/employee.model");
-                const employee = await Employee.findById(req.user.userId);
-                if (hodDeptIds.length === 0 && employee?.department) {
-                    hodDeptIds.push(employee.department);
-                }
-
-                query.assignedRole = "HOD";
-                query.studentDepartmentId = { $in: hodDeptIds };
-            } else {
-                query.assignedRole = { $in: rolesToQuery };
-            }
+            query.assignedRole = { $in: rolesToQuery };
         } else if (activeRole === "FACULTY") {
             // User is acting as faculty, see only raised discrepancies
             query.raisedBy = req.user.userId;
