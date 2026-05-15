@@ -30,7 +30,7 @@ const BookChapterSchema = new mongoose.Schema({
     month: { type: String, required: true },
     year: { type: String, required: true },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
-    expectedAmount: { type: String, default: "1500" },
+    expectedAmount: { type: String, default: "7,500" },
     
     // Files
     coverPage: { type: String, required: true },
