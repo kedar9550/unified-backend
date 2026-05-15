@@ -80,6 +80,7 @@ app.use('/api/student-data', require('./modules/StudentData/Studentdata.route'))
 app.use('/api/semester-types', require('./modules/semesterType/semesterType.route'));
 app.use('/api/dashboard', require('./modules/dashboard/dashboard.route'));
 app.use('/api/research/textbook', require('./modules/Textbook/Textbook.router'));
+app.use('/api/research/book-chapter', require('./modules/BookChapter/BookChapter.router'));
 app.use('/api/sdgs', require('./modules/SDG/sdg.route'));
 app.use('/api/publishers', require('./modules/Publisher/Publisher.router'));
 app.use('/api/hod/research-requests', require('./modules/researchApproval/researchApproval.route'));

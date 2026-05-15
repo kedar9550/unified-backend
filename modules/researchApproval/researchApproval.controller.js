@@ -1,5 +1,6 @@
 const Employee = require('../employee/employee.model');
 const Textbook = require('../Textbook/Textbook.model');
+const BookChapter = require('../BookChapter/BookChapter.model');
 
 // @desc    Get all research requests for HOD departments or Research Admin
 // @route   GET /api/research-approval
@@ -116,7 +117,7 @@ exports.getResearchRequests = async (req, res) => {
         let allRequests = [];
 
         // Fetch from specific collections based on 'type' parameter
-        const typesToFetch = type && type !== 'All' ? [type] : ['Text Book']; 
+        const typesToFetch = type && type !== 'All' ? [type] : ['Text Book', 'Book Chapter']; 
 
         if (typesToFetch.includes('Text Book')) {
             let textbookQuery = { ...query };
@@ -147,6 +148,49 @@ exports.getResearchRequests = async (req, res) => {
                     type: 'Text Book',
                     faculty: fac,
                     title: item.title,
+                    status: item.status,
+                    createdAt: item.createdAt,
+                    academicYear: item.academicYear,
+                    hodComment: item.hodComment,
+                    rndComment: item.rndComment,
+                    approvedAmount: item.approvedAmount
+                });
+            }
+        }
+
+        // Fetch Book Chapters
+        if (typesToFetch.includes('Book Chapter')) {
+            let chapterQuery = { ...query };
+            
+            if (searchRegex && !isResearchAdmin) {
+                chapterQuery.$or = [
+                    { chapterTitle: searchRegex },
+                    { textBookName: searchRegex }
+                ];
+            }
+            
+            const chapters = await BookChapter.find(chapterQuery)
+                .populate('facultyId', 'name institutionId department coreDepartment profileImage')
+                .populate('academicYear', 'year')
+                .sort({ createdAt: -1 })
+                .lean();
+
+            for (const item of chapters) {
+                const fac = item.facultyId;
+                if (!fac) continue;
+
+                if (searchRegex) {
+                    const matchesTitle = searchRegex.test(item.chapterTitle) || searchRegex.test(item.textBookName);
+                    const matchesName = searchRegex.test(fac.name);
+                    const matchesId = searchRegex.test(fac.institutionId);
+                    if (!matchesTitle && !matchesName && !matchesId) continue;
+                }
+                
+                allRequests.push({
+                    _id: item._id,
+                    type: 'Book Chapter',
+                    faculty: fac,
+                    title: `${item.chapterTitle} (in ${item.textBookName})`,
                     status: item.status,
                     createdAt: item.createdAt,
                     academicYear: item.academicYear,
