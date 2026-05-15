@@ -1,0 +1,181 @@
+const Patent = require('./Patent.model');
+const Employee = require('../employee/employee.model');
+
+// @desc    Submit new patent publication
+// @route   POST /api/research/patent
+// @access  Private (Faculty)
+exports.createPatent = async (req, res) => {
+    try {
+        const data = req.body;
+        
+        // Validation
+        if (!req.files || !req.files.eFilingReceipt || !req.files.form1) {
+            return res.status(400).json({ success: false, message: "All documents are mandatory." });
+        }
+
+        // Check file sizes individually (500KB limit)
+        const filesToCheck = ['eFilingReceipt', 'form1'];
+        for (const field of filesToCheck) {
+            if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+                const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.` 
+                });
+            }
+        }
+
+        // Parse co-inventors
+        let parsedCoInventors = [];
+        if (typeof data.coInventors === 'string') {
+            try {
+                parsedCoInventors = JSON.parse(data.coInventors);
+            } catch (e) {
+                parsedCoInventors = [];
+            }
+        } else if (Array.isArray(data.coInventors)) {
+            parsedCoInventors = data.coInventors;
+        }
+
+        const patent = new Patent({
+            ...data,
+            facultyId: req.user.userId,
+            coInventors: parsedCoInventors,
+            patentStatus: data.status, // Map 'status' from frontend to 'patentStatus' in model
+            status: 'Pending at HOD'
+        });
+
+        if (req.files) {
+            if (req.files.eFilingReceipt) patent.eFilingReceipt = `/uploads/patents/${req.files.eFilingReceipt[0].filename}`;
+            if (req.files.form1) patent.form1 = `/uploads/patents/${req.files.form1[0].filename}`;
+        }
+
+        await patent.save();
+        res.status(201).json({ success: true, data: patent });
+    } catch (err) {
+        console.error("Create Patent Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Get faculty's own patents
+// @route   GET /api/research/patent
+// @access  Private (Faculty)
+exports.getMyPatents = async (req, res) => {
+    try {
+        const query = { facultyId: req.user.userId };
+        const patents = await Patent.find(query)
+            .populate('academicYear', 'year')
+            .sort({ createdAt: -1 });
+
+        res.json({ success: true, data: patents });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Get patent by ID
+// @route   GET /api/research/patent/:id
+// @access  Private
+exports.getPatentById = async (req, res) => {
+    try {
+        const patent = await Patent.findById(req.params.id)
+            .populate({
+                path: 'facultyId',
+                select: 'name institutionId department coreDepartment designation phone contactNumber college profileImage',
+                populate: [
+                    { path: 'department', select: 'name' },
+                    { path: 'coreDepartment', select: 'name' }
+                ]
+            })
+            .populate('academicYear', 'year');
+            
+        if (!patent) {
+            return res.status(404).json({ success: false, message: 'Patent not found' });
+        }
+        res.json({ success: true, data: patent });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Get patents pending at HOD
+// @route   GET /api/research/patent/pending-hod
+// @access  Private (HOD)
+exports.getPendingAtHOD = async (req, res) => {
+    try {
+        const Employee = require('../employee/employee.model');
+        let deptIds = req.user.hodDepartments || [];
+        
+        const facultyIds = await Employee.find({ coreDepartment: { $in: deptIds } }).distinct('_id');
+        
+        const patents = await Patent.find({ 
+            facultyId: { $in: facultyIds },
+            status: 'Pending at HOD'
+        }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
+        
+        res.json({ success: true, data: patents });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    HOD Action (Approve/Reject)
+// @route   PUT /api/research/patent/hod-action/:id
+// @access  Private (HOD)
+exports.hodAction = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { action, comment } = req.body;
+
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const patent = await Patent.findByIdAndUpdate(id, { 
+            status, 
+            hodComment: comment 
+        }, { new: true });
+
+        res.json({ success: true, data: patent });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Get patents pending at R&D
+// @route   GET /api/research/patent/pending-rnd
+// @access  Private (R&D)
+exports.getPendingAtRND = async (req, res) => {
+    try {
+        const patents = await Patent.find({ status: 'Pending at R&D' })
+            .populate('facultyId', 'name institutionId department')
+            .populate('academicYear', 'year');
+        res.json({ success: true, data: patents });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    R&D Action (Approve/Reject)
+// @route   PUT /api/research/patent/rnd-action/:id
+// @access  Private (R&D)
+exports.rndAction = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { action, comment, approvedAmount } = req.body;
+
+        const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
+        const updates = { 
+            status, 
+            rndComment: comment 
+        };
+        
+        if (approvedAmount !== undefined) {
+            updates.approvedAmount = approvedAmount;
+        }
+
+        const patent = await Patent.findByIdAndUpdate(id, updates, { new: true });
+
+        res.json({ success: true, data: patent });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};

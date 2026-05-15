@@ -81,6 +81,11 @@ app.use('/api/semester-types', require('./modules/semesterType/semesterType.rout
 app.use('/api/dashboard', require('./modules/dashboard/dashboard.route'));
 app.use('/api/research/textbook', require('./modules/Textbook/Textbook.router'));
 app.use('/api/research/book-chapter', require('./modules/BookChapter/BookChapter.router'));
+app.use('/api/research/journal', require('./modules/Journal/Journal.router'));
+app.use('/api/research/patent', require('./modules/Patent/Patent.router'));
+app.use('/api/research/funded-project', require('./modules/FundedProject/FundedProject.router'));
+app.use('/api/research/consultancy', require('./modules/Consultancy/Consultancy.router'));
+app.use('/api/research/conference', require('./modules/Conference/Conference.router'));
 app.use('/api/sdgs', require('./modules/SDG/sdg.route'));
 app.use('/api/publishers', require('./modules/Publisher/Publisher.router'));
 app.use('/api/hod/research-requests', require('./modules/researchApproval/researchApproval.route'));
