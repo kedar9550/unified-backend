@@ -9,6 +9,9 @@ const fs = require("fs");
 const bcrypt = require("bcryptjs");
 const Role = require("../role/role.model");
 const UserAppRole = require("../userAppRole/userAppRole.model");
+const XLSX = require("xlsx");
+const path = require("path");
+
 
 /**
  * Helper to flatten object for MongoDB $set
@@ -24,6 +27,35 @@ const flattenObject = (obj, prefix = "") => {
     return acc;
   }, {});
 };
+
+/**
+ * Helper to parse CSV or Excel file into a common JSON format
+ */
+const parseFile = async (filePath) => {
+  const extension = path.extname(filePath).toLowerCase();
+  let rows = [];
+
+  if (extension === ".csv") {
+    // Return a promise that resolves with the CSV data
+    return new Promise((resolve, reject) => {
+      const results = [];
+      fs.createReadStream(filePath)
+        .pipe(csv())
+        .on("data", (data) => results.push(data))
+        .on("end", () => resolve(results))
+        .on("error", (err) => reject(err));
+    });
+  } else if (extension === ".xlsx" || extension === ".xls") {
+    const workbook = XLSX.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    rows = XLSX.utils.sheet_to_json(sheet);
+    return rows;
+  } else {
+    throw new Error("Unsupported file format");
+  }
+};
+
 
 const assignStudentRole = async (studentId) => {
   const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
@@ -252,36 +284,44 @@ exports.uploadStudentCSV = async (req, res) => {
     return res.status(400).json({ success: false, message: "No file uploaded" });
   }
 
-  const csvRows = [];
-  const errors = [];
+  try {
+    console.log(`Starting file parse: ${req.file.path}`);
+    const data = await parseFile(req.file.path);
+    console.log(`Parsed ${data.length} rows from file.`);
+    
+    const csvRows = [];
+    const errors = [];
 
-  // Parse CSV
-  fs.createReadStream(req.file.path)
-    .pipe(csv())
-    .on("data", (data) => {
-      const getVal = (prefixes) => {
-        const key = Object.keys(data).find(k =>
-          prefixes.some(p => k.trim().toLowerCase() === p.toLowerCase())
-        );
-        return key ? data[key] : null;
-      };
+    const getVal = (row, prefixes) => {
+      const key = Object.keys(row).find(k =>
+        prefixes.some(p => String(k).trim().toLowerCase() === p.toLowerCase())
+      );
+      return key ? row[key] : null;
+    };
 
-      const rollNo = getVal(["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID"]);
-      const departmentName = getVal(["Dept", "department", "Dept Name", "Department Name"]);
+    const rollNoPrefixes = ["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID", "Roll Number"];
+    const deptPrefixes = ["Dept", "department", "Dept Name", "Department Name"];
+
+    let successCount = 0;
+    let skipCount = 0;
+
+    data.forEach((row) => {
+      const rollNo = getVal(row, rollNoPrefixes);
+      const departmentName = getVal(row, deptPrefixes);
 
       if (rollNo) {
         csvRows.push({
-          rollNo: rollNo.trim().toUpperCase(),
-          departmentName: departmentName ? departmentName.trim() : null
+          rollNo: rollNo.toString().trim().toUpperCase(),
+          departmentName: departmentName ? departmentName.toString().trim() : null
         });
       } else {
-        errors.push({ row: data, message: "Missing Roll No" });
+        errors.push({ row, message: "Missing Roll No" });
+        skipCount++; // Count as a failed record
       }
-    })
-    .on("end", async () => {
-      try {
-        let successCount = 0;
-        let skipCount = 0;
+    });
+
+    console.log(`Validated ${csvRows.length} rows for processing.`);
+
 
         // Fetch all departments for quick lookup
         const departments = await Department.find({});
@@ -293,9 +333,11 @@ exports.uploadStudentCSV = async (req, res) => {
 
         for (const row of csvRows) {
           try {
+            console.log(`Processing student: ${row.rollNo}`);
             const externalData = await studentService.fetchStudentDataFromAPI(row.rollNo);
 
             if (!externalData) {
+              console.warn(`Data not found for: ${row.rollNo}`);
               errors.push({ rollNo: row.rollNo, message: "Data not found in external API" });
               skipCount++;
               continue;
@@ -317,7 +359,7 @@ exports.uploadStudentCSV = async (req, res) => {
               if (deptId) {
                 transformedData.academicInfo.department = deptId;
               } else {
-                transformedData.academicInfo.department = null; // Do NOT throw error for missing department
+                transformedData.academicInfo.department = null; 
               }
             } else {
               transformedData.academicInfo.department = null;
@@ -333,9 +375,17 @@ exports.uploadStudentCSV = async (req, res) => {
               { $set: updatePayload },
               { upsert: true, new: true, runValidators: true }
             );
-            await assignStudentRole(updatedStudent._id);
-            successCount++;
+            if (updatedStudent) {
+              await assignStudentRole(updatedStudent._id);
+              successCount++;
+              console.log(`Successfully saved: ${row.rollNo}`);
+            } else {
+              console.warn(`Failed to save/upsert student: ${row.rollNo}`);
+              errors.push({ rollNo: row.rollNo, message: "Database upsert failed" });
+              skipCount++;
+            }
           } catch (err) {
+            console.error(`Error processing ${row.rollNo}:`, err.message);
             errors.push({ rollNo: row.rollNo, message: err.message });
             skipCount++;
           }
@@ -345,45 +395,56 @@ exports.uploadStudentCSV = async (req, res) => {
 
         res.status(200).json({
           success: true,
-          message: `CSV processed. ${successCount} saved, ${skipCount} failed.`,
-          summary: { total: csvRows.length, success: successCount, failed: skipCount, errors }
+          message: `File processed. ${successCount} saved, ${skipCount} failed.`,
+          summary: { 
+            total: data.length, 
+            success: successCount, 
+            failed: skipCount, 
+            errors: skipCount, // Use skipCount as the errors count for UI
+            errorList: errors 
+          }
         });
       } catch (error) {
+        console.error("Upload error:", error);
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ success: false, message: error.message });
       }
-    });
 };
+
 
 exports.bulkUpdateStudentCSV = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, message: "No file uploaded" });
   }
 
-  const csvRows = [];
-  const errors = [];
+  try {
+    const data = await parseFile(req.file.path);
+    const csvRows = [];
+    const errors = [];
 
-  // Parse CSV
-  fs.createReadStream(req.file.path)
-    .pipe(csv())
-    .on("data", (data) => {
-      const getVal = (prefixes) => {
-        const key = Object.keys(data).find(k =>
-          prefixes.some(p => k.trim().toLowerCase() === p.toLowerCase())
-        );
-        return key ? data[key] : null;
-      };
+    const getVal = (row, prefixes) => {
+      const key = Object.keys(row).find(k =>
+        prefixes.some(p => String(k).trim().toLowerCase() === p.toLowerCase())
+      );
+      return key ? row[key] : null;
+    };
 
-      const rollNo = getVal(["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID"]);
+    const rollNoPrefixes = ["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID", "Roll Number"];
 
+    let updatedCount = 0;
+    let upToDateCount = 0;
+    let skipCount = 0;
+
+    data.forEach((row) => {
+      const rollNo = getVal(row, rollNoPrefixes);
       if (rollNo) {
-        csvRows.push({ rollNo: rollNo.trim().toUpperCase() });
+        csvRows.push({ rollNo: rollNo.toString().trim().toUpperCase() });
+      } else {
+        errors.push({ row, message: "Missing Roll No" });
+        skipCount++;
       }
-    })
-    .on("end", async () => {
-      try {
-        let updatedCount = 0;
-        let upToDateCount = 0;
-        let skipCount = 0;
+    });
+
 
         for (const row of csvRows) {
           try {
@@ -460,7 +521,7 @@ exports.bulkUpdateStudentCSV = async (req, res) => {
           updated: updatedCount > 0,
           message: updatedCount > 0 ? "Update Successful!" : "Data already up to date.",
           summary: {
-            total: csvRows.length,
+            total: data.length,
             success: updatedCount,
             upToDate: upToDateCount,
             failed: skipCount,
@@ -468,10 +529,11 @@ exports.bulkUpdateStudentCSV = async (req, res) => {
           }
         });
       } catch (error) {
+        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ success: false, message: error.message });
       }
-    });
 };
+
 
 /**
  * Get Unassigned Students
