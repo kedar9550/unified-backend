@@ -81,6 +81,7 @@ app.use('/api/semester-types', require('./modules/semesterType/semesterType.rout
 app.use('/api/dashboard', require('./modules/dashboard/dashboard.route'));
 app.use('/api/research/textbook', require('./modules/Textbook/Textbook.router'));
 app.use('/api/research/book-chapter', require('./modules/BookChapter/BookChapter.router'));
+app.use('/api/research/journal', require('./modules/Journal/clarivate.route'));  // Clarivate proxy — must be BEFORE Journal.router
 app.use('/api/research/journal', require('./modules/Journal/Journal.router'));
 app.use('/api/research/patent', require('./modules/Patent/Patent.router'));
 app.use('/api/research/funded-project', require('./modules/FundedProject/FundedProject.router'));
