@@ -9,7 +9,7 @@ const fs = require("fs");
 const bcrypt = require("bcryptjs");
 const Role = require("../role/role.model");
 const UserAppRole = require("../userAppRole/userAppRole.model");
-const XLSX = require("xlsx");
+const ExcelJS = require("exceljs");
 const path = require("path");
 
 
@@ -46,10 +46,44 @@ const parseFile = async (filePath) => {
         .on("error", (err) => reject(err));
     });
   } else if (extension === ".xlsx" || extension === ".xls") {
-    const workbook = XLSX.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    rows = XLSX.utils.sheet_to_json(sheet);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) return [];
+
+    const rows = [];
+    let headers = [];
+    const maxColumnCount = worksheet.columnCount;
+
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      const values = [];
+      for (let i = 1; i <= maxColumnCount; i++) {
+        const cell = row.getCell(i);
+        let val = cell.value;
+        if (val && typeof val === "object") {
+          if (val.richText) {
+            val = val.richText.map(t => t.text).join("");
+          } else if (val.text) {
+            val = val.text;
+          } else if (val.result !== undefined) {
+            val = val.result;
+          }
+        }
+        values.push(val !== undefined && val !== null ? val : "");
+      }
+
+      if (rowNumber === 1) {
+        headers = values.map(v => String(v).trim());
+      } else {
+        const rowData = {};
+        headers.forEach((header, index) => {
+          if (header) {
+            rowData[header] = values[index];
+          }
+        });
+        rows.push(rowData);
+      }
+    });
     return rows;
   } else {
     throw new Error("Unsupported file format");
