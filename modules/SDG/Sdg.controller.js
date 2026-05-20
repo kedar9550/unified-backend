@@ -1,4 +1,5 @@
 const Sdg = require("./Sdg.model");
+const escapeRegex = require("../../utils/escapeRegex");
 
 // 1. Create SGD
 exports.createSdg = async (req, res) => {
@@ -45,9 +46,10 @@ exports.getAllSdgs = async (req, res) => {
 
         // Search by SDG Number or SDG Title
         if (search) {
+            const escapedSearch = escapeRegex(search);
             query.$or = [
-                { sdgNumber: { $regex: search, $options: "i" } },
-                { sdgTitle: { $regex: search, $options: "i" } },
+                { sdgNumber: { $regex: escapedSearch, $options: "i" } },
+                { sdgTitle: { $regex: escapedSearch, $options: "i" } },
                 { keywords: { $in: [search] } }  // Search in keywords array
             ];
         }

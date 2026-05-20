@@ -1,5 +1,6 @@
 const axios = require("axios");
 const Program = require("../academics/program.model");
+const escapeRegex = require("../../utils/escapeRegex");
 const Branch = require("../academics/branch.model");
 const Department = require("../academics/department.model");
 
@@ -172,8 +173,8 @@ const transformStudentData = async (externalData, defaultPassword) => {
     throw new Error(`ECAP API is missing 'coursename' or 'branch' for student ${externalData.rollno || 'Unknown'}. Received Program: '${programName}', Branch: '${branchName}'`);
   }
 
-  const programExists = await Program.findOne({ name: new RegExp(`^${programName}$`, "i") });
-  const branchExists = await Branch.findOne({ name: new RegExp(`^${branchName}$`, "i") });
+  const programExists = await Program.findOne({ name: new RegExp(`^${escapeRegex(programName)}$`, "i") });
+  const branchExists = await Branch.findOne({ name: new RegExp(`^${escapeRegex(branchName)}$`, "i") });
 
   // ── Resolve semester fields ──────────────────────────────────────
   // eCap field: externalData.semestername

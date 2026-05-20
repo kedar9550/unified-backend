@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const AcademicYear = require('./academicYear.model');
+const escapeRegex = require('../../utils/escapeRegex');
 const SemesterType = require('../semesterType/semesterType.model');
 const Program = require('../academics/program.model');
 
@@ -309,10 +310,11 @@ const resolveActiveAcademicYear = async (programIdentifier) => {
     if (mongoose.Types.ObjectId.isValid(programIdentifier)) {
         programId = programIdentifier;
     } else {
+        const escapedIdentifier = escapeRegex(programIdentifier);
         const prog = await Program.findOne({
             $or: [
-                { name: new RegExp(`^${programIdentifier}$`, 'i') },
-                { code: new RegExp(`^${programIdentifier}$`, 'i') }
+                { name: new RegExp(`^${escapedIdentifier}$`, 'i') },
+                { code: new RegExp(`^${escapedIdentifier}$`, 'i') }
             ]
         });
         if (!prog) return null;

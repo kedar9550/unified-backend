@@ -7,6 +7,9 @@ const FundedProject = require('../FundedProject/FundedProject.model');
 const Consultancy = require('../Consultancy/Consultancy.model');
 const Conference = require('../Conference/Conference.model');
 
+const { getHODDepartments } = require('../../utils/hodHelper');
+const escapeRegex = require('../../utils/escapeRegex');
+
 // @desc    Get all research requests for HOD departments or Research Admin
 // @route   GET /api/research-approval
 // @access  Private (HOD, Research Dean, Research Coordinator)
@@ -34,23 +37,8 @@ exports.getResearchRequests = async (req, res) => {
         if (isResearchAdmin) {
             // Deans and Coordinators see everything at institutional level
         } else if (isHOD) {
-            // Get HOD Departments
-            let deptIds = req.user.hodDepartments || [];
-
-            if (deptIds.length === 0) {
-                const EmployeeAppRole = require('../userAppRole/userAppRole.model');
-                const Role = require('../role/role.model');
-
-                const hodRole = await Role.findOne({ name: 'HOD', app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
-                if (hodRole) {
-                    const mappings = await EmployeeAppRole.find({ userId: req.user.userId, role: hodRole._id });
-                    for (const m of mappings) {
-                        if (m.departments && m.departments.length > 0) {
-                            deptIds = [...deptIds, ...m.departments];
-                        }
-                    }
-                }
-            }
+            // Get HOD Departments using robust helper
+            const deptIds = await getHODDepartments(req.user);
 
             if (deptIds.length === 0) {
                 return res.json({ success: true, data: [] });
@@ -116,7 +104,7 @@ exports.getResearchRequests = async (req, res) => {
         // Search Filter
         let searchRegex = null;
         if (search) {
-            searchRegex = new RegExp(search, 'i');
+            searchRegex = new RegExp(escapeRegex(search), 'i');
         }
 
         let allRequests = [];

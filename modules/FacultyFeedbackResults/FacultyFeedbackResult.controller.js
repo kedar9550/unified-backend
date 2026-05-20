@@ -1,4 +1,5 @@
 const FacultyFeedResult = require("./FacultyFeedResult.model");
+const escapeRegex = require("../../utils/escapeRegex");
 const AcademicYear = require("../academicYear/academicYear.model");
 const SemesterType = require("../semesterType/semesterType.model");
 const Program = require("../academics/program.model");
@@ -93,10 +94,11 @@ const uploadCSV = async (req, res) => {
                 let branchDoc = branchCache[branchName];
                 if (!branchDoc) {
                     // Try to find branch by code (globally unique) or name
+                    const escapedBranchName = escapeRegex(branchName.trim());
                     branchDoc = await Branch.findOne({ 
                         $or: [
                             { code: branchName.toUpperCase().trim() },
-                            { name: { $regex: new RegExp(`^${branchName.trim()}$`, "i") } }
+                            { name: { $regex: new RegExp(`^${escapedBranchName}$`, "i") } }
                         ]
                     });
                     if (!branchDoc) throw new Error(`Branch '${branchName}' not found in system`);

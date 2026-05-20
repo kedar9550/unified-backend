@@ -2,6 +2,7 @@ const Textbook = require('./Textbook.model');
 const Edition = require('./Edition.model');
 const Employee = require('../employee/employee.model');
 const axios = require('axios');
+const escapeRegex = require('../../utils/escapeRegex');
 
 // @desc    Submit new textbook publication
 // @route   POST /api/research/textbook
@@ -26,7 +27,7 @@ exports.createTextbook = async (req, res) => {
         const existingRecord = await Textbook.findOne({
             $or: [
                 { isbn: data.isbn },
-                { title: new RegExp(`^${data.title.trim()}$`, 'i') }
+                { title: new RegExp(`^${escapeRegex(data.title.trim())}$`, 'i') }
             ],
             status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
         });
@@ -119,7 +120,7 @@ exports.getMyTextbooks = async (req, res) => {
             $or: [
                 { facultyId: req.user.userId },
                 { 'authors.employeeId': institutionId },
-                ...(user && user.name ? [{ 'authors.authorName': new RegExp(`^${user.name.trim()}$`, 'i') }] : [])
+                ...(user && user.name ? [{ 'authors.authorName': new RegExp(`^${escapeRegex(user.name.trim())}$`, 'i') }] : [])
             ]
         };
 
@@ -207,15 +208,17 @@ exports.addEdition = async (req, res) => {
 };
 
 
+const { getHODDepartments } = require('../../utils/hodHelper');
+
 // @desc    Get textbooks pending at HOD
 // @route   GET /api/research/textbook/pending-hod
 // @access  Private (HOD)
 exports.getPendingAtHOD = async (req, res) => {
     try {
         const Employee = require('../employee/employee.model');
-        const deptIds = req.user.hodDepartments || [];
+        const deptIds = await getHODDepartments(req.user);
         
-        const facultyIds = await Employee.find({ department: { $in: deptIds } }).distinct('_id');
+        const facultyIds = await Employee.find({ coreDepartment: { $in: deptIds } }).distinct('_id');
         
         const textbooks = await Textbook.find({ 
             facultyId: { $in: facultyIds },

@@ -98,13 +98,15 @@ exports.getJournalById = async (req, res) => {
     }
 };
 
+const { getHODDepartments } = require('../../utils/hodHelper');
+
 // @desc    Get journals pending at HOD
 // @route   GET /api/research/journal/pending-hod
 // @access  Private (HOD)
 exports.getPendingAtHOD = async (req, res) => {
     try {
         const Employee = require('../employee/employee.model');
-        let deptIds = req.user.hodDepartments || [];
+        const deptIds = await getHODDepartments(req.user);
         
         const facultyIds = await Employee.find({ coreDepartment: { $in: deptIds } }).distinct('_id');
         

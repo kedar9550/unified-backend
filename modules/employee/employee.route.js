@@ -30,7 +30,16 @@ const storage = multer.diskStorage({
         cb(null, req.user._id + '-' + Date.now() + path.extname(file.originalname));
     }
 });
-const upload = multer({ storage: storage });
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.jpg', '.jpeg', '.png'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (allowed.includes(ext)) return cb(null, true);
+        cb(new Error('Only JPG, JPEG, and PNG images are allowed. Max size 2MB.'));
+    }
+});
 
 // CSV Upload Setup
 const csvStorage = multer.diskStorage({
@@ -43,7 +52,16 @@ const csvStorage = multer.diskStorage({
         cb(null, 'bulk-' + Date.now() + '.csv');
     }
 });
-const uploadCsv = multer({ storage: csvStorage });
+const uploadCsv = multer({ 
+    storage: csvStorage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.csv'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (allowed.includes(ext)) return cb(null, true);
+        cb(new Error('Only CSV files are allowed. Max size 5MB.'));
+    }
+});
 
 // --- Auth & Onboarding ---
 router.post('/register', registerUser);
