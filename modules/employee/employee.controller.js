@@ -1,5 +1,6 @@
 const Employee = require('./employee.model');
 const Student = require('../StudentData/Studentdata.model');
+const escapeRegex = require('../../utils/escapeRegex');
 const mongoose = require('mongoose');
 const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
@@ -50,10 +51,11 @@ const registerUser = async (req, res) => {
             console.error("ECAP ERROR:", apiErr.message);
         }
 
+        const escapedDept = escapeRegex(department);
         const deptRecord = await Department.findOne({
             $or: [
-                { name: new RegExp(`^${department}$`, 'i') },
-                { code: new RegExp(`^${department}$`, 'i') }
+                { name: new RegExp(`^${escapedDept}$`, 'i') },
+                { code: new RegExp(`^${escapedDept}$`, 'i') }
             ]
         });
 
@@ -259,10 +261,11 @@ const searchUser = async (req, res) => {
         const { query } = req.query;
         if (!query) return res.status(400).json({ message: "Search query required" });
 
+        const escapedQuery = escapeRegex(query);
         const matchStage = {
             $or: [
-                { institutionId: { $regex: query, $options: "i" } },
-                { name: { $regex: query, $options: "i" } }
+                { institutionId: { $regex: escapedQuery, $options: "i" } },
+                { name: { $regex: escapedQuery, $options: "i" } }
             ]
         };
 
@@ -390,10 +393,11 @@ const bulkRegisterUser = async (req, res) => {
                 }
 
                 // Match Department
+                const escapedEcapDept = escapeRegex(ecapDept);
                 const deptRecord = await Department.findOne({
                     $or: [
-                        { name: new RegExp(`^${ecapDept}$`, 'i') },
-                        { code: new RegExp(`^${ecapDept}$`, 'i') }
+                        { name: new RegExp(`^${escapedEcapDept}$`, 'i') },
+                        { code: new RegExp(`^${escapedEcapDept}$`, 'i') }
                     ]
                 });
 
@@ -477,10 +481,11 @@ const bulkUpdateEmployees = async (req, res) => {
                 // Match Department
                 let deptId = employee.department;
                 if (ecapDept) {
+                    const escapedEcapDept = escapeRegex(ecapDept);
                     const deptRecord = await Department.findOne({
                         $or: [
-                            { name: new RegExp(`^${ecapDept}$`, 'i') },
-                            { code: new RegExp(`^${ecapDept}$`, 'i') }
+                            { name: new RegExp(`^${escapedEcapDept}$`, 'i') },
+                            { code: new RegExp(`^${escapedEcapDept}$`, 'i') }
                         ]
                     });
                     if (deptRecord) deptId = deptRecord._id;

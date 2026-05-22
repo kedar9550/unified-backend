@@ -28,6 +28,15 @@ const protect = async (req, res, next) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         req.user = decoded; // { userId, app, roles }
+
+        // Extract HOD departments if they exist in roles
+        if (req.user.roles) {
+            const hodRole = req.user.roles.find(r => r.role?.toUpperCase() === 'HOD');
+            if (hodRole && hodRole.departments) {
+                req.user.hodDepartments = hodRole.departments;
+            }
+        }
+
         next();
     } catch (error) {
         console.error('Authorization error:', error.message);

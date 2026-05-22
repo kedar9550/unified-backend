@@ -1,4 +1,5 @@
 const ProctorMapping = require("./ProctorMapping.model");
+const escapeRegex = require("../../utils/escapeRegex");
 const AcademicYear = require("../academicYear/academicYear.model");
 const SemesterType = require("../semesterType/semesterType.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
@@ -237,10 +238,12 @@ const getStudentsForMapping = async (req, res) => {
             return res.status(400).json({ message: "Missing required filters" });
         }
 
+        const escapedProgram = escapeRegex(program);
+        const escapedBranch = escapeRegex(branch);
         const studentQuery = {
             "academicInfo.department": department,
-            "academicInfo.programName": new RegExp(`^${program}$`, "i"),
-            "academicInfo.branch": new RegExp(`^${branch}$`, "i"),
+            "academicInfo.programName": new RegExp(`^${escapedProgram}$`, "i"),
+            "academicInfo.branch": new RegExp(`^${escapedBranch}$`, "i"),
             "academicInfo.studentStatus": "Regular",
             "system.isActive": true
         };

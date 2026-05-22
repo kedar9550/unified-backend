@@ -45,11 +45,26 @@ const limiter = rateLimit({
 });
 app.use('/api', limiter);
 
+// 3b. Dedicated rate limiter for sensitive authentication endpoints
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // max 20 attempts
+    message: 'Too many login or OTP attempts, please try again after 15 minutes',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+app.use('/api/auth', authLimiter);
+app.use('/api/employees/login', authLimiter);
+
 // --- General Middlewares ---
 app.use(logger('dev'));
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: false, limit: '10kb' }));
 app.use(cookieParser());
+
+// NoSQL injection protection middleware
+const mongoSanitize = require('./middlewares/mongoSanitize');
+app.use(mongoSanitize);
 
 // --- Static Files (Profile Images) ---
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

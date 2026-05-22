@@ -1,4 +1,5 @@
 const FacultySubjectResult = require("./FacultySubjectResult.model");
+const escapeRegex = require("../../utils/escapeRegex");
 const AcademicYear = require("../academicYear/academicYear.model");
 const SemesterType = require("../semesterType/semesterType.model");
 const Program = require("../academics/program.model");
@@ -120,7 +121,7 @@ const uploadUnifiedResults = async (req, res) => {
                 // 2. Resolve Program
                 let programDoc = programCache[programName];
                 if (!programDoc) {
-                    const escapedName = programName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const escapedName = escapeRegex(programName);
                     programDoc = await Program.findOne({ 
                         $or: [
                             { name: { $regex: new RegExp(`^${escapedName}$`, "i") } },
@@ -163,9 +164,10 @@ const uploadUnifiedResults = async (req, res) => {
                 // 4. Resolve Branch
                 let branchDoc = branchCache[branchName];
                 if (!branchDoc) {
+                    const escapedBranchName = escapeRegex(branchName);
                     branchDoc = await Branch.findOne({ 
                         $or: [
-                            { name: { $regex: new RegExp(`^${branchName}$`, "i") } },
+                            { name: { $regex: new RegExp(`^${escapedBranchName}$`, "i") } },
                             { code: branchName.toUpperCase() }
                         ],
                         programId: programDoc._id 

@@ -77,12 +77,14 @@ exports.getProjectById = async (req, res) => {
     }
 };
 
+const { getHODDepartments } = require('../../utils/hodHelper');
+
 // @desc    Get projects pending at HOD
 // @route   GET /api/research/funded-project/pending-hod
 // @access  Private (HOD)
 exports.getPendingAtHOD = async (req, res) => {
     try {
-        let deptIds = req.user.hodDepartments || [];
+        const deptIds = await getHODDepartments(req.user);
         
         const facultyIds = await Employee.find({ coreDepartment: { $in: deptIds } }).distinct('_id');
         
