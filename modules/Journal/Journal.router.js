@@ -38,6 +38,7 @@ router.post('/', protect, upload.fields([
 ]), journalController.createJournal);
 
 router.get('/', protect, journalController.getMyJournals);
+router.post('/wos-type', journalController.getClarivateJournalType);
 router.get('/:id', protect, journalController.getJournalById);
 
 // HOD: View pending and Action
