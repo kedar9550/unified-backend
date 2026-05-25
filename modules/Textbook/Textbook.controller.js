@@ -218,7 +218,12 @@ exports.getPendingAtHOD = async (req, res) => {
         const Employee = require('../employee/employee.model');
         const deptIds = await getHODDepartments(req.user);
         
-        const facultyIds = await Employee.find({ coreDepartment: { $in: deptIds } }).distinct('_id');
+        const facultyIds = await Employee.find({
+            $or: [
+                { coreDepartment: { $in: deptIds } },
+                { department: { $in: deptIds } }
+            ]
+        }).distinct('_id');
         
         const textbooks = await Textbook.find({ 
             facultyId: { $in: facultyIds },

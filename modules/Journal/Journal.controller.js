@@ -9,6 +9,25 @@ exports.createJournal = async (req, res) => {
         const data = req.body;
         
         // Validation
+        if (!data.doi || !data.doi.trim()) {
+            return res.status(400).json({ success: false, message: "DOI is mandatory." });
+        }
+
+        const cleanedDoi = data.doi.trim();
+
+        // Check if there is an active (Pending or Approved) submission with the same DOI
+        const existingActiveJournal = await Journal.findOne({
+            doi: cleanedDoi,
+            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+        });
+
+        if (existingActiveJournal) {
+            return res.status(400).json({ 
+                success: false, 
+                message: `This DOI (${cleanedDoi}) has already been submitted and is either pending review or approved. Duplicates are not allowed unless the previous submission was rejected.` 
+            });
+        }
+
         if (!req.files || !req.files.publishedPaper || !req.files.referencePages) {
             return res.status(400).json({ success: false, message: "All documents are mandatory." });
         }
@@ -37,10 +56,16 @@ exports.createJournal = async (req, res) => {
             parsedCoAuthors = data.coAuthors;
         }
 
+        let papersCited = 0;
+        if (data.referencingNos && data.referencingNos.trim()) {
+            papersCited = data.referencingNos.split(',').map(s => s.trim()).filter(Boolean).length;
+        }
+
         const journal = new Journal({
             ...data,
             facultyId: req.user.userId,
             coAuthors: parsedCoAuthors,
+            papersCited,
             status: 'Pending at HOD'
         });
 
@@ -57,18 +82,43 @@ exports.createJournal = async (req, res) => {
     }
 };
 
-// @desc    Get faculty's own journals
+// @desc    Get faculty's own journals and journals where they are a co-author
 // @route   GET /api/research/journal
 // @access  Private (Faculty)
 exports.getMyJournals = async (req, res) => {
     try {
-        const query = { facultyId: req.user.userId };
+        const user = await Employee.findById(req.user.userId);
+        
+        const escapeRegex = (string) => {
+            return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        };
+
+        const query = {
+            $or: [
+                { facultyId: req.user.userId },
+                ...(user && user.name ? [{ 'coAuthors.name': new RegExp(`^${escapeRegex(user.name.trim())}$`, 'i') }] : [])
+            ]
+        };
+
         const journals = await Journal.find(query)
             .populate('academicYear', 'year')
+            .populate('facultyId', 'name institutionId')
             .sort({ createdAt: -1 });
 
-        res.json({ success: true, data: journals });
+        // Add a visibilityRole to indicate if the user is Applicant or Co-Author
+        const journalsWithVisibility = journals.map(j => {
+            const jObj = j.toObject();
+            if (j.facultyId && j.facultyId._id.toString() !== req.user.userId.toString()) {
+                jObj.visibilityRole = "Co-Author";
+            } else {
+                jObj.visibilityRole = "Applicant";
+            }
+            return jObj;
+        });
+
+        res.json({ success: true, data: journalsWithVisibility });
     } catch (err) {
+        console.error("Get My Journals Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };
@@ -108,7 +158,12 @@ exports.getPendingAtHOD = async (req, res) => {
         const Employee = require('../employee/employee.model');
         const deptIds = await getHODDepartments(req.user);
         
-        const facultyIds = await Employee.find({ coreDepartment: { $in: deptIds } }).distinct('_id');
+        const facultyIds = await Employee.find({
+            $or: [
+                { coreDepartment: { $in: deptIds } },
+                { department: { $in: deptIds } }
+            ]
+        }).distinct('_id');
         
         const journals = await Journal.find({ 
             facultyId: { $in: facultyIds },
@@ -127,13 +182,18 @@ exports.getPendingAtHOD = async (req, res) => {
 exports.hodAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment } = req.body;
+        const { action, comment, hIndex, impactFactor } = req.body;
 
         const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
-        const journal = await Journal.findByIdAndUpdate(id, { 
+        const updates = { 
             status, 
             hodComment: comment 
-        }, { new: true });
+        };
+
+        if (hIndex !== undefined) updates.hIndex = hIndex;
+        if (impactFactor !== undefined) updates.impactFactor = impactFactor;
+
+        const journal = await Journal.findByIdAndUpdate(id, updates, { new: true });
 
         res.json({ success: true, data: journal });
     } catch (err) {

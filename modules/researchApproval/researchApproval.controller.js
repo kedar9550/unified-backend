@@ -44,8 +44,13 @@ exports.getResearchRequests = async (req, res) => {
                 return res.json({ success: true, data: [] });
             }
 
-            // Fetch faculty for these departments
-            const facultyDocs = await Employee.find({ coreDepartment: { $in: deptIds } }).select('_id name institutionId department coreDepartment profileImage');
+            // Fetch faculty for these departments (matching either coreDepartment or department)
+            const facultyDocs = await Employee.find({
+                $or: [
+                    { coreDepartment: { $in: deptIds } },
+                    { department: { $in: deptIds } }
+                ]
+            }).select('_id name institutionId department coreDepartment profileImage');
             facultyIds = facultyDocs.map(f => f._id);
             facultyMap = facultyDocs.reduce((acc, f) => {
                 acc[f._id.toString()] = f;
