@@ -24,6 +24,7 @@ const FundedProjectSchema = new mongoose.Schema({
     nonRecurring: { type: String },
     sanctionedAmount: { type: String, required: true },
     sanctionDate: { type: Date, required: true },
+    applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
     
     // Files
     sanctionOrder: { type: String, required: true },

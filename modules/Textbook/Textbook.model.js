@@ -103,10 +103,7 @@ const TextbookSchema = new mongoose.Schema({
         enum: ['Yes', 'No'],
         required: true
     },
-    expectedAmount: {
-        type: String,
-        default: "5,000"
-    },
+
     
     // Files
     coverPage: { type: String, required: true },

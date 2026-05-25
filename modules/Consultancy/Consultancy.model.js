@@ -20,6 +20,7 @@ const ConsultancySchema = new mongoose.Schema({
     duration: { type: String },
     month: { type: String },
     year: { type: String },
+    applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
     
     status: {
         type: String,

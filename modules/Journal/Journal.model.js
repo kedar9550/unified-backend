@@ -37,6 +37,8 @@ const JournalSchema = new mongoose.Schema({
     referencingNos: { type: String },
     papersCited: { type: Number },
     sdgs: { type: String },
+    applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
+    completeJournalName: { type: String },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
     
     // Files
