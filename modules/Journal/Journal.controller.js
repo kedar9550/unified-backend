@@ -172,6 +172,12 @@ exports.rndAction = async (req, res) => {
         if (approvedAmount !== undefined) {
             updates.approvedAmount = approvedAmount;
         }
+        if (req.body.hIndex !== undefined) {
+            updates.hIndex = req.body.hIndex;
+        }
+        if (req.body.impactFactor !== undefined) {
+            updates.impactFactor = req.body.impactFactor;
+        }
 
         const journal = await Journal.findByIdAndUpdate(id, updates, { new: true });
 
