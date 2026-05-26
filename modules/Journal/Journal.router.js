@@ -22,10 +22,10 @@ const upload = multer({
     storage: storage,
     limits: { fileSize: 1024 * 1024 }, // Set to 1MB, but we will validate for 500KB in controller
     fileFilter: (req, file, cb) => {
-        const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+        const allowed = ['.pdf', '.jpg', '.jpeg', '.png', '.docx'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowed.includes(ext)) return cb(null, true);
-        cb(new Error('Only PDF and image files are allowed. Max size 500KB.'));
+        cb(new Error('Only PDF, DOCX and image files are allowed. Max size 500KB.'));
     }
 });
 
@@ -34,7 +34,8 @@ const upload = multer({
 // Faculty: Submit and View own
 router.post('/', protect, upload.fields([
     { name: 'publishedPaper', maxCount: 1 },
-    { name: 'referencePages', maxCount: 1 }
+    { name: 'referencePages', maxCount: 1 },
+    { name: 'completeJournal', maxCount: 1 }
 ]), journalController.createJournal);
 
 router.get('/', protect, journalController.getMyJournals);

@@ -20,7 +20,7 @@ const JournalSchema = new mongoose.Schema({
     panNumber: { type: String },
     doi: { type: String, required: true, trim: true },
     
-    incentiveApplied: { type: String, required: true },
+    publicationScope: { type: String, required: true },
     totalAuthors: { type: Number, required: true },
     userAuthorPosition: { type: Number, required: true },
     journalQuartile: { type: String, required: true },
@@ -34,8 +34,8 @@ const JournalSchema = new mongoose.Schema({
     publishedYear: { type: String, required: true },
     hIndex: { type: String },
     impactFactor: { type: String },
-    referencingNos: { type: String },
-    papersCited: { type: Number },
+    agecReferencingNumbers: { type: String },
+    numberOfReferencesBelongingToAGEC: { type: Number },
     sdgs: { type: String },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
     completeJournalName: { type: String },
@@ -44,6 +44,7 @@ const JournalSchema = new mongoose.Schema({
     // Files
     publishedPaper: { type: String, required: true },
     referencePages: { type: String, required: true },
+    completeJournal: { type: String },
     
     status: {
         type: String,

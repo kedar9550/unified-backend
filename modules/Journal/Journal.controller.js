@@ -28,12 +28,21 @@ exports.createJournal = async (req, res) => {
             });
         }
 
-        if (!req.files || !req.files.publishedPaper || !req.files.referencePages) {
+        if (!req.files || !req.files.publishedPaper || !req.files.referencePages || !req.files.completeJournal) {
             return res.status(400).json({ success: false, message: "All documents are mandatory." });
         }
 
+        // Validate completeJournal type strictly to PDF or DOCX (no images allowed)
+        if (req.files.completeJournal) {
+            const path = require('path');
+            const ext = path.extname(req.files.completeJournal[0].originalname).toLowerCase();
+            if (ext !== '.pdf' && ext !== '.docx') {
+                return res.status(400).json({ success: false, message: "Complete Journal must be a PDF or DOCX file." });
+            }
+        }
+
         // Check file sizes individually (500KB limit as per standard)
-        const filesToCheck = ['publishedPaper', 'referencePages'];
+        const filesToCheck = ['publishedPaper', 'referencePages', 'completeJournal'];
         for (const field of filesToCheck) {
             if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
@@ -56,22 +65,26 @@ exports.createJournal = async (req, res) => {
             parsedCoAuthors = data.coAuthors;
         }
 
-        let papersCited = 0;
-        if (data.referencingNos && data.referencingNos.trim()) {
-            papersCited = data.referencingNos.split(',').map(s => s.trim()).filter(Boolean).length;
+        let numberOfReferencesBelongingToAGEC = 0;
+        if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
+            if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
+                return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
+            }
+            numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
         }
 
         const journal = new Journal({
             ...data,
             facultyId: req.user.userId,
             coAuthors: parsedCoAuthors,
-            papersCited,
+            numberOfReferencesBelongingToAGEC,
             status: 'Pending at HOD'
         });
 
         if (req.files) {
             if (req.files.publishedPaper) journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
             if (req.files.referencePages) journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            if (req.files.completeJournal) journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
         }
 
         await journal.save();
