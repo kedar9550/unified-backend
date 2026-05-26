@@ -9,8 +9,8 @@ exports.createBookChapter = async (req, res) => {
         const data = req.body;
         
         // Validation
-        if (!req.files || !req.files.coverPage || !req.files.authorAffiliation || !req.files.index || !req.files.softCopy) {
-            return res.status(400).json({ success: false, message: "All documents are mandatory." });
+        if (!req.files || !req.files.authorAffiliation) {
+            return res.status(400).json({ success: false, message: "Page displaying author affiliation and chapter title is mandatory." });
         }
 
         // Check file sizes individually to provide specific error messages

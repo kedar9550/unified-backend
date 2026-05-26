@@ -21,7 +21,6 @@ const BookChapterSchema = new mongoose.Schema({
     
     textBookName: { type: String, required: true },
     chapterTitle: { type: String, required: true },
-    isbn: { type: String, required: true },
     yearOfPublication: { type: String, required: true },
     firstAuthor: { type: String, enum: ['Yes', 'No'], required: true },
     authorPosition: { type: String },
@@ -33,10 +32,10 @@ const BookChapterSchema = new mongoose.Schema({
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
     
     // Files
-    coverPage: { type: String, required: true },
+    coverPage: { type: String },
     authorAffiliation: { type: String, required: true },
-    index: { type: String, required: true },
-    softCopy: { type: String, required: true },
+    index: { type: String },
+    softCopy: { type: String },
     
     status: {
         type: String,
