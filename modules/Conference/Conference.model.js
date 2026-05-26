@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+const CoAuthorSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    affiliation: { type: String, required: true }
+}, { _id: false });
+
 const ConferenceSchema = new mongoose.Schema({
     facultyId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -25,6 +30,14 @@ const ConferenceSchema = new mongoose.Schema({
     indexing: { type: String },
     presentationType: { type: String, enum: ['Oral', 'Poster', 'Keynote'] },
     firstAuthor: { type: String, enum: ['Yes', 'No'] },
+    totalAuthors: { type: Number },
+    userAuthorPosition: { type: Number },
+    coAuthors: [CoAuthorSchema],
+    
+    applyIncentive: { type: String, enum: ['Yes', 'No'] },
+    applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
+    college: { type: String },
+    panNumber: { type: String },
     
     // Files
     certificate: { type: String },

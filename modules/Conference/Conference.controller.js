@@ -12,9 +12,29 @@ exports.createConference = async (req, res) => {
         const certificate = files.certificate ? `/uploads/conferences/${files.certificate[0].filename}` : null;
         const proceedings = files.proceedings ? `/uploads/conferences/${files.proceedings[0].filename}` : null;
 
+        // Parse co-authors
+        let parsedCoAuthors = [];
+        if (typeof data.coAuthors === 'string') {
+            try {
+                parsedCoAuthors = JSON.parse(data.coAuthors);
+            } catch (e) {
+                parsedCoAuthors = [];
+            }
+        } else if (Array.isArray(data.coAuthors)) {
+            parsedCoAuthors = data.coAuthors;
+        }
+
+        const userAuthorPos = parseInt(data.userAuthorPosition) || 1;
+        const totalAuths = parseInt(data.totalAuthors) || 1;
+        const calculatedFirstAuthor = userAuthorPos === 1 ? "Yes" : "No";
+
         const conference = new Conference({
             ...data,
             facultyId: req.user.userId,
+            firstAuthor: calculatedFirstAuthor,
+            userAuthorPosition: userAuthorPos,
+            totalAuthors: totalAuths,
+            coAuthors: parsedCoAuthors,
             certificate,
             proceedings,
             status: 'Pending at HOD'
@@ -28,18 +48,43 @@ exports.createConference = async (req, res) => {
     }
 };
 
-// @desc    Get faculty's own conference publications
+// @desc    Get faculty's own conference publications and publications where they are a co-author
 // @route   GET /api/research/conference
 // @access  Private (Faculty)
 exports.getMyConferences = async (req, res) => {
     try {
-        const query = { facultyId: req.user.userId };
+        const user = await Employee.findById(req.user.userId);
+        
+        const escapeRegex = (string) => {
+            return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        };
+
+        const query = {
+            $or: [
+                { facultyId: req.user.userId },
+                ...(user && user.name ? [{ 'coAuthors.name': new RegExp(`^${escapeRegex(user.name.trim())}$`, 'i') }] : [])
+            ]
+        };
+
         const conferences = await Conference.find(query)
             .populate('academicYear', 'year')
+            .populate('facultyId', 'name institutionId')
             .sort({ createdAt: -1 });
 
-        res.json({ success: true, data: conferences });
+        // Add a visibilityRole to indicate if the user is Applicant or Co-Author
+        const conferencesWithVisibility = conferences.map(c => {
+            const cObj = c.toObject();
+            if (c.facultyId && c.facultyId._id.toString() !== req.user.userId.toString()) {
+                cObj.visibilityRole = "Co-Author";
+            } else {
+                cObj.visibilityRole = "Applicant";
+            }
+            return cObj;
+        });
+
+        res.json({ success: true, data: conferencesWithVisibility });
     } catch (err) {
+        console.error("Get My Conferences Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };
