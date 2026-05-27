@@ -21,6 +21,7 @@ const PatentSchema = new mongoose.Schema({
     
     title: { type: String, required: true },
     applicantName: { type: String, required: true },
+    patentName: { type: String, required: true },
     area: { type: String, required: true },
     filingNo: { type: String, required: true },
     dateOfFiling: { type: Date, required: true },
