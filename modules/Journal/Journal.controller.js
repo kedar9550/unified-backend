@@ -1,5 +1,7 @@
 const Journal = require('./Journal.model');
 const Employee = require('../employee/employee.model');
+const escapeRegex = require('../../utils/escapeRegex');
+const { isFutureYearMonth } = require('../../utils/validationHelper');
 
 // @desc    Submit new journal publication
 // @route   POST /api/research/journal
@@ -12,20 +14,34 @@ exports.createJournal = async (req, res) => {
         if (!data.doi || !data.doi.trim()) {
             return res.status(400).json({ success: false, message: "DOI is mandatory." });
         }
+        if (!data.paperTitle || !data.paperTitle.trim()) {
+            return res.status(400).json({ success: false, message: "Paper Title is mandatory." });
+        }
 
         const cleanedDoi = data.doi.trim();
+        const trimmedTitle = data.paperTitle.trim();
 
-        // Check if there is an active (Pending or Approved) submission with the same DOI
+        // Check if there is an active (Pending or Approved) submission with the same DOI or Title
         const existingActiveJournal = await Journal.findOne({
-            doi: cleanedDoi,
+            $or: [
+                { doi: cleanedDoi },
+                { paperTitle: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i') }
+            ],
             status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
         });
 
         if (existingActiveJournal) {
             return res.status(400).json({ 
                 success: false, 
-                message: `This DOI (${cleanedDoi}) has already been submitted and is either pending review or approved. Duplicates are not allowed unless the previous submission was rejected.` 
+                message: `A journal submission with this DOI (${cleanedDoi}) or Paper Title already exists and is either Pending or Approved. Duplicates are not allowed unless the previous submission was rejected.` 
             });
+        }
+
+        // Date Validation (Not future)
+        if (data.publishedYear && data.publishedMonth) {
+            if (isFutureYearMonth(data.publishedYear, data.publishedMonth)) {
+                return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+            }
         }
 
         if (!req.files || !req.files.publishedPaper || !req.files.referencePages || !req.files.completeJournal) {

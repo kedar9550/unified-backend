@@ -1,5 +1,7 @@
 const FundedProject = require('./FundedProject.model');
 const Employee = require('../employee/employee.model');
+const escapeRegex = require('../../utils/escapeRegex');
+const { isFutureDate } = require('../../utils/validationHelper');
 
 // @desc    Submit new funded project
 // @route   POST /api/research/funded-project
@@ -8,7 +10,12 @@ exports.createProject = async (req, res) => {
     try {
         const data = req.body;
         
-        // Validation
+        // 1. Mandatory Fields Validation
+        if (!data.title || !data.fundingAgency || !data.sanctionedAmount || !data.sanctionDate || !data.applyingSeedGrant) {
+            return res.status(400).json({ success: false, message: "Please fill all required fields." });
+        }
+
+        // Validation for file
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Sanction Order is mandatory." });
         }
@@ -21,8 +28,56 @@ exports.createProject = async (req, res) => {
             });
         }
 
+        const trimmedTitle = data.title.trim();
+
+        // 2. Duplicate Validation
+        const existingRecord = await FundedProject.findOne({
+            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+        });
+
+        if (existingRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "A funded project entry with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+            });
+        }
+
+        // 3. Numeric Fields Validation
+        if (data.duration) {
+            const numDuration = Number(data.duration);
+            if (isNaN(numDuration) || numDuration <= 0) {
+                return res.status(400).json({ success: false, message: "Duration of Project in Years must be a positive numeric value." });
+            }
+        }
+
+        if (data.recurring) {
+            const numRecurring = Number(data.recurring);
+            if (isNaN(numRecurring) || numRecurring < 0) {
+                return res.status(400).json({ success: false, message: "Recurring amount must be a valid positive numeric value." });
+            }
+        }
+
+        if (data.nonRecurring) {
+            const numNonRecurring = Number(data.nonRecurring);
+            if (isNaN(numNonRecurring) || numNonRecurring < 0) {
+                return res.status(400).json({ success: false, message: "Non-Recurring amount must be a valid positive numeric value." });
+            }
+        }
+
+        const numSanctioned = Number(data.sanctionedAmount);
+        if (isNaN(numSanctioned) || numSanctioned <= 0) {
+            return res.status(400).json({ success: false, message: "Sanctioned Amount must be a positive numeric value." });
+        }
+
+        // 4. Date Validation (Not future)
+        if (isFutureDate(data.sanctionDate)) {
+            return res.status(400).json({ success: false, message: "Sanction Date cannot be in the future." });
+        }
+
         const project = new FundedProject({
             ...data,
+            title: trimmedTitle,
             facultyId: req.user.userId,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
             status: 'Pending at HOD'
@@ -36,17 +91,36 @@ exports.createProject = async (req, res) => {
     }
 };
 
-// @desc    Get faculty's own projects
+// @desc    Get faculty's own projects and projects where they are a co-investigator
 // @route   GET /api/research/funded-project
 // @access  Private (Faculty)
 exports.getMyProjects = async (req, res) => {
     try {
-        const query = { facultyId: req.user.userId };
+        const user = await Employee.findById(req.user.userId);
+        
+        const query = {
+            $or: [
+                { facultyId: req.user.userId },
+                ...(user && user.name ? [{ 'otherInvestigators': new RegExp(escapeRegex(user.name.trim()), 'i') }] : [])
+            ]
+        };
+
         const projects = await FundedProject.find(query)
             .populate('academicYear', 'year')
+            .populate('facultyId', 'name institutionId')
             .sort({ createdAt: -1 });
 
-        res.json({ success: true, data: projects });
+        const projectsWithVisibility = projects.map(p => {
+            const pObj = p.toObject();
+            if (p.facultyId && p.facultyId._id.toString() !== req.user.userId.toString()) {
+                pObj.visibilityRole = "Co-Investigator";
+            } else {
+                pObj.visibilityRole = "Applicant";
+            }
+            return pObj;
+        });
+
+        res.json({ success: true, data: projectsWithVisibility });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

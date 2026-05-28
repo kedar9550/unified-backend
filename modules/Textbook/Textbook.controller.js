@@ -3,6 +3,7 @@ const Edition = require('./Edition.model');
 const Employee = require('../employee/employee.model');
 const axios = require('axios');
 const escapeRegex = require('../../utils/escapeRegex');
+const { isFutureYearMonth } = require('../../utils/validationHelper');
 
 // @desc    Submit new textbook publication
 // @route   POST /api/research/textbook
@@ -13,10 +14,23 @@ exports.createTextbook = async (req, res) => {
         
         // Trim and normalize ISBN
         if (data.isbn) data.isbn = data.isbn.trim().replace(/-/g, '');
-
-        // 1. Duplicate Validation (ISBN or Title)
+        
+        // 1. Mandatory & Future Year/Month Validation
         if (!data.isbn || !data.title) {
             return res.status(400).json({ success: false, message: "ISBN and Title are required." });
+        }
+
+        if (data.year && data.month) {
+            if (isFutureYearMonth(data.year, data.month)) {
+                return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+            }
+        }
+
+        if (data.cost) {
+            const numCost = Number(data.cost);
+            if (isNaN(numCost) || numCost < 0) {
+                return res.status(400).json({ success: false, message: "Cost must be a valid positive numeric value." });
+            }
         }
 
         // 2. Mandatory Documents Validation

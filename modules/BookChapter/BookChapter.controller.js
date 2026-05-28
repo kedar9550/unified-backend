@@ -1,5 +1,7 @@
 const BookChapter = require('./BookChapter.model');
 const Employee = require('../employee/employee.model');
+const escapeRegex = require('../../utils/escapeRegex');
+const { isFutureYearMonth } = require('../../utils/validationHelper');
 
 // @desc    Submit new book chapter publication
 // @route   POST /api/research/book-chapter
@@ -8,6 +10,11 @@ exports.createBookChapter = async (req, res) => {
     try {
         const data = req.body;
         
+        // 1. Mandatory Fields Validation
+        if (!data.chapterTitle || !data.textBookName || !data.publisher || !data.year || !data.month) {
+            return res.status(400).json({ success: false, message: "Please fill all required fields." });
+        }
+
         // Validation
         if (!req.files || !req.files.authorAffiliation) {
             return res.status(400).json({ success: false, message: "Page displaying author affiliation and chapter title is mandatory." });
@@ -25,6 +32,26 @@ exports.createBookChapter = async (req, res) => {
             }
         }
 
+        const trimmedChapterTitle = data.chapterTitle.trim();
+
+        // 2. Duplicate Validation
+        const existingRecord = await BookChapter.findOne({
+            chapterTitle: new RegExp(`^${escapeRegex(trimmedChapterTitle)}$`, 'i'),
+            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+        });
+
+        if (existingRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "A book chapter with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+            });
+        }
+
+        // 3. Date Validation (Not future)
+        if (isFutureYearMonth(data.year, data.month)) {
+            return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+        }
+
         // Parse co-authors if it's a string
         let parsedCoAuthors = [];
         if (typeof data.coAuthors === 'string') {
@@ -39,6 +66,7 @@ exports.createBookChapter = async (req, res) => {
 
         const bookChapter = new BookChapter({
             ...data,
+            chapterTitle: trimmedChapterTitle,
             facultyId: req.user.userId,
             coAuthors: parsedCoAuthors,
             status: 'Pending at HOD'
@@ -59,17 +87,36 @@ exports.createBookChapter = async (req, res) => {
     }
 };
 
-// @desc    Get faculty's own book chapters
+// @desc    Get faculty's own book chapters and chapters where they are a co-author
 // @route   GET /api/research/book-chapter
 // @access  Private (Faculty)
 exports.getMyBookChapters = async (req, res) => {
     try {
-        const query = { facultyId: req.user.userId };
+        const user = await Employee.findById(req.user.userId);
+        
+        const query = {
+            $or: [
+                { facultyId: req.user.userId },
+                ...(user && user.name ? [{ 'coAuthors.name': new RegExp(`^${escapeRegex(user.name.trim())}$`, 'i') }] : [])
+            ]
+        };
+
         const bookChapters = await BookChapter.find(query)
             .populate('academicYear', 'year')
+            .populate('facultyId', 'name institutionId')
             .sort({ createdAt: -1 });
 
-        res.json({ success: true, data: bookChapters });
+        const chaptersWithVisibility = bookChapters.map(c => {
+            const cObj = c.toObject();
+            if (c.facultyId && c.facultyId._id.toString() !== req.user.userId.toString()) {
+                cObj.visibilityRole = "Co-Author";
+            } else {
+                cObj.visibilityRole = "Applicant";
+            }
+            return cObj;
+        });
+
+        res.json({ success: true, data: chaptersWithVisibility });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

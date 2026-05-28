@@ -1,5 +1,7 @@
 const Conference = require('./Conference.model');
 const Employee = require('../employee/employee.model');
+const escapeRegex = require('../../utils/escapeRegex');
+const { isFutureYearMonth } = require('../../utils/validationHelper');
 
 // @desc    Submit new conference publication
 // @route   POST /api/research/conference
@@ -8,6 +10,33 @@ exports.createConference = async (req, res) => {
     try {
         const data = req.body;
         
+        // 1. Mandatory Fields Validation
+        if (!data.title || !data.conferenceName || !data.level || !data.indexing || !data.applyingSeedGrant || !data.applyIncentive) {
+            return res.status(400).json({ success: false, message: "Please fill all required fields." });
+        }
+
+        const trimmedTitle = data.title.trim();
+
+        // 2. Duplicate Validation
+        const existingRecord = await Conference.findOne({
+            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+        });
+
+        if (existingRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "A conference paper entry with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+            });
+        }
+
+        // 3. Date Validation (Not future)
+        if (data.year && data.month) {
+            if (isFutureYearMonth(data.year, data.month)) {
+                return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+            }
+        }
+
         const files = req.files || {};
         const certificate = files.certificate ? `/uploads/conferences/${files.certificate[0].filename}` : null;
         const proceedings = files.proceedings ? `/uploads/conferences/${files.proceedings[0].filename}` : null;
@@ -30,6 +59,7 @@ exports.createConference = async (req, res) => {
 
         const conference = new Conference({
             ...data,
+            title: trimmedTitle,
             facultyId: req.user.userId,
             firstAuthor: calculatedFirstAuthor,
             userAuthorPosition: userAuthorPos,

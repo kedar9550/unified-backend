@@ -1,5 +1,7 @@
 const Patent = require('./Patent.model');
 const Employee = require('../employee/employee.model');
+const escapeRegex = require('../../utils/escapeRegex');
+const { isFutureDate } = require('../../utils/validationHelper');
 
 // @desc    Submit new patent publication
 // @route   POST /api/research/patent
@@ -8,7 +10,12 @@ exports.createPatent = async (req, res) => {
     try {
         const data = req.body;
         
-        // Validation
+        // 1. Mandatory Fields Validation
+        if (!data.title || !data.patentName || !data.applyingSeedGrant || !data.dateOfFiling || !data.filingNo) {
+            return res.status(400).json({ success: false, message: "Please fill all required fields." });
+        }
+
+        // Validation for documents
         if (!req.files || !req.files.eFilingReceipt || !req.files.form1) {
             return res.status(400).json({ success: false, message: "All documents are mandatory." });
         }
@@ -25,6 +32,26 @@ exports.createPatent = async (req, res) => {
             }
         }
 
+        const trimmedTitle = data.title.trim();
+
+        // 2. Duplicate Validation
+        const existingRecord = await Patent.findOne({
+            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+        });
+
+        if (existingRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "A patent entry with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+            });
+        }
+
+        // 3. Date Validation (Not future)
+        if (isFutureDate(data.dateOfFiling)) {
+            return res.status(400).json({ success: false, message: "Date of Filing cannot be in the future." });
+        }
+
         // Parse co-inventors
         let parsedCoInventors = [];
         if (typeof data.coInventors === 'string') {
@@ -39,6 +66,7 @@ exports.createPatent = async (req, res) => {
 
         const patent = new Patent({
             ...data,
+            title: trimmedTitle,
             facultyId: req.user.userId,
             coInventors: parsedCoInventors,
             patentStatus: data.status, // Map 'status' from frontend to 'patentStatus' in model
@@ -58,17 +86,36 @@ exports.createPatent = async (req, res) => {
     }
 };
 
-// @desc    Get faculty's own patents
+// @desc    Get faculty's own patents and patents where they are a co-inventor
 // @route   GET /api/research/patent
 // @access  Private (Faculty)
 exports.getMyPatents = async (req, res) => {
     try {
-        const query = { facultyId: req.user.userId };
+        const user = await Employee.findById(req.user.userId);
+        
+        const query = {
+            $or: [
+                { facultyId: req.user.userId },
+                ...(user && user.name ? [{ 'coInventors.name': new RegExp(`^${escapeRegex(user.name.trim())}$`, 'i') }] : [])
+            ]
+        };
+
         const patents = await Patent.find(query)
             .populate('academicYear', 'year')
+            .populate('facultyId', 'name institutionId')
             .sort({ createdAt: -1 });
 
-        res.json({ success: true, data: patents });
+        const patentsWithVisibility = patents.map(p => {
+            const pObj = p.toObject();
+            if (p.facultyId && p.facultyId._id.toString() !== req.user.userId.toString()) {
+                pObj.visibilityRole = "Co-Inventor";
+            } else {
+                pObj.visibilityRole = "Applicant";
+            }
+            return pObj;
+        });
+
+        res.json({ success: true, data: patentsWithVisibility });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

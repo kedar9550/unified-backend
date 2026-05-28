@@ -1,5 +1,7 @@
 const Consultancy = require('./Consultancy.model');
 const Employee = require('../employee/employee.model');
+const escapeRegex = require('../../utils/escapeRegex');
+const { isFutureYearMonth } = require('../../utils/validationHelper');
 
 // @desc    Submit new consultancy work
 // @route   POST /api/research/consultancy
@@ -8,8 +10,49 @@ exports.createConsultancy = async (req, res) => {
     try {
         const data = req.body;
         
+        // 1. Mandatory Fields Validation
+        if (!data.title || !data.organization || !data.amount || !data.applyingSeedGrant) {
+            return res.status(400).json({ success: false, message: "Please fill all required fields." });
+        }
+
+        const trimmedTitle = data.title.trim();
+
+        // 2. Duplicate Validation
+        const existingRecord = await Consultancy.findOne({
+            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+        });
+
+        if (existingRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "A consultancy entry with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+            });
+        }
+
+        // 3. Numeric Fields Validation
+        const numAmount = Number(data.amount);
+        if (isNaN(numAmount) || numAmount <= 0) {
+            return res.status(400).json({ success: false, message: "Consultancy Amount must be a positive numeric value." });
+        }
+
+        if (data.duration) {
+            const numDuration = Number(data.duration);
+            if (isNaN(numDuration) || numDuration <= 0) {
+                return res.status(400).json({ success: false, message: "Duration must be a positive numeric value." });
+            }
+        }
+
+        // 4. Date Validation
+        if (data.year && data.month) {
+            if (isFutureYearMonth(data.year, data.month)) {
+                return res.status(400).json({ success: false, message: "Commencement date cannot be in the future." });
+            }
+        }
+        
         const consultancy = new Consultancy({
             ...data,
+            title: trimmedTitle,
             facultyId: req.user.userId,
             status: 'Pending at HOD'
         });
@@ -30,9 +73,16 @@ exports.getMyConsultancies = async (req, res) => {
         const query = { facultyId: req.user.userId };
         const consultancies = await Consultancy.find(query)
             .populate('academicYear', 'year')
+            .populate('facultyId', 'name institutionId')
             .sort({ createdAt: -1 });
 
-        res.json({ success: true, data: consultancies });
+        const consultanciesWithVisibility = consultancies.map(c => {
+            const cObj = c.toObject();
+            cObj.visibilityRole = "Applicant";
+            return cObj;
+        });
+
+        res.json({ success: true, data: consultanciesWithVisibility });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
