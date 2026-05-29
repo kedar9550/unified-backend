@@ -22,8 +22,7 @@ const branchSchema = new mongoose.Schema({
         type: String,
         required: true,
         uppercase: true,
-        trim: true,
-        unique: true
+        trim: true
     },
     status: {
         type: Boolean,
@@ -32,8 +31,10 @@ const branchSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Enforce unique combination of programId and code is no longer needed since code is globally unique 
-// (or enforce combination if code repeats across programs, but usually it doesn't).
-// We set unique: true on code above.
+// Enforce unique combination of programId, departmentId, and code
+branchSchema.index({ programId: 1, departmentId: 1, code: 1 }, { unique: true });
+
+// Enforce unique combination of programId, departmentId, and name
+branchSchema.index({ programId: 1, departmentId: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Branch', branchSchema);

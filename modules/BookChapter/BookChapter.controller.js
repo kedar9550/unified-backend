@@ -9,7 +9,7 @@ const { isFutureYearMonth } = require('../../utils/validationHelper');
 exports.createBookChapter = async (req, res) => {
     try {
         const data = req.body;
-        
+
         // 1. Mandatory Fields Validation
         if (!data.chapterTitle || !data.textBookName || !data.publisher || !data.year || !data.month) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
@@ -25,9 +25,9 @@ exports.createBookChapter = async (req, res) => {
         for (const field of filesToCheck) {
             if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                return res.status(400).json({ 
-                    success: false, 
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.` 
+                return res.status(400).json({
+                    success: false,
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
             }
         }
@@ -41,9 +41,9 @@ exports.createBookChapter = async (req, res) => {
         });
 
         if (existingRecord) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "A book chapter with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+            return res.status(400).json({
+                success: false,
+                message: "A book chapter with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed."
             });
         }
 
@@ -93,7 +93,7 @@ exports.createBookChapter = async (req, res) => {
 exports.getMyBookChapters = async (req, res) => {
     try {
         const user = await Employee.findById(req.user.userId);
-        
+
         const query = {
             $or: [
                 { facultyId: req.user.userId },
@@ -137,7 +137,7 @@ exports.getBookChapterById = async (req, res) => {
                 ]
             })
             .populate('academicYear', 'year');
-            
+
         if (!bookChapter) {
             return res.status(404).json({ success: false, message: 'Book Chapter not found' });
         }
@@ -156,19 +156,19 @@ exports.getPendingAtHOD = async (req, res) => {
     try {
         const Employee = require('../employee/employee.model');
         const deptIds = await getHODDepartments(req.user);
-        
+
         const facultyIds = await Employee.find({
             $or: [
                 { coreDepartment: { $in: deptIds } },
                 { department: { $in: deptIds } }
             ]
         }).distinct('_id');
-        
-        const chapters = await BookChapter.find({ 
+
+        const chapters = await BookChapter.find({
             facultyId: { $in: facultyIds },
             status: 'Pending at HOD'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
-        
+
         res.json({ success: true, data: chapters });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -184,9 +184,9 @@ exports.hodAction = async (req, res) => {
         const { action, comment } = req.body;
 
         const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
-        const chapter = await BookChapter.findByIdAndUpdate(id, { 
-            status, 
-            hodComment: comment 
+        const chapter = await BookChapter.findByIdAndUpdate(id, {
+            status,
+            hodComment: comment
         }, { new: true });
 
         res.json({ success: true, data: chapter });
@@ -218,11 +218,11 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = { 
-            status, 
-            rndComment: comment 
+        const updates = {
+            status,
+            rndComment: comment
         };
-        
+
         if (approvedAmount !== undefined) {
             updates.approvedAmount = approvedAmount;
         }

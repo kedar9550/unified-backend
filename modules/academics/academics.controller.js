@@ -269,7 +269,17 @@ exports.createBranch = async (req, res, next) => {
         res.status(201).json({ success: true, data: savedBranch });
     } catch (error) {
         if (error.code === 11000) {
-            return res.status(400).json({ success: false, message: 'Branch code already exists for this program.' });
+            const keys = Object.keys(error.keyPattern || {});
+            let field = 'name or code';
+            if (keys.includes('code')) {
+                field = 'code';
+            } else if (keys.includes('name')) {
+                field = 'name';
+            }
+            return res.status(400).json({ 
+                success: false, 
+                message: `Branch with this ${field} already exists for this program and department.` 
+            });
         }
         res.status(500).json({ success: false, message: error.message });
     }
@@ -310,6 +320,19 @@ exports.updateBranch = async (req, res, next) => {
         }
         res.status(200).json({ success: true, data: branch });
     } catch (error) {
+        if (error.code === 11000) {
+            const keys = Object.keys(error.keyPattern || {});
+            let field = 'name or code';
+            if (keys.includes('code')) {
+                field = 'code';
+            } else if (keys.includes('name')) {
+                field = 'name';
+            }
+            return res.status(400).json({ 
+                success: false, 
+                message: `Branch with this ${field} already exists for this program and department.` 
+            });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };
