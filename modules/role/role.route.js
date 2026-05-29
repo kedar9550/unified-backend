@@ -27,6 +27,9 @@ router.route('/:id')
 router.route('/:id/users')
     .get(getRoleEmployees);
 
+router.route('/:id/users/:userId')
+    .delete(removeEmployeeFromRole);
+
 router.route('/reconcile-all')
     .post(reconcileAllEmployeeRoles);
 
