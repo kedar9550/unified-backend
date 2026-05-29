@@ -342,11 +342,11 @@ const bulkRegisterUser = async (req, res) => {
 
         for await (const row of stream) {
             try {
-                const institutionId = row.institutionId?.trim();
-                const email = row.email?.trim();
+                const institutionId = (row.institutionId || row.id || row.institution || row.institutionID)?.trim();
+                const email = (row.email || row.Email || row.EmailAddress || row['email address'])?.trim();
 
                 if (!institutionId) {
-                    errors.push({ id: "Unknown", error: "Missing institutionId in CSV" });
+                    errors.push({ id: "Unknown", error: "Missing institutionId or id in CSV" });
                     continue;
                 }
 
