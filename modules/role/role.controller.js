@@ -158,6 +158,19 @@ exports.removeEmployeeFromRole = async (req, res, next) => {
         const { id, userId } = req.params;
         const app = process.env.APP_NAME || 'UNIFIED_SYSTEM';
 
+        // Enforce that a default identity-based role cannot be removed
+        const role = await Role.findById(id);
+        const user = await Employee.findById(userId);
+        if (role && user) {
+            const identityRoleName = getIdentityBasedRoleName(user.userType, user.designation);
+            if (role.defaultRole || role.name === identityRoleName) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cannot remove a default identity-based role'
+                });
+            }
+        }
+
         const mapping = await EmployeeAppRole.findOneAndDelete({ userId, role: id, app });
 
         if (!mapping) {
@@ -214,29 +227,31 @@ exports.syncEmployeeRoles = async (req, res, next) => {
         const user = await Employee.findById(userId);
         if (!user) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-        // 2. Identify default roles and HOD in the provided selection
-        const selectedRoles = await Role.find({ _id: { $in: roleIds } });
+        // Get the expected identity-based default role
+        const identityRoleName = getIdentityBasedRoleName(user.userType, user.designation);
+        let idRole = await Role.findOne({ name: identityRoleName, app });
+        if (!idRole) {
+            idRole = await Role.create({ name: identityRoleName, app, defaultRole: true, description: `System Role` });
+        }
+
+        // Ensure the identity-based default role is present in finalRoleIds
+        let finalRoleIds = [...roleIds];
+        if (!finalRoleIds.includes(idRole._id.toString())) {
+            finalRoleIds.push(idRole._id.toString());
+        }
+
+        // 2. Identify default roles and HOD in the final selection
+        const selectedRoles = await Role.find({ _id: { $in: finalRoleIds } });
         const selectedDefaultRoles = selectedRoles.filter(r => r.defaultRole);
         const hodRole = selectedRoles.find(r => r.name === 'HOD');
 
-        // 3. Enforcement: Exactly one default role
-        let finalRoleIds = [...roleIds];
-        
-        if (selectedDefaultRoles.length > 1) {
+        // 3. Enforcement: Exactly one default role (which must be the identity one)
+        const otherDefaultRoles = selectedDefaultRoles.filter(r => r._id.toString() !== idRole._id.toString());
+        if (otherDefaultRoles.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Employee can only have one default role. Found: ${selectedDefaultRoles.map(r => r.name).join(', ')}`
+                message: `Employee's default identity role is ${identityRoleName}. Other default roles (${otherDefaultRoles.map(r => r.name).join(', ')}) cannot be assigned.`
             });
-        }
-
-        if (selectedDefaultRoles.length === 0) {
-            const identityRoleName = getIdentityBasedRoleName(user.userType, user.designation);
-            let idRole = await Role.findOne({ name: identityRoleName, app });
-            
-            if (!idRole) {
-                idRole = await Role.create({ name: identityRoleName, app, defaultRole: true, description: `System Role` });
-            }
-            finalRoleIds.push(idRole._id.toString());
         }
 
         // 4. Update mappings
