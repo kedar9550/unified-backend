@@ -104,6 +104,10 @@ exports.getAllDepartments = async (req, res, next) => {
             query.status = true; // Default to active only as per requirement
         }
 
+        if (req.query.type) {
+            query.type = req.query.type;
+        }
+
         if (req.query.programId) {
             // Find all branches for this program
             const branches = await Branch.find({ programId: req.query.programId }).select('departmentId');
