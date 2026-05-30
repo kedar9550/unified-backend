@@ -22,6 +22,7 @@ const uploadCSV = async (req, res) => {
         const requiredHeaders = [
             "facultyid",
             "academicyear",
+            "program",
             "branch",
             "subjectname",
             "subjectcode",
@@ -53,6 +54,7 @@ const uploadCSV = async (req, res) => {
             const {
                 facultyid,
                 academicyear,
+                program: programName,
                 branch: branchName,
                 subjectname,
                 subjectcode,
@@ -90,19 +92,34 @@ const uploadCSV = async (req, res) => {
                 if (isNaN(overallPerc)) throw new Error(`Invalid overallPercentage: ${overallpercentage}`);
                 if (isNaN(phs) || (phs !== 1 && phs !== 2)) throw new Error(`Invalid phase '${phase}' (must be 1 or 2)`);
 
-                // Resolve Branch & Infer Program
-                let branchDoc = branchCache[branchName];
+                // Resolve Program
+                let programDoc = programCache[programName];
+                if (!programDoc) {
+                    const escapedProgramName = escapeRegex(programName.trim());
+                    programDoc = await Program.findOne({
+                        $or: [
+                            { code: programName.toUpperCase().trim() },
+                            { name: { $regex: new RegExp(`^${escapedProgramName}$`, "i") } }
+                        ]
+                    });
+                    if (!programDoc) throw new Error(`Program '${programName}' not found in system`);
+                    programCache[programName] = programDoc;
+                }
+
+                // Resolve Branch
+                const branchCacheKey = `${programDoc._id}_${branchName}`;
+                let branchDoc = branchCache[branchCacheKey];
                 if (!branchDoc) {
-                    // Try to find branch by code (globally unique) or name
                     const escapedBranchName = escapeRegex(branchName.trim());
                     branchDoc = await Branch.findOne({ 
+                        programId: programDoc._id,
                         $or: [
                             { code: branchName.toUpperCase().trim() },
                             { name: { $regex: new RegExp(`^${escapedBranchName}$`, "i") } }
                         ]
                     });
-                    if (!branchDoc) throw new Error(`Branch '${branchName}' not found in system`);
-                    branchCache[branchName] = branchDoc;
+                    if (!branchDoc) throw new Error(`Branch '${branchName}' not found for program '${programName}'`);
+                    branchCache[branchCacheKey] = branchDoc;
                 }
                 
                 const programIdFromBranch = branchDoc.programId;
@@ -122,7 +139,6 @@ const uploadCSV = async (req, res) => {
                 let semesterTypeId = null;
 
                 const inputStr = String(semester_or_year).trim();
-                const programDoc = await Program.findById(programIdFromBranch);
                 if (!programDoc) throw new Error("Program associated with branch not found");
 
                 if (programDoc.programPattern === "SEMESTER") {
