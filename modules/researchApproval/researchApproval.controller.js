@@ -6,6 +6,8 @@ const Patent = require('../Patent/Patent.model');
 const FundedProject = require('../FundedProject/FundedProject.model');
 const Consultancy = require('../Consultancy/Consultancy.model');
 const Conference = require('../Conference/Conference.model');
+const PhdApplication = require('../PhdScholar/PhdApplication.model');
+const NovelProduct = require('../NovelProduct/NovelProduct.model');
 
 const { getHODDepartments } = require('../../utils/hodHelper');
 const escapeRegex = require('../../utils/escapeRegex');
@@ -115,7 +117,7 @@ exports.getResearchRequests = async (req, res) => {
         let allRequests = [];
 
         // Fetch from specific collections based on 'type' parameter
-        const typesToFetch = type && type !== 'All' ? [type] : ['Text Book', 'Book Chapter', 'Journal', 'Patent', 'Funded Project', 'Consultancy', 'Conference'];
+        const typesToFetch = type && type !== 'All' ? [type] : ['Text Book', 'Book Chapter', 'Journal', 'Patent', 'Funded Project', 'Consultancy', 'Conference', 'Ph.D. Scholar', 'Novel Product'];
 
         if (typesToFetch.includes('Text Book')) {
             let textbookQuery = { ...query };
@@ -400,6 +402,84 @@ exports.getResearchRequests = async (req, res) => {
                     hodComment: item.hodComment,
                     rndComment: item.rndComment,
                     approvedAmount: item.approvedAmount
+                });
+            }
+        }
+
+        // Fetch Ph.D. Scholar Applications
+        if (typesToFetch.includes('Ph.D. Scholar')) {
+            let phdQuery = { ...query };
+            
+            if (searchRegex && !isResearchAdmin) {
+                phdQuery.$or = [{ studentName: searchRegex }, { rollNumber: searchRegex }];
+            }
+            
+            const phdApps = await PhdApplication.find(phdQuery)
+                .populate('facultyId', 'name institutionId department coreDepartment profileImage')
+                .populate('academicYear', 'year')
+                .sort({ createdAt: -1 })
+                .lean();
+
+            for (const item of phdApps) {
+                const fac = item.facultyId;
+                if (!fac) continue;
+
+                if (searchRegex) {
+                    const matchesTitle = searchRegex.test(item.studentName) || searchRegex.test(item.rollNumber);
+                    const matchesName = searchRegex.test(fac.name);
+                    const matchesId = searchRegex.test(fac.institutionId);
+                    if (!matchesTitle && !matchesName && !matchesId) continue;
+                }
+                
+                allRequests.push({
+                    _id: item._id,
+                    type: 'Ph.D. Scholar',
+                    faculty: fac,
+                    title: `${item.studentName} (${item.rollNumber} - ${item.scholarStatus})`,
+                    status: item.status,
+                    createdAt: item.createdAt,
+                    academicYear: item.academicYear,
+                    hodComment: item.hodComment,
+                    rndComment: item.rndComment
+                });
+            }
+        }
+
+        // Fetch Novel Products
+        if (typesToFetch.includes('Novel Product')) {
+            let productQuery = { ...query };
+            
+            if (searchRegex && !isResearchAdmin) {
+                productQuery.$or = [{ productName: searchRegex }, { description: searchRegex }];
+            }
+            
+            const products = await NovelProduct.find(productQuery)
+                .populate('facultyId', 'name institutionId department coreDepartment profileImage')
+                .populate('academicYear', 'year')
+                .sort({ createdAt: -1 })
+                .lean();
+
+            for (const item of products) {
+                const fac = item.facultyId;
+                if (!fac) continue;
+
+                if (searchRegex) {
+                    const matchesTitle = searchRegex.test(item.productName) || searchRegex.test(item.description);
+                    const matchesName = searchRegex.test(fac.name);
+                    const matchesId = searchRegex.test(fac.institutionId);
+                    if (!matchesTitle && !matchesName && !matchesId) continue;
+                }
+                
+                allRequests.push({
+                    _id: item._id,
+                    type: 'Novel Product',
+                    faculty: fac,
+                    title: `${item.productName} (${item.category})`,
+                    status: item.status,
+                    createdAt: item.createdAt,
+                    academicYear: item.academicYear,
+                    hodComment: item.hodComment,
+                    rndComment: item.rndComment
                 });
             }
         }
