@@ -128,6 +128,27 @@ const validateCategoryFields = (category, data) => {
     return null;
 };
 
+// Helper to get the unique name/description field by Category for duplicate checks
+const getContributionNameField = (category, data) => {
+    const cat = parseInt(category);
+    switch (cat) {
+        case 1: return { field: 'organizationName', value: data.organizationName };
+        case 2: return { field: 'journalName', value: data.journalName };
+        case 3: return { field: 'journalConferenceName', value: data.journalConferenceName };
+        case 4:
+        case 5: return { field: 'awardName', value: data.awardName };
+        case 6: return { field: 'courseName', value: data.courseName };
+        case 7: return { field: 'certificationName', value: data.certificationName };
+        case 8: return { field: 'eventName', value: data.eventName };
+        case 9: return { field: 'articleTitle', value: data.articleTitle };
+        case 10: return { field: 'facilityName', value: data.facilityName };
+        case 11:
+        case 12: return { field: 'courseName', value: data.courseName };
+        case 13: return { field: 'grantName', value: data.grantName };
+        default: return { field: '', value: '' };
+    }
+};
+
 // @desc    Submit new faculty contribution entry (saves as Draft by default)
 // @route   POST /api/value-addition/contribution
 // @access  Private (Faculty)
@@ -159,6 +180,25 @@ exports.createContribution = async (req, res) => {
         }
 
         const categoryNum = parseInt(data.category);
+
+        // Validate duplicates (same name/title in same category and academic year unless rejected)
+        const { field, value } = getContributionNameField(data.category, data);
+        if (field && value) {
+            const query = {
+                facultyId: req.user.userId,
+                academicYear: data.academicYear,
+                category: categoryNum,
+                [field]: { $regex: new RegExp("^" + value.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                status: { $ne: 'Rejected' }
+            };
+            const existing = await Contribution.findOne(query);
+            if (existing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `A duplicate entry for this academic year and category already exists with the same name: "${value}".`
+                });
+            }
+        }
 
         const contribution = new Contribution({
             facultyId: req.user.userId,
@@ -255,6 +295,26 @@ exports.updateContribution = async (req, res) => {
         }
 
         const categoryNum = parseInt(categoryVal);
+
+        // Validate duplicates (same name/title in same category and academic year unless rejected)
+        const { field, value } = getContributionNameField(categoryNum, { ...record.toObject(), ...data });
+        if (field && value) {
+            const query = {
+                _id: { $ne: id },
+                facultyId: req.user.userId,
+                academicYear: data.academicYear || record.academicYear,
+                category: categoryNum,
+                [field]: { $regex: new RegExp("^" + value.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                status: { $ne: 'Rejected' }
+            };
+            const existing = await Contribution.findOne(query);
+            if (existing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `A duplicate entry for this academic year and category already exists with the same name: "${value}".`
+                });
+            }
+        }
 
         // Update fields dynamically
         record.academicYear = data.academicYear || record.academicYear;

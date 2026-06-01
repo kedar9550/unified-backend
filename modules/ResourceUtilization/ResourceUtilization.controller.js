@@ -15,6 +15,31 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
+        // Validate role-specific mandatory fields
+        if (data.activityType && data.activityType.includes("Resource Person") && !data.sessionsConducted) {
+            return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
+        }
+        if (data.activityType && data.activityType.includes("Participant") && !data.daysParticipated) {
+            return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
+        }
+
+        // Validate duplicates (same organization/event name in same category and academic year unless rejected)
+        if (data.organizationName) {
+            const existing = await ResourceUtilization.findOne({
+                facultyId: req.user.userId,
+                academicYear: data.academicYear,
+                activityCategory: data.activityCategory,
+                organizationName: { $regex: new RegExp("^" + data.organizationName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                status: { $ne: 'Rejected' }
+            });
+            if (existing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `A duplicate entry for this academic year and activity category already exists with the same organization/event name: "${data.organizationName}".`
+                });
+            }
+        }
+
         // Validate proof upload
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Relevant proof upload is mandatory." });
@@ -119,6 +144,39 @@ exports.updateResourceUtilization = async (req, res) => {
         const to = data.toDate || record.toDate;
         if (from && to && new Date(from) >= new Date(to)) {
             return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
+        }
+
+        // Validate role-specific mandatory fields
+        const type = data.activityType || record.activityType;
+        const days = data.daysParticipated !== undefined ? data.daysParticipated : record.daysParticipated;
+        const sessions = data.sessionsConducted !== undefined ? data.sessionsConducted : record.sessionsConducted;
+
+        if (type && type.includes("Resource Person") && !sessions) {
+            return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
+        }
+        if (type && type.includes("Participant") && !days) {
+            return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
+        }
+
+        // Validate duplicates (same organization/event name in same category and academic year unless rejected)
+        const category = data.activityCategory || record.activityCategory;
+        const orgName = data.organizationName || record.organizationName;
+        const academicYearVal = data.academicYear || record.academicYear;
+        if (orgName) {
+            const existing = await ResourceUtilization.findOne({
+                _id: { $ne: id },
+                facultyId: req.user.userId,
+                academicYear: academicYearVal,
+                activityCategory: category,
+                organizationName: { $regex: new RegExp("^" + orgName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                status: { $ne: 'Rejected' }
+            });
+            if (existing) {
+                return res.status(400).json({
+                    success: false,
+                    message: `A duplicate entry for this academic year and activity category already exists with the same organization/event name: "${orgName}".`
+                });
+            }
         }
 
         // Auto-calculate duration in days
