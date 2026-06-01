@@ -78,6 +78,11 @@ exports.createPhdApplication = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please fill all mandatory fields." });
         }
 
+        // Validate date (not in future)
+        if (new Date(data.admissionOrAwardDate) > new Date()) {
+            return res.status(400).json({ success: false, message: "Admission or Award Date cannot be in the future." });
+        }
+
         // 2. Validate supporting document file uploaded
         if (!req.file) {
             return res.status(400).json({ success: false, message: "Supporting proof document is mandatory." });

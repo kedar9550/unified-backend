@@ -11,27 +11,39 @@ const validateCategoryFields = (category, data) => {
             if (!data.organizationName || !data.fromDate || !data.toDate) {
                 return "Organization Name, From Date, and To Date are mandatory for Category 1.";
             }
-            if (new Date(data.fromDate) > new Date(data.toDate)) {
-                return "From Date cannot be later than To Date.";
+            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+                return "To Date must be greater than From Date.";
             }
-            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
-                return "Dates cannot be in the future.";
+            if (isFutureDate(data.fromDate)) {
+                return "From Date cannot be in the future.";
             }
             break;
         case 2:
-            if (!data.journalName || !data.duration) {
-                return "Journal Name and Duration are mandatory for Category 2.";
+            if (!data.journalName || !data.fromDate || !data.toDate) {
+                return "Journal Name, From Date, and To Date are mandatory for Category 2.";
+            }
+            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+                return "To Date must be greater than From Date.";
+            }
+            if (isFutureDate(data.fromDate)) {
+                return "From Date cannot be in the future.";
             }
             break;
         case 3:
-            if (!data.journalConferenceName || !data.duration) {
-                return "Journal/Conference Name and Duration are mandatory for Category 3.";
+            if (!data.journalConferenceName || !data.fromDate || !data.toDate) {
+                return "Journal/Conference Name, From Date, and To Date are mandatory for Category 3.";
+            }
+            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+                return "To Date must be greater than From Date.";
+            }
+            if (isFutureDate(data.fromDate)) {
+                return "From Date cannot be in the future.";
             }
             break;
         case 4:
         case 5:
             if (!data.awardName || !data.awardDate) {
-                return "Award Name and Award Date are mandatory for Awards.";
+                return "Award Name and Award Date are mandatory.";
             }
             if (isFutureDate(data.awardDate)) {
                 return "Award Date cannot be in the future.";
@@ -39,17 +51,23 @@ const validateCategoryFields = (category, data) => {
             break;
         case 6:
             if (!data.courseName || !data.url) {
-                return "Course Name and URL are mandatory for Developed E-Content.";
+                return "Course Name and URL are mandatory.";
             }
             break;
         case 7:
-            if (!data.certificationName || !data.duration) {
-                return "Certification Name and Duration are mandatory for Certification.";
+            if (!data.certificationName || !data.fromDate || !data.toDate) {
+                return "Certification Name, From Date, and To Date are mandatory.";
+            }
+            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+                return "To Date must be greater than From Date.";
+            }
+            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
+                return "Dates cannot be in the future.";
             }
             break;
         case 8:
             if (!data.eventName || !data.eventDate) {
-                return "Event Name and Event Date are mandatory for Category 8.";
+                return "Event Name and Event Date are mandatory.";
             }
             if (isFutureDate(data.eventDate)) {
                 return "Event Date cannot be in the future.";
@@ -57,32 +75,51 @@ const validateCategoryFields = (category, data) => {
             break;
         case 9:
             if (!data.articleTitle || !data.publicationName || !data.publicationDate) {
-                return "Article Title, Publication Name, and Publication Date are mandatory for Category 9.";
+                return "Article Title, Publication Name, and Publication Date are mandatory.";
             }
             if (isFutureDate(data.publicationDate)) {
                 return "Publication Date cannot be in the future.";
             }
             break;
         case 10:
-            if (!data.facilityName || !data.facilityDate) {
-                return "Facility Name and Date are mandatory for Research Facility.";
+            if (!data.facilityName || !data.fromDate || !data.toDate) {
+                return "Facility Name, From Date, and To Date are mandatory.";
             }
-            if (isFutureDate(data.facilityDate)) {
-                return "Establishment Date cannot be in the future.";
+            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+                return "To Date must be greater than From Date.";
+            }
+            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
+                return "Dates cannot be in the future.";
             }
             break;
         case 11:
-        case 12:
             if (!data.courseName || !data.duration) {
-                return "Course Name and Duration are mandatory for Course Completion.";
+                return "Course Name and Duration are mandatory.";
+            }
+            if (!["12 Weeks", "8 Weeks", "4 Weeks"].includes(data.duration)) {
+                return "Invalid duration selected. Must be '12 Weeks', '8 Weeks', or '4 Weeks'.";
+            }
+            break;
+        case 12:
+            if (!data.courseName || !data.fromDate || !data.toDate) {
+                return "Course Name, From Date, and To Date are mandatory.";
+            }
+            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+                return "To Date must be greater than From Date.";
+            }
+            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
+                return "Dates cannot be in the future.";
             }
             break;
         case 13:
-            if (!data.grantName || !data.sanctionDate) {
-                return "Grant Name and Sanction Date are mandatory for Category 13.";
+            if (!data.grantName || !data.fromDate || !data.toDate) {
+                return "Grant Name, From Date, and To Date are mandatory.";
             }
-            if (isFutureDate(data.sanctionDate)) {
-                return "Sanction Date cannot be in the future.";
+            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+                return "To Date must be greater than From Date.";
+            }
+            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
+                return "Dates cannot be in the future.";
             }
             break;
         default:
@@ -130,13 +167,13 @@ exports.createContribution = async (req, res) => {
             
             // Populate matching category fields
             organizationName: categoryNum === 1 ? data.organizationName : undefined,
-            fromDate: categoryNum === 1 ? data.fromDate : undefined,
-            toDate: categoryNum === 1 ? data.toDate : undefined,
+            fromDate: [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? data.fromDate : undefined,
+            toDate: [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? data.toDate : undefined,
             
             journalName: categoryNum === 2 ? data.journalName : (categoryNum === 3 ? data.journalConferenceName : undefined),
             journalConferenceName: categoryNum === 3 ? data.journalConferenceName : undefined,
             
-            duration: [2, 3, 7, 11, 12].includes(categoryNum) ? data.duration : undefined,
+            duration: [1, 2, 3, 7, 10, 11, 12, 13].includes(categoryNum) ? data.duration : undefined,
             
             awardName: [4, 5].includes(categoryNum) ? data.awardName : undefined,
             awardDate: [4, 5].includes(categoryNum) ? data.awardDate : undefined,
@@ -154,10 +191,8 @@ exports.createContribution = async (req, res) => {
             publicationDate: categoryNum === 9 ? data.publicationDate : undefined,
             
             facilityName: categoryNum === 10 ? data.facilityName : undefined,
-            facilityDate: categoryNum === 10 ? data.facilityDate : undefined,
             
             grantName: categoryNum === 13 ? data.grantName : undefined,
-            sanctionDate: categoryNum === 13 ? data.sanctionDate : undefined,
             
             proof: `/uploads/contributions/${req.file.filename}`,
             status: 'Draft' // Always save as Draft first
@@ -227,13 +262,13 @@ exports.updateContribution = async (req, res) => {
 
         // Clear other fields to maintain schema purity
         record.organizationName = categoryNum === 1 ? (data.organizationName || record.organizationName) : undefined;
-        record.fromDate = categoryNum === 1 ? (data.fromDate || record.fromDate) : undefined;
-        record.toDate = categoryNum === 1 ? (data.toDate || record.toDate) : undefined;
+        record.fromDate = [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? (data.fromDate || record.fromDate) : undefined;
+        record.toDate = [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? (data.toDate || record.toDate) : undefined;
         
         record.journalName = categoryNum === 2 ? (data.journalName || record.journalName) : (categoryNum === 3 ? (data.journalConferenceName || record.journalConferenceName) : undefined);
         record.journalConferenceName = categoryNum === 3 ? (data.journalConferenceName || record.journalConferenceName) : undefined;
         
-        record.duration = [2, 3, 7, 11, 12].includes(categoryNum) ? (data.duration || record.duration) : undefined;
+        record.duration = [1, 2, 3, 7, 10, 11, 12, 13].includes(categoryNum) ? (data.duration || record.duration) : undefined;
         
         record.awardName = [4, 5].includes(categoryNum) ? (data.awardName || record.awardName) : undefined;
         record.awardDate = [4, 5].includes(categoryNum) ? (data.awardDate || record.awardDate) : undefined;
@@ -251,10 +286,8 @@ exports.updateContribution = async (req, res) => {
         record.publicationDate = categoryNum === 9 ? (data.publicationDate || record.publicationDate) : undefined;
         
         record.facilityName = categoryNum === 10 ? (data.facilityName || record.facilityName) : undefined;
-        record.facilityDate = categoryNum === 10 ? (data.facilityDate || record.facilityDate) : undefined;
         
         record.grantName = categoryNum === 13 ? (data.grantName || record.grantName) : undefined;
-        record.sanctionDate = categoryNum === 13 ? (data.sanctionDate || record.sanctionDate) : undefined;
 
         if (req.file) {
             if (req.file.size > 500 * 1024) {

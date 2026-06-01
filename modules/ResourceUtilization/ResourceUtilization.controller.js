@@ -33,18 +33,15 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Activity dates cannot be in the future." });
         }
 
-        if (new Date(data.fromDate) > new Date(data.toDate)) {
-            return res.status(400).json({ success: false, message: "From Date cannot be later than To Date." });
+        if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
         }
 
-        // Auto-calculate duration in days if not provided
-        let calcDuration = parseInt(data.duration);
-        if (isNaN(calcDuration) || calcDuration <= 0) {
-            const start = new Date(data.fromDate);
-            const end = new Date(data.toDate);
-            const diffTime = Math.abs(end - start);
-            calcDuration = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-        }
+        // Auto-calculate duration in days
+        const start = new Date(data.fromDate);
+        const end = new Date(data.toDate);
+        const diffTime = Math.abs(end - start);
+        const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
         const resourceUtilization = new ResourceUtilization({
             facultyId: req.user.userId,
@@ -118,20 +115,17 @@ exports.updateResourceUtilization = async (req, res) => {
         if (data.toDate && isFutureDate(data.toDate)) {
             return res.status(400).json({ success: false, message: "To Date cannot be in the future." });
         }
-        if (data.fromDate && data.toDate && new Date(data.fromDate) > new Date(data.toDate)) {
-            return res.status(400).json({ success: false, message: "From Date cannot be later than To Date." });
-        }
-
-        // Recalculate duration if date fields changed
-        let duration = data.duration ? parseInt(data.duration) : record.duration;
         const from = data.fromDate || record.fromDate;
         const to = data.toDate || record.toDate;
-        if ((data.fromDate || data.toDate) && (!data.duration)) {
-            const start = new Date(from);
-            const end = new Date(to);
-            const diffTime = Math.abs(end - start);
-            duration = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        if (from && to && new Date(from) >= new Date(to)) {
+            return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
         }
+
+        // Auto-calculate duration in days
+        const start = new Date(from);
+        const end = new Date(to);
+        const diffTime = Math.abs(end - start);
+        const duration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
         // Update fields
         record.academicYear = data.academicYear || record.academicYear;
