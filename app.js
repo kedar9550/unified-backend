@@ -107,6 +107,7 @@ app.use('/api/sdgs', require('./modules/SDG/sdg.route'));
 app.use('/api/publishers', require('./modules/Publisher/Publisher.router'));
 app.use('/api/hod/research-requests', require('./modules/researchApproval/researchApproval.route'));
 app.use('/api/faculty-proctoring', require('./modules/FacultyProctoringEntry/FacultyProctoringEntry.route'));
+app.use('/api/faculty-administration', require('./modules/FacultyAdministration/FacultyAdministration.route'));
 
 // --- Error Handling ---
 

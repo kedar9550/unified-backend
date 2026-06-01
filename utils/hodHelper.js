@@ -11,7 +11,9 @@ const Role = require('../modules/role/role.model');
  */
 const getHODDepartments = async (user) => {
     // 1. Try from req.user (already populated by middleware from token)
-    let deptIds = user.hodDepartments || [];
+    let deptIds = (user.hodDepartments || []).map(d => 
+        (typeof d === 'object' && d._id) ? d._id.toString() : d.toString()
+    );
 
     // 2. Fallback to Database Lookup if token doesn't have them or is empty
     if (deptIds.length === 0) {
