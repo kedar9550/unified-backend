@@ -339,12 +339,13 @@ exports.deleteContribution = async (req, res) => {
 exports.submitAcademicYear = async (req, res) => {
     try {
         const { academicYear } = req.body;
-        if (!academicYear) {
-            return res.status(400).json({ success: false, message: "Academic Year is required." });
+        const query = { facultyId: req.user.userId, status: 'Draft' };
+        if (academicYear) {
+            query.academicYear = academicYear;
         }
 
         const result = await Contribution.updateMany(
-            { facultyId: req.user.userId, academicYear: academicYear, status: 'Draft' },
+            query,
             { status: 'Pending at HOD' }
         );
 

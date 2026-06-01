@@ -41,7 +41,7 @@ exports.createResourceUtilization = async (req, res) => {
         const start = new Date(data.fromDate);
         const end = new Date(data.toDate);
         const diffTime = Math.abs(end - start);
-        const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
 
         const resourceUtilization = new ResourceUtilization({
             facultyId: req.user.userId,
@@ -125,7 +125,7 @@ exports.updateResourceUtilization = async (req, res) => {
         const start = new Date(from);
         const end = new Date(to);
         const diffTime = Math.abs(end - start);
-        const duration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+        const duration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
 
         // Update fields
         record.academicYear = data.academicYear || record.academicYear;
@@ -189,12 +189,13 @@ exports.deleteResourceUtilization = async (req, res) => {
 exports.submitAcademicYear = async (req, res) => {
     try {
         const { academicYear } = req.body;
-        if (!academicYear) {
-            return res.status(400).json({ success: false, message: "Academic Year is required." });
+        const query = { facultyId: req.user.userId, status: 'Draft' };
+        if (academicYear) {
+            query.academicYear = academicYear;
         }
 
         const result = await ResourceUtilization.updateMany(
-            { facultyId: req.user.userId, academicYear: academicYear, status: 'Draft' },
+            query,
             { status: 'Pending at HOD' }
         );
 
