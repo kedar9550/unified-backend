@@ -17,6 +17,24 @@ const AdministrativeRoleSchema = new mongoose.Schema({
     details: {
         type: String,
         default: ""
+    },
+    status: {
+        type: String,
+        enum: ["Pending", "Approved", "Rejected"],
+        default: "Pending"
+    },
+    approvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Employee",
+        default: null
+    },
+    approvalDate: {
+        type: Date,
+        default: null
+    },
+    remarks: {
+        type: String,
+        default: ""
     }
 }, { _id: false });
 

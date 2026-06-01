@@ -19,24 +19,84 @@ exports.createOrUpdateEntry = async (req, res) => {
             return res.status(400).json({ success: false, message: "Roles data is required." });
         }
 
+        // Format roles to set defaults
+        const formattedRoles = roles.map(r => ({
+            roleName: r.roleName,
+            isResponsible: r.isResponsible,
+            level: r.level || "",
+            details: r.details || "",
+            status: "Pending",
+            approvedBy: null,
+            approvalDate: null,
+            remarks: ""
+        }));
+
         // Check if an entry already exists for this faculty and academic year
         let entry = await FacultyAdministration.findOne({ facultyId, academicYear });
-
+ 
         if (entry) {
-            // Update details and reset to Pending
-            entry.roles = roles;
-            entry.status = "Pending";
+            // Create a map of existing roles by name to check against
+            const existingRolesMap = {};
+            (entry.roles || []).forEach(r => {
+                existingRolesMap[r.roleName] = r;
+            });
+
+            // Map through incoming roles and preserve approval status for unchanged roles
+            const updatedRoles = formattedRoles.map(newRole => {
+                const existing = existingRolesMap[newRole.roleName];
+                if (existing && newRole.isResponsible && existing.isResponsible) {
+                    const isSame = 
+                        existing.level === newRole.level &&
+                        existing.details === newRole.details;
+                    
+                    if (isSame) {
+                        return {
+                            roleName: newRole.roleName,
+                            isResponsible: newRole.isResponsible,
+                            level: newRole.level,
+                            details: newRole.details,
+                            status: existing.status || "Pending",
+                            approvedBy: existing.approvedBy || null,
+                            approvalDate: existing.approvalDate || null,
+                            remarks: existing.remarks || ""
+                        };
+                    }
+                }
+                return newRole;
+            });
+
+            entry.roles = updatedRoles;
+
+            // Re-calculate overall entry status based on the status of active roles
+            const activeRoles = entry.roles.filter(r => r.isResponsible);
+            const allApproved = activeRoles.every(r => r.status === "Approved");
+            const anyRejected = activeRoles.some(r => r.status === "Rejected");
+            const anyPending = activeRoles.some(r => r.status === "Pending");
+
+            if (activeRoles.length === 0) {
+                entry.status = "Pending";
+            } else if (allApproved) {
+                entry.status = "Approved";
+            } else if (anyPending) {
+                entry.status = "Pending";
+            } else if (anyRejected) {
+                entry.status = "Rejected";
+            } else {
+                entry.status = "Pending";
+            }
+
             entry.approvedBy = null;
             entry.approvalDate = null;
-            entry.remarks = ""; // clear previous remarks
+            entry.remarks = ""; // clear entry-level remarks
 
+            entry.markModified("roles");
             await entry.save();
         } else {
             // Create a new entry
             entry = new FacultyAdministration({
                 facultyId,
                 academicYear,
-                roles,
+                roles: formattedRoles,
                 status: "Pending"
             });
             await entry.save();
@@ -57,6 +117,7 @@ exports.getMyEntries = async (req, res) => {
         const entries = await FacultyAdministration.find({ facultyId: req.user.userId })
             .populate("academicYear", "year")
             .populate("approvedBy", "name")
+            .populate("roles.approvedBy", "name")
             .sort({ createdAt: -1 });
 
         res.json({ success: true, data: entries });
@@ -92,6 +153,7 @@ exports.getPendingAtHOD = async (req, res) => {
         .populate("facultyId", "name institutionId department coreDepartment")
         .populate("academicYear", "year")
         .populate("approvedBy", "name")
+        .populate("roles.approvedBy", "name")
         .sort({ createdAt: -1 });
 
         res.json({ success: true, data: entries });
@@ -101,39 +163,70 @@ exports.getPendingAtHOD = async (req, res) => {
     }
 };
 
-// @desc    HOD action (Approve/Reject) on administration declaration
-// @route   PUT /api/faculty-administration/hod-action/:id
+// @desc    HOD action (Approve/Reject) on individual role
+// @route   PUT /api/faculty-administration/hod-action-role/:id
 // @access  Private (HOD)
-exports.hodAction = async (req, res) => {
+exports.hodActionRole = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, remarks } = req.body; // action: "Approve" or "Reject"
+        const { roleName, action, remarks } = req.body; // action: "Approve" or "Reject"
+
+        if (!roleName) {
+            return res.status(400).json({ success: false, message: "roleName is required." });
+        }
 
         if (!action || !["Approve", "Reject"].includes(action)) {
             return res.status(400).json({ success: false, message: "Action must be either Approve or Reject." });
         }
 
-        const status = action === "Approve" ? "Approved" : "Rejected";
-
-        const updates = {
-            status,
-            approvedBy: req.user.userId,
-            approvalDate: new Date(),
-            remarks: remarks || ""
-        };
-
-        const entry = await FacultyAdministration.findByIdAndUpdate(id, updates, { new: true })
-            .populate("facultyId", "name institutionId")
-            .populate("academicYear", "year")
-            .populate("approvedBy", "name");
-
+        const entry = await FacultyAdministration.findById(id);
         if (!entry) {
             return res.status(404).json({ success: false, message: "Administration roles entry not found." });
         }
 
-        res.json({ success: true, data: entry });
+        // Find and update the role in roles array
+        const role = entry.roles.find(r => r.roleName === roleName);
+        if (!role) {
+            return res.status(404).json({ success: false, message: `Role '${roleName}' not found in this entry.` });
+        }
+
+        role.status = action === "Approve" ? "Approved" : "Rejected";
+        role.approvedBy = req.user.userId;
+        role.approvalDate = new Date();
+        role.remarks = remarks || "";
+
+        // Calculate and update overall status based on active roles
+        const activeRoles = entry.roles.filter(r => r.isResponsible);
+        const allApproved = activeRoles.every(r => r.status === "Approved");
+        const anyRejected = activeRoles.some(r => r.status === "Rejected");
+        const anyPending = activeRoles.some(r => r.status === "Pending");
+
+        if (allApproved) {
+            entry.status = "Approved";
+        } else if (anyPending) {
+            entry.status = "Pending";
+        } else if (anyRejected) {
+            entry.status = "Rejected";
+        } else {
+            entry.status = "Pending";
+        }
+
+        // Keep document-level audit fields updated
+        entry.approvedBy = req.user.userId;
+        entry.approvalDate = new Date();
+
+        entry.markModified("roles");
+        await entry.save();
+
+        const populatedEntry = await FacultyAdministration.findById(entry._id)
+            .populate("facultyId", "name institutionId")
+            .populate("academicYear", "year")
+            .populate("approvedBy", "name")
+            .populate("roles.approvedBy", "name");
+
+        res.json({ success: true, data: populatedEntry });
     } catch (err) {
-        console.error("HOD Administration Action Error:", err);
+        console.error("HOD Administration Action Role Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };

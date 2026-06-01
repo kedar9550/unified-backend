@@ -9,6 +9,6 @@ router.get("/my-entries", protect, facultyAdministrationController.getMyEntries)
 
 // HOD: View department faculty declarations and Approve/Reject
 router.get("/pending-hod", protect, authorize("HOD"), facultyAdministrationController.getPendingAtHOD);
-router.put("/hod-action/:id", protect, authorize("HOD"), facultyAdministrationController.hodAction);
+router.put("/hod-action-role/:id", protect, authorize("HOD"), facultyAdministrationController.hodActionRole);
 
 module.exports = router;
