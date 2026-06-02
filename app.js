@@ -110,6 +110,7 @@ app.use('/api/faculty-proctoring', require('./modules/FacultyProctoringEntry/Fac
 app.use('/api/faculty-administration', require('./modules/FacultyAdministration/FacultyAdministration.route'));
 app.use('/api/value-addition/resource-utilization', require('./modules/ResourceUtilization/ResourceUtilization.router'));
 app.use('/api/value-addition/contribution', require('./modules/Contribution/Contribution.router'));
+app.use('/api/appraisal', require('./modules/Appraisal/Appraisal.route'));
 
 // --- Error Handling ---
 
