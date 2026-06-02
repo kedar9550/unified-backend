@@ -49,5 +49,6 @@ router.put('/hod-action/:id', protect, authorize('HOD'), journalController.hodAc
 // R&D: View pending and Action
 router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), journalController.getPendingAtRND);
 router.put('/rnd-action/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), journalController.rndAction);
+router.put('/update-metrics/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), journalController.updateJournalMetrics);
 
 module.exports = router;

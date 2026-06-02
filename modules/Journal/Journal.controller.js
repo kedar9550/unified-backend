@@ -221,6 +221,7 @@ exports.hodAction = async (req, res) => {
 
         if (hIndex !== undefined) updates.hIndex = hIndex;
         if (impactFactor !== undefined) updates.impactFactor = impactFactor;
+        if (req.body.citations !== undefined) updates.citations = req.body.citations;
 
         const journal = await Journal.findByIdAndUpdate(id, updates, { new: true });
 
@@ -266,6 +267,9 @@ exports.rndAction = async (req, res) => {
         }
         if (req.body.impactFactor !== undefined) {
             updates.impactFactor = req.body.impactFactor;
+        }
+        if (req.body.citations !== undefined) {
+            updates.citations = req.body.citations;
         }
 
         const journal = await Journal.findByIdAndUpdate(id, updates, { new: true });
@@ -354,3 +358,38 @@ exports.getClarivateJournalType = async (req, res) => {
         return res.status(status).json({ success: false, message: typeof message === 'object' ? JSON.stringify(message) : message });
     }
 };
+
+// @desc    Update Journal Metrics (H-Index, Impact Factor, Citations) at any time
+// @route   PUT /api/research/journal/update-metrics/:id
+// @access  Private (R&D Admin)
+exports.updateJournalMetrics = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { hIndex, impactFactor, citations } = req.body;
+
+        const updates = {};
+        if (hIndex !== undefined) updates.hIndex = hIndex;
+        if (impactFactor !== undefined) updates.impactFactor = impactFactor;
+        if (citations !== undefined) updates.citations = citations;
+
+        const journal = await Journal.findByIdAndUpdate(id, updates, { new: true })
+            .populate({
+                path: 'facultyId',
+                select: 'name institutionId department coreDepartment designation phone contactNumber college profileImage',
+                populate: [
+                    { path: 'department', select: 'name' },
+                    { path: 'coreDepartment', select: 'name' }
+                ]
+            })
+            .populate('academicYear', 'year');
+
+        if (!journal) {
+            return res.status(404).json({ success: false, message: 'Journal not found' });
+        }
+
+        res.json({ success: true, data: journal });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+

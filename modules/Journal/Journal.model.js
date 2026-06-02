@@ -34,6 +34,7 @@ const JournalSchema = new mongoose.Schema({
     publishedYear: { type: String, required: true },
     hIndex: { type: String },
     impactFactor: { type: String },
+    citations: { type: String },
     agecReferencingNumbers: { type: String },
     numberOfReferencesBelongingToAGEC: { type: Number },
     sdgs: { type: String },
