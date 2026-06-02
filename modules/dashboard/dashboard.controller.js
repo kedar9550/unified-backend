@@ -8,6 +8,20 @@ const UserAppRole = require('../userAppRole/userAppRole.model');
 const FacultyFeedResult = require('../FacultyFeedbackResults/FacultyFeedResult.model');
 const Discrepancy = require('../discrepancy/discrepancy.model');
 const FacultySubjectResult = require('../FacultySubjectResult/FacultySubjectResult.model');
+const Textbook = require('../Textbook/Textbook.model');
+const BookChapter = require('../BookChapter/BookChapter.model');
+const Journal = require('../Journal/Journal.model');
+const Patent = require('../Patent/Patent.model');
+const FundedProject = require('../FundedProject/FundedProject.model');
+const Consultancy = require('../Consultancy/Consultancy.model');
+const Conference = require('../Conference/Conference.model');
+const PhdApplication = require('../PhdScholar/PhdApplication.model');
+const NovelProduct = require('../NovelProduct/NovelProduct.model');
+const FacultyAdministration = require('../FacultyAdministration/FacultyAdministration.model');
+const FacultyProctoringEntry = require('../FacultyProctoringEntry/FacultyProctoringEntry.model');
+const ResourceUtilization = require('../ResourceUtilization/ResourceUtilization.model');
+const Contribution = require('../Contribution/Contribution.model');
+const { getHODDepartments } = require('../../utils/hodHelper');
 
 exports.getUniprimeDashboardData = async (req, res, next) => {
     try {
@@ -369,6 +383,301 @@ exports.getExamDashboardData = async (req, res, next) => {
         });
     } catch (error) {
         console.error('EXAM DASHBOARD ERROR:', error);
+        next(error);
+    }
+};
+
+exports.getHODDashboardData = async (req, res, next) => {
+    try {
+        // 1. Get HOD Departments using the helper
+        const deptIds = await getHODDepartments(req.user);
+        
+        if (!deptIds || deptIds.length === 0) {
+            return res.status(200).json({
+                status: 'success',
+                data: {
+                    totalFaculty: 0,
+                    totalPrograms: 0,
+                    departments: [],
+                    pendingCounts: {
+                        research: 0,
+                        proctoring: 0,
+                        administration: 0,
+                        resourceUtilization: 0,
+                        contribution: 0,
+                        total: 0
+                    },
+                    researchStats: [],
+                    recentActivities: [],
+                    topFaculty: []
+                }
+            });
+        }
+
+        // 2. Fetch department details
+        const depts = await Department.find({ _id: { $in: deptIds } }).select('name code').lean();
+        const deptNames = depts.map(d => d.name);
+
+        // 3. Find all active faculty members under HOD's departments
+        const facultyDocs = await Employee.find({
+            $or: [
+                { coreDepartment: { $in: deptIds } },
+                { department: { $in: deptIds } }
+            ],
+            isActive: true
+        }).select('_id name institutionId department coreDepartment designation email profileImage').lean();
+
+        const facultyIds = facultyDocs.map(f => f._id);
+
+        if (facultyIds.length === 0) {
+            return res.status(200).json({
+                status: 'success',
+                data: {
+                    totalFaculty: 0,
+                    totalPrograms: depts.length,
+                    departments: deptNames,
+                    pendingCounts: {
+                        research: 0,
+                        proctoring: 0,
+                        administration: 0,
+                        resourceUtilization: 0,
+                        contribution: 0,
+                        total: 0
+                    },
+                    researchStats: [],
+                    recentActivities: [],
+                    topFaculty: []
+                }
+            });
+        }
+
+        // 4. Calculate pending approval counts in parallel
+        const [
+            pendingTextbooks,
+            pendingChapters,
+            pendingJournals,
+            pendingPatents,
+            pendingProjects,
+            pendingConsultancies,
+            pendingConferences,
+            pendingPhds,
+            pendingProducts,
+            pendingProctoring,
+            pendingAdmin,
+            pendingResource,
+            pendingContribution
+        ] = await Promise.all([
+            Textbook.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            BookChapter.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            Journal.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            Patent.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            FundedProject.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            Consultancy.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            Conference.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            PhdApplication.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            NovelProduct.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            FacultyProctoringEntry.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending' }),
+            FacultyAdministration.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending' }),
+            ResourceUtilization.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' }),
+            Contribution.countDocuments({ facultyId: { $in: facultyIds }, status: 'Pending at HOD' })
+        ]);
+
+        const pendingResearchCount = pendingTextbooks + pendingChapters + pendingJournals + pendingPatents + pendingProjects + pendingConsultancies + pendingConferences + pendingPhds + pendingProducts;
+        const totalPending = pendingResearchCount + pendingProctoring + pendingAdmin + pendingResource + pendingContribution;
+
+        // 5. Aggregate overall department research counts for charting (approved & pending)
+        const [
+            journalsCount,
+            conferencesCount,
+            patentsCount,
+            textbooksCount,
+            chaptersCount,
+            projectsCount,
+            consultanciesCount,
+            phdsCount,
+            productsCount
+        ] = await Promise.all([
+            Journal.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            Conference.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            Patent.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            Textbook.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            BookChapter.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            FundedProject.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            Consultancy.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            PhdApplication.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } }),
+            NovelProduct.countDocuments({ facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } })
+        ]);
+
+        const researchStats = [
+            { name: 'Journals', value: journalsCount, color: '#3B82F6' },
+            { name: 'Conferences', value: conferencesCount, color: '#10B981' },
+            { name: 'Patents', value: patentsCount, color: '#F59E0B' },
+            { name: 'Text Books', value: textbooksCount, color: '#8B5CF6' },
+            { name: 'Book Chapters', value: chaptersCount, color: '#EC4899' },
+            { name: 'Projects & Consultancies', value: projectsCount + consultanciesCount, color: '#06B6D4' },
+            { name: 'Ph.D. & Products', value: phdsCount + productsCount, color: '#64748B' }
+        ].filter(item => item.value > 0);
+
+        // 6. Aggregate publications count by faculty member
+        const aggregateFacultyCounts = async (Model) => {
+            return Model.aggregate([
+                { $match: { facultyId: { $in: facultyIds }, status: { $in: ['Approved', 'Pending at R&D', 'Pending at HOD'] } } },
+                { $group: { _id: '$facultyId', count: { $sum: 1 } } }
+            ]);
+        };
+
+        const [
+            journalFacultyCounts,
+            conferenceFacultyCounts,
+            patentFacultyCounts,
+            textbookFacultyCounts,
+            chapterFacultyCounts,
+            projectFacultyCounts,
+            consultancyFacultyCounts,
+            phdFacultyCounts,
+            productFacultyCounts
+        ] = await Promise.all([
+            aggregateFacultyCounts(Journal),
+            aggregateFacultyCounts(Conference),
+            aggregateFacultyCounts(Patent),
+            aggregateFacultyCounts(Textbook),
+            aggregateFacultyCounts(BookChapter),
+            aggregateFacultyCounts(FundedProject),
+            aggregateFacultyCounts(Consultancy),
+            aggregateFacultyCounts(PhdApplication),
+            aggregateFacultyCounts(NovelProduct)
+        ]);
+
+        const facultyActivityMap = {};
+        const mergeCounts = (countsList) => {
+            for (const item of countsList) {
+                const fid = item._id.toString();
+                facultyActivityMap[fid] = (facultyActivityMap[fid] || 0) + item.count;
+            }
+        };
+
+        mergeCounts(journalFacultyCounts);
+        mergeCounts(conferenceFacultyCounts);
+        mergeCounts(patentFacultyCounts);
+        mergeCounts(textbookFacultyCounts);
+        mergeCounts(chapterFacultyCounts);
+        mergeCounts(projectFacultyCounts);
+        mergeCounts(consultancyFacultyCounts);
+        mergeCounts(phdFacultyCounts);
+        mergeCounts(productFacultyCounts);
+
+        const topFaculty = facultyDocs.map(f => {
+            const fid = f._id.toString();
+            return {
+                _id: f._id,
+                name: f.name,
+                institutionId: f.institutionId,
+                designation: f.designation,
+                email: f.email,
+                profileImage: f.profileImage,
+                activityCount: facultyActivityMap[fid] || 0
+            };
+        })
+        .sort((a, b) => b.activityCount - a.activityCount)
+        .slice(0, 5);
+
+        // 7. Get recent activities feed (limit to 5)
+        const [
+            recentJournals,
+            recentPatents,
+            recentTextbooks,
+            recentProctoring,
+            recentResourceUtil
+        ] = await Promise.all([
+            Journal.find({ facultyId: { $in: facultyIds } }).sort({ createdAt: -1 }).limit(5).populate('facultyId', 'name profileImage').lean(),
+            Patent.find({ facultyId: { $in: facultyIds } }).sort({ createdAt: -1 }).limit(5).populate('facultyId', 'name profileImage').lean(),
+            Textbook.find({ facultyId: { $in: facultyIds } }).sort({ createdAt: -1 }).limit(5).populate('facultyId', 'name profileImage').lean(),
+            FacultyProctoringEntry.find({ facultyId: { $in: facultyIds } }).sort({ createdAt: -1 }).limit(5).populate('facultyId', 'name profileImage').lean(),
+            ResourceUtilization.find({ facultyId: { $in: facultyIds } }).sort({ createdAt: -1 }).limit(5).populate('facultyId', 'name profileImage').lean()
+        ]);
+
+        const recentActivities = [];
+
+        recentJournals.forEach(item => {
+            recentActivities.push({
+                type: 'Journal',
+                title: item.paperTitle,
+                facultyName: item.facultyId?.name || 'Unknown',
+                profileImage: item.facultyId?.profileImage,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+
+        recentPatents.forEach(item => {
+            recentActivities.push({
+                type: 'Patent',
+                title: item.title,
+                facultyName: item.facultyId?.name || 'Unknown',
+                profileImage: item.facultyId?.profileImage,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+
+        recentTextbooks.forEach(item => {
+            recentActivities.push({
+                type: 'Text Book',
+                title: item.title,
+                facultyName: item.facultyId?.name || 'Unknown',
+                profileImage: item.facultyId?.profileImage,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+
+        recentProctoring.forEach(item => {
+            recentActivities.push({
+                type: 'Proctoring',
+                title: 'Student Proctoring Entry',
+                facultyName: item.facultyId?.name || 'Unknown',
+                profileImage: item.facultyId?.profileImage,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+
+        recentResourceUtil.forEach(item => {
+            recentActivities.push({
+                type: 'Resource Utilization',
+                title: `${item.activityCategory} - ${item.activityType}`,
+                facultyName: item.facultyId?.name || 'Unknown',
+                profileImage: item.facultyId?.profileImage,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+
+        recentActivities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const finalRecentActivities = recentActivities.slice(0, 5);
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                totalFaculty: facultyDocs.length,
+                totalPrograms: depts.length,
+                departments: deptNames,
+                pendingCounts: {
+                    research: pendingResearchCount,
+                    proctoring: pendingProctoring,
+                    administration: pendingAdmin,
+                    resourceUtilization: pendingResource,
+                    contribution: pendingContribution,
+                    total: totalPending
+                },
+                researchStats,
+                recentActivities: finalRecentActivities,
+                topFaculty
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching HOD dashboard data:', error);
         next(error);
     }
 };
