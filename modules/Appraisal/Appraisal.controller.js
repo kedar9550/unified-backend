@@ -103,10 +103,59 @@ const DEFAULT_CONFIG = {
             resourcePerson: 2,
             participated: 1
         },
+        resourceUtilizationPoints: {
+            conference: 10,
+            sttp: 10,
+            fdp: 10,
+            guestLecture: 2,
+            resourcePerson: 2,
+            participated: 1
+        },
+        expertisePoints: {
+            memberBOS: 5,
+            editorialBoardSCIE: 5,
+            editorialBoardESCI: 3,
+            awardsGovt: 5,
+            awardsOthers: 3,
+            developedEContent: 10,
+            certificationNewAge: 5,
+            hackathonShortlisted: 5,
+            newspaperArticle: 3,
+            researchFacility: 3,
+            nptel12W: 10,
+            nptel8W: 8,
+            nptel4W: 5,
+            coursera: 5,
+            grantSanctioned: 5
+        },
         expertiseMaxPoints: 10
     },
     administration: {
-        maxPoints: 20
+        maxPoints: 20,
+        rolePoints: {
+            deanCentral: 20,
+            hodCentral: 15,
+            hodDept: 15,
+            dyHodDept: 10,
+            timetableDept: 10,
+            placementCentral: 10,
+            placementDept: 10,
+            courseraCentral: 10,
+            courseraDept: 5,
+            edcCentral: 10,
+            edcDept: 5,
+            courseDept: 5,
+            websiteCentral: 10,
+            nssCentral: 10,
+            nssDept: 5,
+            trainingCentral: 10,
+            trainingDept: 5,
+            drcDept: 5,
+            antiRaggingCentral: 5,
+            antiRaggingDept: 3,
+            otherCentral: 10,
+            otherDept: 5
+        }
     }
 };
 
@@ -128,7 +177,7 @@ exports.getAppraisalConfig = async (req, res) => {
 // 2. Save/Update Appraisal Point Config (UNIPRIME)
 exports.saveAppraisalConfig = async (req, res) => {
     try {
-        const { academicYearId, teaching, research } = req.body;
+        const { academicYearId, teaching, research, valueAddition, administration } = req.body;
         if (!academicYearId) {
             return res.status(400).json({ success: false, message: "Academic Year ID is required." });
         }
@@ -137,6 +186,8 @@ exports.saveAppraisalConfig = async (req, res) => {
         if (config) {
             config.teaching = teaching || config.teaching;
             config.research = research || config.research;
+            config.valueAddition = valueAddition || config.valueAddition;
+            config.administration = administration || config.administration;
             config.lastUpdatedBy = req.user.userId;
             await config.save();
         } else {
@@ -144,6 +195,8 @@ exports.saveAppraisalConfig = async (req, res) => {
                 academicYearId,
                 teaching,
                 research,
+                valueAddition,
+                administration,
                 lastUpdatedBy: req.user.userId
             });
             await config.save();
@@ -522,21 +575,42 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const resUtilItems = [];
         let totalResPoints = 0;
 
-        const resourceUtConf = config.valueAddition?.resourceUtilization || DEFAULT_CONFIG.valueAddition.resourceUtilization;
+        const resourceUtConf = config.valueAddition?.resourceUtilizationPoints || {
+            conference: 10,
+            sttp: 10,
+            fdp: 10,
+            guestLecture: 2,
+            resourcePerson: 2,
+            participated: 1
+        };
+
         resourceUt.forEach(r => {
             let pts = 0;
-            const role = r.role ? r.role.toLowerCase() : '';
-            if (role.includes('organized') || role.includes('coordinator') || role.includes('chair')) {
-                pts = resourceUtConf.organized ?? 10;
-            } else if (role.includes('resource') || role.includes('expert')) {
-                pts = resourceUtConf.resourcePerson ?? 2; // per session
+            const activityRole = (r.activityType || '').toLowerCase();
+            const activityCat = (r.activityCategory || '').toLowerCase();
+            
+            if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
+                pts = (r.sessionsConducted || 1) * (resourceUtConf.resourcePerson ?? 2);
+            } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
+                pts = (r.daysParticipated || 1) * (resourceUtConf.participated ?? 1);
+            } else if (activityRole.includes('guest lecture') || activityRole.includes('workshop') || activityRole.includes('event')) {
+                pts = resourceUtConf.guestLecture ?? 2;
             } else {
-                pts = resourceUtConf.participated ?? 1; // participated
+                // Organized STTP/FDP/Conference
+                if (activityCat.includes('conference')) {
+                    pts = resourceUtConf.conference ?? 10;
+                } else if (activityCat.includes('sttp') || activityCat.includes('refresher')) {
+                    pts = resourceUtConf.sttp ?? 10;
+                } else if (activityCat.includes('fdp') || activityCat.includes('symposium')) {
+                    pts = resourceUtConf.fdp ?? 10;
+                } else {
+                    pts = resourceUtConf.conference ?? 10; // fallback
+                }
             }
             resUtilItems.push({
                 eventId: r._id,
-                event: r.eventName || r.title,
-                role: r.role,
+                event: r.organizationName || "N/A",
+                role: r.activityType || "N/A",
                 pointsClaimed: pts
             });
             totalResPoints += pts;
@@ -547,11 +621,95 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const contItems = [];
         let totalContPoints = 0;
 
+        const expPointsConf = config.valueAddition?.expertisePoints || {
+            memberBOS: 5,
+            editorialBoardSCIE: 5,
+            editorialBoardESCI: 3,
+            awardsGovt: 5,
+            awardsOthers: 3,
+            developedEContent: 10,
+            certificationNewAge: 5,
+            hackathonShortlisted: 5,
+            newspaperArticle: 3,
+            researchFacility: 3,
+            nptel12W: 10,
+            nptel8W: 8,
+            nptel4W: 5,
+            coursera: 5,
+            grantSanctioned: 5
+        };
+
         contributions.forEach(c => {
-            const pts = c.points || 5; // Use c.points if pre-entered
+            let pts = 5; // default fallback
+            let activityName = "Expertise / Recognition Activity";
+            
+            switch (c.category) {
+                case 1:
+                    pts = expPointsConf.memberBOS ?? 5;
+                    activityName = "Member of BOG/GB/AC/BOS (Outside AUS)";
+                    break;
+                case 2:
+                    pts = expPointsConf.editorialBoardSCIE ?? 5;
+                    activityName = `Editorial Board Member (SCIE/Q1/Q2) - ${c.journalName || ''}`;
+                    break;
+                case 3:
+                    pts = expPointsConf.editorialBoardESCI ?? 3;
+                    activityName = `Editorial Board Member (ESCI/Q3/Q4/Conf) - ${c.journalName || c.journalConferenceName || ''}`;
+                    break;
+                case 4:
+                    pts = expPointsConf.awardsGovt ?? 5;
+                    activityName = `Awards (MHRD/AICTE/UGC/State Govt/Top 2%) - ${c.awardName || ''}`;
+                    break;
+                case 5:
+                    pts = expPointsConf.awardsOthers ?? 3;
+                    activityName = `Awards (NGO/Trust/Others) - ${c.awardName || ''}`;
+                    break;
+                case 6:
+                    pts = expPointsConf.developedEContent ?? 10;
+                    activityName = `Developed E-Content (Complete Course) - ${c.courseName || ''}`;
+                    break;
+                case 7:
+                    pts = expPointsConf.certificationNewAge ?? 5;
+                    activityName = `Certification on New Age Technologies - ${c.certificationName || ''}`;
+                    break;
+                case 8:
+                    pts = expPointsConf.hackathonShortlisted ?? 5;
+                    activityName = `Student Shortlisted in Hackathon/Startup Finals - ${c.eventName || ''}`;
+                    break;
+                case 9:
+                    pts = expPointsConf.newspaperArticle ?? 3;
+                    activityName = `Magazine/Newspaper Article Published - ${c.articleTitle || ''}`;
+                    break;
+                case 10:
+                    pts = expPointsConf.researchFacility ?? 3;
+                    activityName = `Establishment/Maintenance of Research Facility - ${c.facilityName || ''}`;
+                    break;
+                case 11:
+                    const dur = (c.duration || '').toLowerCase();
+                    if (dur.includes('12')) {
+                        pts = expPointsConf.nptel12W ?? 10;
+                    } else if (dur.includes('8')) {
+                        pts = expPointsConf.nptel8W ?? 8;
+                    } else if (dur.includes('4')) {
+                        pts = expPointsConf.nptel4W ?? 5;
+                    } else {
+                        pts = expPointsConf.nptel8W ?? 8; // fallback
+                    }
+                    activityName = `NPTEL Course Completion (${c.duration || '8 weeks'}) - ${c.courseName || ''}`;
+                    break;
+                case 12:
+                    pts = expPointsConf.coursera ?? 5;
+                    activityName = `Coursera Course Completion - ${c.courseName || ''}`;
+                    break;
+                case 13:
+                    pts = expPointsConf.grantSanctioned ?? 5;
+                    activityName = `FDP/Seminar Grant Sanctioned - ${c.grantName || ''}`;
+                    break;
+            }
+
             contItems.push({
                 contributionId: c._id,
-                activityName: c.expertiseType || c.activityName || c.title,
+                activityName: activityName,
                 pointsClaimed: pts
             });
             totalContPoints += pts;
@@ -565,17 +723,72 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const adminItems = [];
         let totalAdminPoints = 0;
 
+        const adminConf = config.administration?.rolePoints || {
+            deanCentral: 20,
+            hodCentral: 15,
+            hodDept: 15,
+            dyHodDept: 10,
+            timetableDept: 10,
+            placementCentral: 10,
+            placementDept: 10,
+            courseraCentral: 10,
+            courseraDept: 5,
+            edcCentral: 10,
+            edcDept: 5,
+            courseDept: 5,
+            websiteCentral: 10,
+            nssCentral: 10,
+            nssDept: 5,
+            trainingCentral: 10,
+            trainingDept: 5,
+            drcDept: 5,
+            antiRaggingCentral: 5,
+            antiRaggingDept: 3,
+            otherCentral: 10,
+            otherDept: 5
+        };
+
         if (adminRoles && adminRoles.roles) {
             adminRoles.roles.forEach(r => {
-                let pts = 5; // default
+                let pts = 5; // default fallback
                 const name = r.roleName.toLowerCase();
+                const level = (r.level || '').toLowerCase();
+                const isCentral = level.includes('central') || level.includes('institute');
+                
                 if (name.includes('dean') || name.includes('coe')) {
-                    pts = r.level === 'Institute level' ? 20 : 15;
-                } else if (name.includes('hod') || name.includes('coordinator')) {
-                    pts = 15;
-                } else if (name.includes('incharge') || name.includes('exam')) {
-                    pts = 10;
+                    pts = adminConf.deanCentral ?? 20;
+                } else if (name.includes('hod')) {
+                    if (name.includes('dy') || name.includes('vice')) {
+                        pts = adminConf.dyHodDept ?? 10;
+                    } else {
+                        pts = isCentral ? (adminConf.hodCentral ?? 15) : (adminConf.hodDept ?? 15);
+                    }
+                } else if (name.includes('exam cell') || name.includes('exam incharge')) {
+                    pts = adminConf.dyHodDept ?? 10;
+                } else if (name.includes('timetable') || name.includes('time table') || name.includes('project') || name.includes('curriculum')) {
+                    pts = adminConf.timetableDept ?? 10;
+                } else if (name.includes('placement') || name.includes('internship') || name.includes('alumni')) {
+                    pts = isCentral ? (adminConf.placementCentral ?? 10) : (adminConf.placementDept ?? 10);
+                } else if (name.includes('coursera') || name.includes('linkedin') || name.includes('ala')) {
+                    pts = isCentral ? (adminConf.courseraCentral ?? 10) : (adminConf.courseraDept ?? 5);
+                } else if (name.includes('edc') || name.includes('iic') || name.includes('iqac')) {
+                    pts = isCentral ? (adminConf.edcCentral ?? 10) : (adminConf.edcDept ?? 5);
+                } else if (name.includes('course coordinator')) {
+                    pts = adminConf.courseDept ?? 5;
+                } else if (name.includes('website')) {
+                    pts = adminConf.websiteCentral ?? 10;
+                } else if (name.includes('nss') || name.includes('professional chapter')) {
+                    pts = isCentral ? (adminConf.nssCentral ?? 10) : (adminConf.nssDept ?? 5);
+                } else if (name.includes('training')) {
+                    pts = isCentral ? (adminConf.trainingCentral ?? 10) : (adminConf.trainingDept ?? 5);
+                } else if (name.includes('drc') || name.includes('research')) {
+                    pts = adminConf.drcDept ?? 5;
+                } else if (name.includes('anti-ragging') || name.includes('antiragging')) {
+                    pts = isCentral ? (adminConf.antiRaggingCentral ?? 5) : (adminConf.antiRaggingDept ?? 3);
+                } else {
+                    pts = isCentral ? (adminConf.otherCentral ?? 10) : (adminConf.otherDept ?? 5);
                 }
+
                 adminItems.push({
                     activityName: r.roleName,
                     level: r.level || "Dept level",
