@@ -226,7 +226,20 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // If appraisal is already submitted/evaluated, return it as-is
         if (appraisal && appraisal.status !== "Draft") {
-            return res.json({ success: true, isCalculatedFresh: false, data: appraisal });
+            const proctoringEntry = await FacultyProctoringEntry.findOne({ facultyId, academicYear: academicYearId });
+            const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
+            const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
+
+            return res.json({ 
+                success: true, 
+                isCalculatedFresh: false, 
+                data: appraisal,
+                proctoringDetail: proctoringEntry,
+                resourceUtilizationDetails: resourceUt,
+                contributionDetails: contributions,
+                administrationDetail: adminRoles
+            });
         }
 
         // Fetch configurations for dynamic calculations
@@ -320,26 +333,25 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const feedbackAverage = feedbackItems.length > 0 ? Number((totalFeedbackClaimed / feedbackItems.length).toFixed(2)) : 0;
 
         // 1.3 Proctoring Pass Percentage
-        const proctoringResults = await FacultyProctoringEntry.find({
+        const proctoringEntry = await FacultyProctoringEntry.findOne({
             facultyId,
-            academicYear: academicYearId,
-            status: "Approved"
+            academicYear: academicYearId
         });
 
         const proctoringItems = [];
         let totalProctorPoints = 0;
 
-        proctoringResults.forEach(res => {
-            const procPoints = getPointsFromRanges(res.passPercentage, config.teaching.proctoringPoints);
+        if (proctoringEntry && (proctoringEntry.status === "Approved" || proctoringEntry.status === "Pending")) {
+            const procPoints = getPointsFromRanges(proctoringEntry.passPercentage, config.teaching.proctoringPoints);
             proctoringItems.push({
-                totalStudents: res.totalStudents || 0,
-                appeared: res.studentsAppeared || 0,
-                passed: res.studentsPassed || 0,
-                percentage: res.passPercentage || 0,
+                totalStudents: proctoringEntry.totalStudents || 0,
+                appeared: proctoringEntry.studentsAppeared || 0,
+                passed: proctoringEntry.studentsPassed || 0,
+                percentage: proctoringEntry.passPercentage || 0,
                 pointsClaimed: procPoints
             });
             totalProctorPoints += procPoints;
-        });
+        }
 
         const proctoringAverage = proctoringItems.length > 0 ? Number((totalProctorPoints / proctoringItems.length).toFixed(2)) : 0;
 
@@ -572,7 +584,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // --- 3. Extension / Value Addition ---
         
         // 3.1 Faculty resource utilization
-        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
         const resUtilItems = [];
         let totalResPoints = 0;
 
@@ -586,39 +598,41 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         };
 
         resourceUt.forEach(r => {
-            let pts = 0;
-            const activityRole = (r.activityType || '').toLowerCase();
-            const activityCat = (r.activityCategory || '').toLowerCase();
-            
-            if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
-                pts = (r.sessionsConducted || 1) * (resourceUtConf.resourcePerson ?? 2);
-            } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
-                pts = (r.daysParticipated || 1) * (resourceUtConf.participated ?? 1);
-            } else if (activityRole.includes('guest lecture') || activityRole.includes('workshop') || activityRole.includes('event')) {
-                pts = resourceUtConf.guestLecture ?? 2;
-            } else {
-                // Organized STTP/FDP/Conference
-                if (activityCat.includes('conference')) {
-                    pts = resourceUtConf.conference ?? 10;
-                } else if (activityCat.includes('sttp') || activityCat.includes('refresher')) {
-                    pts = resourceUtConf.sttp ?? 10;
-                } else if (activityCat.includes('fdp') || activityCat.includes('symposium')) {
-                    pts = resourceUtConf.fdp ?? 10;
+            if (r.status === "Approved" || r.status === "Pending at HOD") {
+                let pts = 0;
+                const activityRole = (r.activityType || '').toLowerCase();
+                const activityCat = (r.activityCategory || '').toLowerCase();
+                
+                if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
+                    pts = (r.sessionsConducted || 1) * (resourceUtConf.resourcePerson ?? 2);
+                } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
+                    pts = (r.daysParticipated || 1) * (resourceUtConf.participated ?? 1);
+                } else if (activityRole.includes('guest lecture') || activityRole.includes('workshop') || activityRole.includes('event')) {
+                    pts = resourceUtConf.guestLecture ?? 2;
                 } else {
-                    pts = resourceUtConf.conference ?? 10; // fallback
+                    // Organized STTP/FDP/Conference
+                    if (activityCat.includes('conference')) {
+                        pts = resourceUtConf.conference ?? 10;
+                    } else if (activityCat.includes('sttp') || activityCat.includes('refresher')) {
+                        pts = resourceUtConf.sttp ?? 10;
+                    } else if (activityCat.includes('fdp') || activityCat.includes('symposium')) {
+                        pts = resourceUtConf.fdp ?? 10;
+                    } else {
+                        pts = resourceUtConf.conference ?? 10; // fallback
+                    }
                 }
+                resUtilItems.push({
+                    eventId: r._id,
+                    event: r.organizationName || "N/A",
+                    role: r.activityType || "N/A",
+                    pointsClaimed: pts
+                });
+                totalResPoints += pts;
             }
-            resUtilItems.push({
-                eventId: r._id,
-                event: r.organizationName || "N/A",
-                role: r.activityType || "N/A",
-                pointsClaimed: pts
-            });
-            totalResPoints += pts;
         });
 
         // 3.2 Faculty Expertise/Recognition/Contribution
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
         const contItems = [];
         let totalContPoints = 0;
 
@@ -641,79 +655,81 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         };
 
         contributions.forEach(c => {
-            let pts = 5; // default fallback
-            let activityName = "Expertise / Recognition Activity";
-            
-            switch (c.category) {
-                case 1:
-                    pts = expPointsConf.memberBOS ?? 5;
-                    activityName = "Member of BOG/GB/AC/BOS (Outside AUS)";
-                    break;
-                case 2:
-                    pts = expPointsConf.editorialBoardSCIE ?? 5;
-                    activityName = `Editorial Board Member (SCIE/Q1/Q2) - ${c.journalName || ''}`;
-                    break;
-                case 3:
-                    pts = expPointsConf.editorialBoardESCI ?? 3;
-                    activityName = `Editorial Board Member (ESCI/Q3/Q4/Conf) - ${c.journalName || c.journalConferenceName || ''}`;
-                    break;
-                case 4:
-                    pts = expPointsConf.awardsGovt ?? 5;
-                    activityName = `Awards (MHRD/AICTE/UGC/State Govt/Top 2%) - ${c.awardName || ''}`;
-                    break;
-                case 5:
-                    pts = expPointsConf.awardsOthers ?? 3;
-                    activityName = `Awards (NGO/Trust/Others) - ${c.awardName || ''}`;
-                    break;
-                case 6:
-                    pts = expPointsConf.developedEContent ?? 10;
-                    activityName = `Developed E-Content (Complete Course) - ${c.courseName || ''}`;
-                    break;
-                case 7:
-                    pts = expPointsConf.certificationNewAge ?? 5;
-                    activityName = `Certification on New Age Technologies - ${c.certificationName || ''}`;
-                    break;
-                case 8:
-                    pts = expPointsConf.hackathonShortlisted ?? 5;
-                    activityName = `Student Shortlisted in Hackathon/Startup Finals - ${c.eventName || ''}`;
-                    break;
-                case 9:
-                    pts = expPointsConf.newspaperArticle ?? 3;
-                    activityName = `Magazine/Newspaper Article Published - ${c.articleTitle || ''}`;
-                    break;
-                case 10:
-                    pts = expPointsConf.researchFacility ?? 3;
-                    activityName = `Establishment/Maintenance of Research Facility - ${c.facilityName || ''}`;
-                    break;
-                case 11:
-                    const dur = (c.duration || '').toLowerCase();
-                    if (dur.includes('12')) {
-                        pts = expPointsConf.nptel12W ?? 10;
-                    } else if (dur.includes('8')) {
-                        pts = expPointsConf.nptel8W ?? 8;
-                    } else if (dur.includes('4')) {
-                        pts = expPointsConf.nptel4W ?? 5;
-                    } else {
-                        pts = expPointsConf.nptel8W ?? 8; // fallback
-                    }
-                    activityName = `NPTEL Course Completion (${c.duration || '8 weeks'}) - ${c.courseName || ''}`;
-                    break;
-                case 12:
-                    pts = expPointsConf.coursera ?? 5;
-                    activityName = `Coursera Course Completion - ${c.courseName || ''}`;
-                    break;
-                case 13:
-                    pts = expPointsConf.grantSanctioned ?? 5;
-                    activityName = `FDP/Seminar Grant Sanctioned - ${c.grantName || ''}`;
-                    break;
-            }
+            if (c.status === "Approved" || c.status === "Pending at HOD") {
+                let pts = 5; // default fallback
+                let activityName = "Expertise / Recognition Activity";
+                
+                switch (c.category) {
+                    case 1:
+                        pts = expPointsConf.memberBOS ?? 5;
+                        activityName = "Member of BOG/GB/AC/BOS (Outside AUS)";
+                        break;
+                    case 2:
+                        pts = expPointsConf.editorialBoardSCIE ?? 5;
+                        activityName = `Editorial Board Member (SCIE/Q1/Q2) - ${c.journalName || ''}`;
+                        break;
+                    case 3:
+                        pts = expPointsConf.editorialBoardESCI ?? 3;
+                        activityName = `Editorial Board Member (ESCI/Q3/Q4/Conf) - ${c.journalName || c.journalConferenceName || ''}`;
+                        break;
+                    case 4:
+                        pts = expPointsConf.awardsGovt ?? 5;
+                        activityName = `Awards (MHRD/AICTE/UGC/State Govt/Top 2%) - ${c.awardName || ''}`;
+                        break;
+                    case 5:
+                        pts = expPointsConf.awardsOthers ?? 3;
+                        activityName = `Awards (NGO/Trust/Others) - ${c.awardName || ''}`;
+                        break;
+                    case 6:
+                        pts = expPointsConf.developedEContent ?? 10;
+                        activityName = `Developed E-Content (Complete Course) - ${c.courseName || ''}`;
+                        break;
+                    case 7:
+                        pts = expPointsConf.certificationNewAge ?? 5;
+                        activityName = `Certification on New Age Technologies - ${c.certificationName || ''}`;
+                        break;
+                    case 8:
+                        pts = expPointsConf.hackathonShortlisted ?? 5;
+                        activityName = `Student Shortlisted in Hackathon/Startup Finals - ${c.eventName || ''}`;
+                        break;
+                    case 9:
+                        pts = expPointsConf.newspaperArticle ?? 3;
+                        activityName = `Magazine/Newspaper Article Published - ${c.articleTitle || ''}`;
+                        break;
+                    case 10:
+                        pts = expPointsConf.researchFacility ?? 3;
+                        activityName = `Establishment/Maintenance of Research Facility - ${c.facilityName || ''}`;
+                        break;
+                    case 11:
+                        const dur = (c.duration || '').toLowerCase();
+                        if (dur.includes('12')) {
+                            pts = expPointsConf.nptel12W ?? 10;
+                        } else if (dur.includes('8')) {
+                            pts = expPointsConf.nptel8W ?? 8;
+                        } else if (dur.includes('4')) {
+                            pts = expPointsConf.nptel4W ?? 5;
+                        } else {
+                            pts = expPointsConf.nptel8W ?? 8; // fallback
+                        }
+                        activityName = `NPTEL Course Completion (${c.duration || '8 weeks'}) - ${c.courseName || ''}`;
+                        break;
+                    case 12:
+                        pts = expPointsConf.coursera ?? 5;
+                        activityName = `Coursera Course Completion - ${c.courseName || ''}`;
+                        break;
+                    case 13:
+                        pts = expPointsConf.grantSanctioned ?? 5;
+                        activityName = `FDP/Seminar Grant Sanctioned - ${c.grantName || ''}`;
+                        break;
+                }
 
-            contItems.push({
-                contributionId: c._id,
-                activityName: activityName,
-                pointsClaimed: pts
-            });
-            totalContPoints += pts;
+                contItems.push({
+                    contributionId: c._id,
+                    activityName: activityName,
+                    pointsClaimed: pts
+                });
+                totalContPoints += pts;
+            }
         });
 
         const cappedResPoints = Math.min(config.valueAddition?.resourceUtilizationMaxPoints ?? 10, totalResPoints);
@@ -721,7 +737,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const totalValueAdditionPoints = Number((cappedResPoints + cappedContPoints).toFixed(2));
 
         // --- 4. Administrative Responsibilities ---
-        const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
         const adminItems = [];
         let totalAdminPoints = 0;
 
@@ -752,51 +768,53 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         if (adminRoles && adminRoles.roles) {
             adminRoles.roles.forEach(r => {
-                let pts = 5; // default fallback
-                const name = r.roleName.toLowerCase();
-                const level = (r.level || '').toLowerCase();
-                const isCentral = level.includes('central') || level.includes('institute');
-                
-                if (name.includes('dean') || name.includes('coe')) {
-                    pts = adminConf.deanCentral ?? 20;
-                } else if (name.includes('hod')) {
-                    if (name.includes('dy') || name.includes('vice')) {
+                if (r.isResponsible && (r.status === "Approved" || r.status === "Pending")) {
+                    let pts = 5; // default fallback
+                    const name = r.roleName.toLowerCase();
+                    const level = (r.level || '').toLowerCase();
+                    const isCentral = level.includes('central') || level.includes('institute');
+                    
+                    if (name.includes('dean') || name.includes('coe')) {
+                        pts = adminConf.deanCentral ?? 20;
+                    } else if (name.includes('hod')) {
+                        if (name.includes('dy') || name.includes('vice')) {
+                            pts = adminConf.dyHodDept ?? 10;
+                        } else {
+                            pts = isCentral ? (adminConf.hodCentral ?? 15) : (adminConf.hodDept ?? 15);
+                        }
+                    } else if (name.includes('exam cell') || name.includes('exam incharge')) {
                         pts = adminConf.dyHodDept ?? 10;
+                    } else if (name.includes('timetable') || name.includes('time table') || name.includes('project') || name.includes('curriculum')) {
+                        pts = adminConf.timetableDept ?? 10;
+                    } else if (name.includes('placement') || name.includes('internship') || name.includes('alumni')) {
+                        pts = isCentral ? (adminConf.placementCentral ?? 10) : (adminConf.placementDept ?? 10);
+                    } else if (name.includes('coursera') || name.includes('linkedin') || name.includes('ala')) {
+                        pts = isCentral ? (adminConf.courseraCentral ?? 10) : (adminConf.courseraDept ?? 5);
+                    } else if (name.includes('edc') || name.includes('iic') || name.includes('iqac')) {
+                        pts = isCentral ? (adminConf.edcCentral ?? 10) : (adminConf.edcDept ?? 5);
+                    } else if (name.includes('course coordinator')) {
+                        pts = adminConf.courseDept ?? 5;
+                    } else if (name.includes('website')) {
+                        pts = adminConf.websiteCentral ?? 10;
+                    } else if (name.includes('nss') || name.includes('professional chapter')) {
+                        pts = isCentral ? (adminConf.nssCentral ?? 10) : (adminConf.nssDept ?? 5);
+                    } else if (name.includes('training')) {
+                        pts = isCentral ? (adminConf.trainingCentral ?? 10) : (adminConf.trainingDept ?? 5);
+                    } else if (name.includes('drc') || name.includes('research')) {
+                        pts = adminConf.drcDept ?? 5;
+                    } else if (name.includes('anti-ragging') || name.includes('antiragging')) {
+                        pts = isCentral ? (adminConf.antiRaggingCentral ?? 5) : (adminConf.antiRaggingDept ?? 3);
                     } else {
-                        pts = isCentral ? (adminConf.hodCentral ?? 15) : (adminConf.hodDept ?? 15);
+                        pts = isCentral ? (adminConf.otherCentral ?? 10) : (adminConf.otherDept ?? 5);
                     }
-                } else if (name.includes('exam cell') || name.includes('exam incharge')) {
-                    pts = adminConf.dyHodDept ?? 10;
-                } else if (name.includes('timetable') || name.includes('time table') || name.includes('project') || name.includes('curriculum')) {
-                    pts = adminConf.timetableDept ?? 10;
-                } else if (name.includes('placement') || name.includes('internship') || name.includes('alumni')) {
-                    pts = isCentral ? (adminConf.placementCentral ?? 10) : (adminConf.placementDept ?? 10);
-                } else if (name.includes('coursera') || name.includes('linkedin') || name.includes('ala')) {
-                    pts = isCentral ? (adminConf.courseraCentral ?? 10) : (adminConf.courseraDept ?? 5);
-                } else if (name.includes('edc') || name.includes('iic') || name.includes('iqac')) {
-                    pts = isCentral ? (adminConf.edcCentral ?? 10) : (adminConf.edcDept ?? 5);
-                } else if (name.includes('course coordinator')) {
-                    pts = adminConf.courseDept ?? 5;
-                } else if (name.includes('website')) {
-                    pts = adminConf.websiteCentral ?? 10;
-                } else if (name.includes('nss') || name.includes('professional chapter')) {
-                    pts = isCentral ? (adminConf.nssCentral ?? 10) : (adminConf.nssDept ?? 5);
-                } else if (name.includes('training')) {
-                    pts = isCentral ? (adminConf.trainingCentral ?? 10) : (adminConf.trainingDept ?? 5);
-                } else if (name.includes('drc') || name.includes('research')) {
-                    pts = adminConf.drcDept ?? 5;
-                } else if (name.includes('anti-ragging') || name.includes('antiragging')) {
-                    pts = isCentral ? (adminConf.antiRaggingCentral ?? 5) : (adminConf.antiRaggingDept ?? 3);
-                } else {
-                    pts = isCentral ? (adminConf.otherCentral ?? 10) : (adminConf.otherDept ?? 5);
-                }
 
-                adminItems.push({
-                    activityName: r.roleName,
-                    level: r.level || "Dept level",
-                    pointsClaimed: pts
-                });
-                totalAdminPoints += pts;
+                    adminItems.push({
+                        activityName: r.roleName,
+                        level: r.level || "Dept level",
+                        pointsClaimed: pts
+                    });
+                    totalAdminPoints += pts;
+                }
             });
         }
 
@@ -862,7 +880,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             isCalculatedFresh: true,
             isProfileComplete,
             missingProfileFields,
-            data: appraisal
+            data: appraisal,
+            proctoringDetail: proctoringEntry,
+            resourceUtilizationDetails: resourceUt,
+            contributionDetails: contributions,
+            administrationDetail: adminRoles
         });
 
     } catch (err) {
@@ -963,7 +985,26 @@ exports.getPendingHODAppraisals = async (req, res) => {
             status: "Submitted to HOD"
         }).populate("facultyId", "name institutionId coreDepartment department").populate("academicYearId", "year");
 
-        res.json({ success: true, data: appraisals });
+        const appraisalsWithDetails = [];
+        for (const app of appraisals) {
+            const facultyId = app.facultyId._id;
+            const academicYearId = app.academicYearId._id;
+
+            const proctoringEntry = await FacultyProctoringEntry.findOne({ facultyId, academicYear: academicYearId });
+            const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
+            const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
+
+            const appObj = app.toObject();
+            appObj.proctoringDetail = proctoringEntry;
+            appObj.resourceUtilizationDetails = resourceUt;
+            appObj.contributionDetails = contributions;
+            appObj.administrationDetail = adminRoles;
+
+            appraisalsWithDetails.push(appObj);
+        }
+
+        res.json({ success: true, data: appraisalsWithDetails });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -989,6 +1030,57 @@ exports.evaluateHODAppraisal = async (req, res) => {
             };
             await appraisal.save();
             return res.json({ success: true, message: "Appraisal sent back to faculty.", data: appraisal });
+        }
+
+        if (action === "Approve") {
+            const facultyId = appraisal.facultyId;
+            const academicYearId = appraisal.academicYearId;
+
+            // Check if any entries are Rejected
+            const hasRejectedProctoring = await FacultyProctoringEntry.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
+            const hasRejectedResourceUt = await ResourceUtilization.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
+            const hasRejectedContribution = await Contribution.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
+            const hasRejectedAdmin = await FacultyAdministration.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
+
+            if (hasRejectedProctoring || hasRejectedResourceUt || hasRejectedContribution || hasRejectedAdmin) {
+                return res.status(400).json({ success: false, message: "Cannot approve appraisal while there are rejected sections. Please reject the overall appraisal so the faculty can correct them." });
+            }
+
+            // Auto-approve any remaining Pending entries
+            await FacultyProctoringEntry.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Pending" },
+                { status: "Approved", approvedBy: req.user.userId, approvalDate: new Date() }
+            );
+            await ResourceUtilization.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Pending at HOD" },
+                { status: "Approved", hodComment: "Approved via Appraisal" }
+            );
+            await Contribution.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Pending at HOD" },
+                { status: "Approved", hodComment: "Approved via Appraisal" }
+            );
+
+            // For administration, update overall status and role statuses
+            const adminEntry = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
+            if (adminEntry) {
+                let modified = false;
+                adminEntry.roles.forEach(r => {
+                    if (r.isResponsible && r.status === "Pending") {
+                        r.status = "Approved";
+                        r.approvedBy = req.user.userId;
+                        r.approvalDate = new Date();
+                        r.remarks = "Approved via Appraisal";
+                        modified = true;
+                    }
+                });
+                if (modified) {
+                    adminEntry.status = "Approved";
+                    adminEntry.approvedBy = req.user.userId;
+                    adminEntry.approvalDate = new Date();
+                    adminEntry.markModified("roles");
+                    await adminEntry.save();
+                }
+            }
         }
 
         if (!interpersonalRatings || interpersonalRatings.length !== 10) {
