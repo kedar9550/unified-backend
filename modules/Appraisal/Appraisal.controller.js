@@ -111,6 +111,7 @@ const DEFAULT_CONFIG = {
             resourcePerson: 2,
             participated: 1
         },
+        resourceUtilizationMaxPoints: 10,
         expertisePoints: {
             memberBOS: 5,
             editorialBoardSCIE: 5,
@@ -715,8 +716,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             totalContPoints += pts;
         });
 
+        const cappedResPoints = Math.min(config.valueAddition?.resourceUtilizationMaxPoints ?? 10, totalResPoints);
         const cappedContPoints = Math.min(config.valueAddition?.expertiseMaxPoints ?? 10, totalContPoints);
-        const totalValueAdditionPoints = Number((totalResPoints + cappedContPoints).toFixed(2));
+        const totalValueAdditionPoints = Number((cappedResPoints + cappedContPoints).toFixed(2));
 
         // --- 4. Administrative Responsibilities ---
         const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId, status: "Approved" });
@@ -835,7 +837,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 totalClaimed: totalResearchPoints
             },
             valueAddition: {
-                resourceUtilization: { items: resUtilItems, totalClaimed: totalResPoints },
+                resourceUtilization: { items: resUtilItems, totalClaimed: cappedResPoints },
                 expertiseContribution: { items: contItems, totalClaimed: cappedContPoints },
                 totalClaimed: totalValueAdditionPoints
             },

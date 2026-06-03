@@ -70,6 +70,7 @@ const AppraisalConfigSchema = new mongoose.Schema({
             resourcePerson: { type: Number, default: 2 },
             participated: { type: Number, default: 1 }
         },
+        resourceUtilizationMaxPoints: { type: Number, default: 10 },
         expertisePoints: {
             memberBOS: { type: Number, default: 5 },
             editorialBoardSCIE: { type: Number, default: 5 },
