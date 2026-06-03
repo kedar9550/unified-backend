@@ -681,3 +681,233 @@ exports.getHODDashboardData = async (req, res, next) => {
         next(error);
     }
 };
+
+exports.getResearchDeanDashboardData = async (req, res, next) => {
+    try {
+        const models = [
+            { name: 'Textbook', model: Textbook },
+            { name: 'BookChapter', model: BookChapter },
+            { name: 'Journal', model: Journal },
+            { name: 'Patent', model: Patent },
+            { name: 'FundedProject', model: FundedProject },
+            { name: 'Consultancy', model: Consultancy },
+            { name: 'Conference', model: Conference },
+            { name: 'PhdApplication', model: PhdApplication },
+            { name: 'NovelProduct', model: NovelProduct }
+        ];
+
+        // 1. Fetch status counts for all models in parallel
+        const counts = await Promise.all(models.map(async ({ model }) => {
+            return model.aggregate([
+                {
+                    $group: {
+                        _id: "$status",
+                        count: { $sum: 1 }
+                    }
+                }
+            ]);
+        }));
+
+        let approved = 0;
+        let pendingHod = 0;
+        let pendingRnd = 0;
+        let rejected = 0;
+        let total = 0;
+
+        let journalApproved = 0;
+        let conferenceApproved = 0;
+        let chapterApproved = 0;
+        let textbookApproved = 0;
+        let othersApproved = 0;
+
+        models.forEach(({ name }, idx) => {
+            const modelCounts = counts[idx];
+            modelCounts.forEach(({ _id: status, count }) => {
+                total += count;
+                if (status === 'Approved') {
+                    approved += count;
+                    if (name === 'Journal') journalApproved += count;
+                    else if (name === 'Conference') conferenceApproved += count;
+                    else if (name === 'BookChapter') chapterApproved += count;
+                    else if (name === 'Textbook') textbookApproved += count;
+                    else othersApproved += count;
+                } else if (status === 'Pending at HOD') {
+                    pendingHod += count;
+                } else if (status === 'Pending at R&D') {
+                    pendingRnd += count;
+                } else if (status && status.startsWith('Rejected')) {
+                    rejected += count;
+                }
+            });
+        });
+
+        // 2. Fetch monthly trend data for approved publications (last 12 months)
+        const twelveMonthsAgo = new Date();
+        twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+        twelveMonthsAgo.setDate(1);
+        twelveMonthsAgo.setHours(0, 0, 0, 0);
+
+        const trendResults = await Promise.all(models.map(({ model }) => {
+            return model.aggregate([
+                {
+                    $match: {
+                        status: 'Approved',
+                        createdAt: { $gte: twelveMonthsAgo }
+                    }
+                },
+                {
+                    $group: {
+                        _id: {
+                            year: { $year: "$createdAt" },
+                            month: { $month: "$createdAt" }
+                        },
+                        count: { $sum: 1 }
+                    }
+                }
+            ]);
+        }));
+
+        const dynamicMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const trendData = [];
+        const now = new Date();
+
+        for (let i = 11; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            trendData.push({
+                year: d.getFullYear(),
+                month: d.getMonth() + 1,
+                name: dynamicMonthNames[d.getMonth()],
+                publications: 0
+            });
+        }
+
+        trendResults.forEach(modelTrend => {
+            modelTrend.forEach(({ _id, count }) => {
+                const match = trendData.find(t => t.year === _id.year && t.month === _id.month);
+                if (match) {
+                    match.publications += count;
+                }
+            });
+        });
+
+        const formattedTrendData = trendData.map(({ name, publications }) => ({ name, publications }));
+
+        // 3. Publications by Type (Pie chart)
+        const pieData = [
+            { name: 'Journal Articles', value: journalApproved, color: '#3b82f6' },
+            { name: 'Conference Papers', value: conferenceApproved, color: '#10b981' },
+            { name: 'Book Chapters', value: chapterApproved, color: '#f59e0b' },
+            { name: 'Books', value: textbookApproved, color: '#8b5cf6' },
+            { name: 'Others', value: othersApproved, color: '#ec4899' }
+        ];
+
+        // 4. Aggregate department-wise publication counts (Top Departments)
+        const departmentsList = await Department.find().select('name code').lean();
+        const deptCountMap = {};
+        departmentsList.forEach(d => {
+            deptCountMap[d._id.toString()] = {
+                name: d.name,
+                code: d.code,
+                value: 0
+            };
+        });
+
+        const deptAggResults = await Promise.all(models.map(({ model }) => {
+            return model.aggregate([
+                { $match: { status: 'Approved' } },
+                {
+                    $lookup: {
+                        from: "employees",
+                        localField: "facultyId",
+                        foreignField: "_id",
+                        as: "faculty"
+                    }
+                },
+                { $unwind: "$faculty" },
+                {
+                    $project: {
+                        deptId: { $ifNull: ["$faculty.coreDepartment", "$faculty.department"] }
+                    }
+                },
+                { $match: { deptId: { $ne: null } } },
+                {
+                    $group: {
+                        _id: "$deptId",
+                        count: { $sum: 1 }
+                    }
+                }
+            ]);
+        }));
+
+        deptAggResults.forEach(modelResult => {
+            modelResult.forEach(({ _id, count }) => {
+                const deptIdStr = _id.toString();
+                if (deptCountMap[deptIdStr]) {
+                    deptCountMap[deptIdStr].value += count;
+                }
+            });
+        });
+
+        const sortedDepts = Object.values(deptCountMap)
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5);
+
+        const deptColors = ['#3b82f6', '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b'];
+        const departmentsData = sortedDepts.map((dept, index) => ({
+            name: dept.name,
+            value: dept.value,
+            color: deptColors[index] || '#64748b'
+        }));
+
+        // 5. Research Impact metrics from Approved Journals
+        const approvedJournals = await Journal.find({ status: 'Approved' }).select('citations hIndex').lean();
+        let citationsSum = 0;
+        let maxHIndex = 0;
+        let i10IndexCount = 0;
+
+        approvedJournals.forEach(j => {
+            const cit = Number(j.citations) || 0;
+            const h = Number(j.hIndex) || 0;
+            citationsSum += cit;
+            if (h > maxHIndex) {
+                maxHIndex = h;
+            }
+            if (cit >= 10) {
+                i10IndexCount++;
+            }
+        });
+
+        const researchImpact = [
+            { label: 'Citations', value: citationsSum, trend: '+15%', icon: '“', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+            { label: 'h-index', value: maxHIndex, trend: '+5%', icon: 'h.', color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },
+            { label: 'i10-index', value: i10IndexCount, trend: '+10%', icon: 'i10', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' }
+        ];
+
+        // 6. Announcements
+        const announcements = [
+            { date: '02 Jun 2026', title: 'R&D Seed Grant Application', desc: 'Faculty members are invited to apply for Aditya University Seed Grant 2026.' },
+            { date: '28 May 2026', title: 'Research Publication Policy 2026', desc: 'Updated incentives structure for Q1/Q2 Scopus Journals has been published.' },
+            { date: '15 May 2026', title: 'IPR and Patent Filing Workshop', desc: 'A hands-on workshop on filing patents will be organized on 12th June.' }
+        ];
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                totalPublications: total,
+                approved,
+                pendingHod,
+                pendingRnd,
+                rejected,
+                trendData: formattedTrendData,
+                pieData,
+                departments: departmentsData,
+                researchImpact,
+                announcements
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching Research Dean dashboard data:', error);
+        next(error);
+    }
+};

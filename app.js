@@ -94,6 +94,8 @@ app.use('/api/roles', require('./modules/role/role.route'));
 app.use('/api/student-data', require('./modules/StudentData/Studentdata.route'));
 app.use('/api/semester-types', require('./modules/semesterType/semesterType.route'));
 app.use('/api/dashboard', require('./modules/dashboard/dashboard.route'));
+app.use('/api/reference-journals', require('./modules/ReferenceJournal/ReferenceJournal.route'));
+app.use('/api/journal-impact-factors', require('./modules/JournalImpactFactor/JournalImpactFactor.route'));
 app.use('/api/research/textbook', require('./modules/Textbook/Textbook.router'));
 app.use('/api/research/book-chapter', require('./modules/BookChapter/BookChapter.router'));
 app.use('/api/research/journal', require('./modules/Journal/Journal.router'));
