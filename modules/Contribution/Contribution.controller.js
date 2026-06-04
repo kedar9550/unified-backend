@@ -1,4 +1,5 @@
 const Contribution = require('./Contribution.model');
+const ResourceUtilization = require('../ResourceUtilization/ResourceUtilization.model');
 const Employee = require('../employee/employee.model');
 const { isFutureDate } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
@@ -200,6 +201,24 @@ exports.createContribution = async (req, res) => {
             }
         }
 
+        // Cross-module NPTEL duplicate check
+        if (categoryNum === 11 && data.courseName) {
+            const existingResUt = await ResourceUtilization.findOne({
+                facultyId: req.user.userId,
+                activityCategory: 'FDP',
+                activityType: 'FDP Participant',
+                organizingInstitutionCategory: 'NPTEL',
+                courseFdpName: { $regex: new RegExp("^" + data.courseName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                status: { $ne: 'Rejected' }
+            });
+            if (existingResUt) {
+                return res.status(400).json({
+                    success: false,
+                    message: `This NPTEL course has already been submitted under Resource Utilization (FDP Participant) with status: "${existingResUt.status}". Duplicates are not allowed.`
+                });
+            }
+        }
+
         const contribution = new Contribution({
             facultyId: req.user.userId,
             academicYear: data.academicYear,
@@ -313,6 +332,27 @@ exports.updateContribution = async (req, res) => {
                     success: false,
                     message: `A duplicate entry for this academic year and category already exists with the same name: "${value}".`
                 });
+            }
+        }
+
+        // Cross-module NPTEL duplicate check
+        if (categoryNum === 11) {
+            const courseNameVal = data.courseName !== undefined ? data.courseName : record.courseName;
+            if (courseNameVal) {
+                const existingResUt = await ResourceUtilization.findOne({
+                    facultyId: req.user.userId,
+                    activityCategory: 'FDP',
+                    activityType: 'FDP Participant',
+                    organizingInstitutionCategory: 'NPTEL',
+                    courseFdpName: { $regex: new RegExp("^" + courseNameVal.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                    status: { $ne: 'Rejected' }
+                });
+                if (existingResUt) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `This NPTEL course has already been submitted under Resource Utilization (FDP Participant) with status: "${existingResUt.status}". Duplicates are not allowed.`
+                    });
+                }
             }
         }
 

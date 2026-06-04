@@ -1,4 +1,5 @@
 const ResourceUtilization = require('./ResourceUtilization.model');
+const Contribution = require('../Contribution/Contribution.model');
 const Employee = require('../employee/employee.model');
 const { isFutureDate } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
@@ -88,6 +89,22 @@ exports.createResourceUtilization = async (req, res) => {
                 return res.status(400).json({
                     success: false,
                     message: `A duplicate entry for this academic year and activity category already exists with the same organization/event name: "${data.organizationName}".`
+                });
+            }
+        }
+
+        // Cross-module NPTEL duplicate check
+        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NPTEL" && data.courseFdpName) {
+            const existingContribution = await Contribution.findOne({
+                facultyId: req.user.userId,
+                category: 11,
+                courseName: { $regex: new RegExp("^" + data.courseFdpName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                status: { $ne: 'Rejected' }
+            });
+            if (existingContribution) {
+                return res.status(400).json({
+                    success: false,
+                    message: `This NPTEL course has already been submitted under Contribution (Category 11 - NPTEL Course Completion) with status: "${existingContribution.status}". Duplicates are not allowed.`
                 });
             }
         }
@@ -301,6 +318,27 @@ exports.updateResourceUtilization = async (req, res) => {
                     success: false,
                     message: `A duplicate entry for this academic year and activity category already exists with the same organization/event name: "${orgName}".`
                 });
+            }
+        }
+
+        // Cross-module NPTEL duplicate check
+        if (category === "FDP" && type === "FDP Participant") {
+            const courseFdpNameVal = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
+            const orgInstCatVal = data.organizingInstitutionCategory !== undefined ? data.organizingInstitutionCategory : record.organizingInstitutionCategory;
+            
+            if (orgInstCatVal === "NPTEL" && courseFdpNameVal) {
+                const existingContribution = await Contribution.findOne({
+                    facultyId: req.user.userId,
+                    category: 11,
+                    courseName: { $regex: new RegExp("^" + courseFdpNameVal.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
+                    status: { $ne: 'Rejected' }
+                });
+                if (existingContribution) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `This NPTEL course has already been submitted under Contribution (Category 11 - NPTEL Course Completion) with status: "${existingContribution.status}". Duplicates are not allowed.`
+                    });
+                }
             }
         }
 
