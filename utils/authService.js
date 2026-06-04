@@ -80,6 +80,8 @@ const normalizeUser = (user, userType) => {
         googleScholarId: userType === 'Employee' ? user.googleScholarId : "",
         panNumber: userType === 'Employee' ? user.panNumber : "",
         college: userType === 'Employee' ? user.college : "",
+        qualification: userType === 'Employee' ? (user.qualification || "") : "",
+        doctorate: userType === 'Employee' ? (user.doctorate || "no") : "no",
         coreDepartment: userType === 'Employee' 
             ? (user.coreDepartment?.name || (user.coreDepartment ? user.coreDepartment.toString() : "Not Assigned")) 
             : "",
