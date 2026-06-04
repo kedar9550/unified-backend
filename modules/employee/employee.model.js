@@ -33,6 +33,16 @@ const EmployeeSchema = new mongoose.Schema({
         trim: true,
         default: ""
     },
+    qualification: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    doctorate: {
+        type: String,
+        enum: ["yes", "no"],
+        default: "no"
+    },
     email: {
         type: String,
         required: true,
@@ -107,6 +117,15 @@ const EmployeeSchema = new mongoose.Schema({
 
 // hash password
 EmployeeSchema.pre("save", async function () {
+    if (this.isModified("qualification")) {
+        const qual = (this.qualification || "").toLowerCase().trim();
+        if (/ph\.?\s*d|doctor/i.test(qual)) {
+            this.doctorate = "yes";
+        } else {
+            this.doctorate = "no";
+        }
+    }
+
     if (!this.isModified("password")) return;
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);

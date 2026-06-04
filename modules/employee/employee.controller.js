@@ -234,7 +234,7 @@ const updateProfile = async (req, res) => {
 
             return res.json({ user: normalizedUser });
         } else {
-            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college"];
+            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college", "qualification"];
             const updates = {};
             allowedFields.forEach((field) => {
                 // Allow setting empty values except email and phone which are required
@@ -246,6 +246,15 @@ const updateProfile = async (req, res) => {
                     }
                 }
             });
+
+            if (updates.qualification !== undefined) {
+                const qual = (updates.qualification || "").toLowerCase().trim();
+                if (/ph\.?\s*d|doctor/i.test(qual)) {
+                    updates.doctorate = "yes";
+                } else {
+                    updates.doctorate = "no";
+                }
+            }
 
             const user = await Employee.findOneAndUpdate(
                 { institutionId },
