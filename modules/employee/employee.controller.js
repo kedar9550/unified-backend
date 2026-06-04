@@ -204,31 +204,71 @@ const logoutUser = (req, res) => {
  */
 const updateProfile = async (req, res) => {
     try {
-        const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college"];
-        const updates = {};
-        allowedFields.forEach((field) => {
-            if (req.body[field]) updates[field] = req.body[field];
-        });
-
+        const userType = req.user.userType || (/^\d+$/.test(req.user.institutionId) ? 'Employee' : 'Student');
         const institutionId = req.user.institutionId;
         if (!institutionId) {
             return res.status(400).json({ message: "Invalid session. Please log in again." });
         }
 
-        const user = await Employee.findOneAndUpdate(
-            { institutionId },
-            { $set: updates },
-            { new: true }
-        ).populate('department', 'name').populate('coreDepartment', 'name');
+        if (userType === 'Student') {
+            const updates = {};
+            if (req.body.email) updates['contactInfo.emailId'] = req.body.email;
+            if (req.body.phone) updates['contactInfo.mobileNumber'] = req.body.phone;
 
-        if (!user) return res.status(404).json({ message: "User not found" });
+            const student = await Student.findOneAndUpdate(
+                { rollNo: institutionId?.toUpperCase() },
+                { $set: updates },
+                { new: true }
+            ).populate('academicInfo.department', 'name');
 
-        // Refresh token with updated user data
-        const normalizedUser = authService.normalizeUser(user, 'Employee');
-        generateToken({ ...normalizedUser, roles: req.user.roles }, res);
+            if (!student) return res.status(404).json({ message: "User not found" });
 
-        res.json({ user: normalizedUser });
+            const normalizedUser = authService.normalizeUser(student, 'Student');
+            generateToken({
+                userId: student._id,
+                institutionId: student.rollNo,
+                userType: 'Student',
+                app: req.user.app || 'UNIFIED_SYSTEM',
+                roles: req.user.roles
+            }, res);
+
+            return res.json({ user: normalizedUser });
+        } else {
+            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college"];
+            const updates = {};
+            allowedFields.forEach((field) => {
+                // Allow setting empty values except email and phone which are required
+                if (req.body[field] !== undefined) {
+                    if (["email", "phone"].includes(field)) {
+                        if (req.body[field]) updates[field] = req.body[field];
+                    } else {
+                        updates[field] = req.body[field];
+                    }
+                }
+            });
+
+            const user = await Employee.findOneAndUpdate(
+                { institutionId },
+                { $set: updates },
+                { new: true }
+            ).populate('department', 'name').populate('coreDepartment', 'name');
+
+            if (!user) return res.status(404).json({ message: "User not found" });
+
+            // Refresh token with updated user data
+            const normalizedUser = authService.normalizeUser(user, 'Employee');
+            generateToken({
+                userId: user._id,
+                institutionId: user.institutionId,
+                userType: 'Employee',
+                app: req.user.app || 'UNIFIED_SYSTEM',
+                roles: req.user.roles
+            }, res);
+
+            return res.json({ user: normalizedUser });
+        }
     } catch (err) {
+        console.error("updateProfile error:", err);
         res.status(500).json({ message: "Server error" });
     }
 };
