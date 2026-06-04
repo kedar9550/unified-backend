@@ -48,6 +48,27 @@ const ResourceUtilizationSchema = new mongoose.Schema({
     daysParticipated: {
         type: Number
     },
+    courseFdpName: {
+        type: String
+    },
+    organizingInstitutionCategory: {
+        type: String
+    },
+    location: {
+        type: String
+    },
+    labName: {
+        type: String
+    },
+    universityName: {
+        type: String
+    },
+    instituteName: {
+        type: String
+    },
+    nirfRank: {
+        type: Number
+    },
     status: {
         type: String,
         enum: ['Draft', 'Pending at HOD', 'Approved', 'Rejected'],

@@ -10,6 +10,10 @@ exports.createResourceUtilization = async (req, res) => {
     try {
         const data = req.body;
 
+        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant") {
+            data.organizationName = data.courseFdpName;
+        }
+
         // Validate mandatory text fields
         if (!data.academicYear || !data.activityCategory || !data.activityType || !data.organizationName || !data.fromDate || !data.toDate) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
@@ -21,6 +25,54 @@ exports.createResourceUtilization = async (req, res) => {
         }
         if (data.activityType && data.activityType.includes("Participant") && !data.daysParticipated) {
             return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
+        }
+
+        // FDP Participant specific validation
+        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant") {
+            if (!data.courseFdpName) {
+                return res.status(400).json({ success: false, message: "Course / FDP Name is required." });
+            }
+            if (!data.organizingInstitutionCategory) {
+                return res.status(400).json({ success: false, message: "Organizing Institution Category is required." });
+            }
+            const allowedCategories = [
+                "UGC",
+                "AICTE",
+                "IIT",
+                "IIM",
+                "NIT",
+                "MHRD R&D Lab",
+                "NITTTR",
+                "NIPER",
+                "ICMR",
+                "Govt. University",
+                "NIRF Ranked Institute (Below 200)",
+                "NPTEL"
+            ];
+            if (!allowedCategories.includes(data.organizingInstitutionCategory)) {
+                return res.status(400).json({ success: false, message: "Invalid Organizing Institution Category." });
+            }
+            if (!data.location) {
+                return res.status(400).json({ success: false, message: "Location (City, State) is required." });
+            }
+            if (data.organizingInstitutionCategory === "MHRD R&D Lab" && !data.labName) {
+                return res.status(400).json({ success: false, message: "Lab Name is required." });
+            }
+            if (data.organizingInstitutionCategory === "Govt. University" && !data.universityName) {
+                return res.status(400).json({ success: false, message: "University Name is required." });
+            }
+            if (data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)") {
+                if (!data.instituteName) {
+                    return res.status(400).json({ success: false, message: "Institute Name is required." });
+                }
+                if (data.nirfRank === undefined || data.nirfRank === null || data.nirfRank === "") {
+                    return res.status(400).json({ success: false, message: "NIRF Rank is required." });
+                }
+                const rank = parseInt(data.nirfRank);
+                if (isNaN(rank) || rank <= 0 || rank >= 200) {
+                    return res.status(400).json({ success: false, message: "NIRF Rank must be a positive integer less than 200." });
+                }
+            }
         }
 
         // Validate duplicates (same organization/event name in same category and academic year unless rejected)
@@ -81,7 +133,16 @@ exports.createResourceUtilization = async (req, res) => {
             sessionsConducted: data.sessionsConducted ? parseInt(data.sessionsConducted) : undefined,
             daysParticipated: data.daysParticipated ? parseInt(data.daysParticipated) : undefined,
             proof: `/uploads/resource-utilization/${req.file.filename}`,
-            status: 'Draft' // Always save as Draft first
+            status: 'Draft', // Always save as Draft first
+
+            // new FDP fields
+            courseFdpName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.courseFdpName : undefined,
+            organizingInstitutionCategory: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.organizingInstitutionCategory : undefined,
+            location: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.location : undefined,
+            labName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "MHRD R&D Lab" ? data.labName : undefined,
+            universityName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "Govt. University" ? data.universityName : undefined,
+            instituteName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" ? data.instituteName : undefined,
+            nirfRank: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" ? parseInt(data.nirfRank) : undefined
         });
 
         await resourceUtilization.save();
@@ -133,6 +194,16 @@ exports.updateResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Submitted, Approved, or Rejected entries cannot be edited." });
         }
 
+        const category = data.activityCategory || record.activityCategory;
+        const type = data.activityType || record.activityType;
+
+        if (category === "FDP" && type === "FDP Participant") {
+            const courseFdpName = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
+            if (courseFdpName) {
+                data.organizationName = courseFdpName;
+            }
+        }
+
         // Validate dates if sent
         if (data.fromDate && isFutureDate(data.fromDate)) {
             return res.status(400).json({ success: false, message: "From Date cannot be in the future." });
@@ -147,7 +218,6 @@ exports.updateResourceUtilization = async (req, res) => {
         }
 
         // Validate role-specific mandatory fields
-        const type = data.activityType || record.activityType;
         const days = data.daysParticipated !== undefined ? data.daysParticipated : record.daysParticipated;
         const sessions = data.sessionsConducted !== undefined ? data.sessionsConducted : record.sessionsConducted;
 
@@ -158,8 +228,63 @@ exports.updateResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
         }
 
+        // FDP Participant specific validation
+        if (category === "FDP" && type === "FDP Participant") {
+            const courseFdpName = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
+            const organizingInstitutionCategory = data.organizingInstitutionCategory !== undefined ? data.organizingInstitutionCategory : record.organizingInstitutionCategory;
+            const location = data.location !== undefined ? data.location : record.location;
+            const labName = data.labName !== undefined ? data.labName : record.labName;
+            const universityName = data.universityName !== undefined ? data.universityName : record.universityName;
+            const instituteName = data.instituteName !== undefined ? data.instituteName : record.instituteName;
+            const nirfRank = data.nirfRank !== undefined ? data.nirfRank : record.nirfRank;
+
+            if (!courseFdpName) {
+                return res.status(400).json({ success: false, message: "Course / FDP Name is required." });
+            }
+            if (!organizingInstitutionCategory) {
+                return res.status(400).json({ success: false, message: "Organizing Institution Category is required." });
+            }
+            const allowedCategories = [
+                "UGC",
+                "AICTE",
+                "IIT",
+                "IIM",
+                "NIT",
+                "MHRD R&D Lab",
+                "NITTTR",
+                "NIPER",
+                "ICMR",
+                "Govt. University",
+                "NIRF Ranked Institute (Below 200)",
+                "NPTEL"
+            ];
+            if (!allowedCategories.includes(organizingInstitutionCategory)) {
+                return res.status(400).json({ success: false, message: "Invalid Organizing Institution Category." });
+            }
+            if (!data.location && !record.location) {
+                return res.status(400).json({ success: false, message: "Location (City, State) is required." });
+            }
+            if (organizingInstitutionCategory === "MHRD R&D Lab" && !labName) {
+                return res.status(400).json({ success: false, message: "Lab Name is required." });
+            }
+            if (organizingInstitutionCategory === "Govt. University" && !universityName) {
+                return res.status(400).json({ success: false, message: "University Name is required." });
+            }
+            if (organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)") {
+                if (!instituteName) {
+                    return res.status(400).json({ success: false, message: "Institute Name is required." });
+                }
+                if (nirfRank === undefined || nirfRank === null || nirfRank === "") {
+                    return res.status(400).json({ success: false, message: "NIRF Rank is required." });
+                }
+                const rank = parseInt(nirfRank);
+                if (isNaN(rank) || rank <= 0 || rank >= 200) {
+                    return res.status(400).json({ success: false, message: "NIRF Rank must be a positive integer less than 200." });
+                }
+            }
+        }
+
         // Validate duplicates (same organization/event name in same category and academic year unless rejected)
-        const category = data.activityCategory || record.activityCategory;
         const orgName = data.organizationName || record.organizationName;
         const academicYearVal = data.academicYear || record.academicYear;
         if (orgName) {
@@ -196,6 +321,34 @@ exports.updateResourceUtilization = async (req, res) => {
         record.remarks = data.remarks !== undefined ? data.remarks : record.remarks;
         record.sessionsConducted = data.sessionsConducted !== undefined ? (data.sessionsConducted ? parseInt(data.sessionsConducted) : undefined) : record.sessionsConducted;
         record.daysParticipated = data.daysParticipated !== undefined ? (data.daysParticipated ? parseInt(data.daysParticipated) : undefined) : record.daysParticipated;
+
+        if (category === "FDP" && type === "FDP Participant") {
+            record.courseFdpName = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
+            record.organizingInstitutionCategory = data.organizingInstitutionCategory !== undefined ? data.organizingInstitutionCategory : record.organizingInstitutionCategory;
+            record.location = data.location !== undefined ? data.location : record.location;
+            
+            const finalOrgCategory = data.organizingInstitutionCategory !== undefined ? data.organizingInstitutionCategory : record.organizingInstitutionCategory;
+            
+            record.labName = finalOrgCategory === "MHRD R&D Lab" ? (data.labName !== undefined ? data.labName : record.labName) : undefined;
+            record.universityName = finalOrgCategory === "Govt. University" ? (data.universityName !== undefined ? data.universityName : record.universityName) : undefined;
+            
+            if (finalOrgCategory === "NIRF Ranked Institute (Below 200)") {
+                record.instituteName = data.instituteName !== undefined ? data.instituteName : record.instituteName;
+                const finalNirfRank = data.nirfRank !== undefined ? data.nirfRank : record.nirfRank;
+                record.nirfRank = finalNirfRank ? parseInt(finalNirfRank) : undefined;
+            } else {
+                record.instituteName = undefined;
+                record.nirfRank = undefined;
+            }
+        } else {
+            record.courseFdpName = undefined;
+            record.organizingInstitutionCategory = undefined;
+            record.location = undefined;
+            record.labName = undefined;
+            record.universityName = undefined;
+            record.instituteName = undefined;
+            record.nirfRank = undefined;
+        }
 
         if (req.file) {
             if (req.file.size > 500 * 1024) {
