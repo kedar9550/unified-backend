@@ -43,6 +43,11 @@ const EmployeeSchema = new mongoose.Schema({
         enum: ["yes", "no"],
         default: "no"
     },
+    leadership: {
+        type: String,
+        enum: ["yes", "no"],
+        default: "no"
+    },
     email: {
         type: String,
         required: true,

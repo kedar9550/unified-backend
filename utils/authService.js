@@ -82,6 +82,7 @@ const normalizeUser = (user, userType) => {
         college: userType === 'Employee' ? user.college : "",
         qualification: userType === 'Employee' ? (user.qualification || "") : "",
         doctorate: userType === 'Employee' ? (user.doctorate || "no") : "no",
+        leadership: userType === 'Employee' ? (user.leadership || "no") : "no",
         coreDepartment: userType === 'Employee' 
             ? (user.coreDepartment?.name || (user.coreDepartment ? user.coreDepartment.toString() : "Not Assigned")) 
             : "",
