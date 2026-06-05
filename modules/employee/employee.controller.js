@@ -248,8 +248,8 @@ const updateProfile = async (req, res) => {
             });
 
             if (updates.qualification !== undefined) {
-                const qual = (updates.qualification || "").toLowerCase().trim();
-                if (/ph\.?\s*d|doctor/i.test(qual)) {
+                const qual = (updates.qualification || "").toUpperCase().trim();
+                if (qual === "PHD") {
                     updates.doctorate = "yes";
                 } else {
                     updates.doctorate = "no";

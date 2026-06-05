@@ -123,8 +123,8 @@ const EmployeeSchema = new mongoose.Schema({
 // hash password
 EmployeeSchema.pre("save", async function () {
     if (this.isModified("qualification")) {
-        const qual = (this.qualification || "").toLowerCase().trim();
-        if (/ph\.?\s*d|doctor/i.test(qual)) {
+        const qual = (this.qualification || "").toUpperCase().trim();
+        if (qual === "PHD") {
             this.doctorate = "yes";
         } else {
             this.doctorate = "no";
