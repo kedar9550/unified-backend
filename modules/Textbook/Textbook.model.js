@@ -18,6 +18,11 @@ const AuthorSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    employeeObjectId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Employee',
+        default: null
+    },
     affiliationName: {
         type: String,
         required: true
@@ -129,6 +134,15 @@ const TextbookSchema = new mongoose.Schema({
     },
     discrepancyComment: { type: String },
     discrepancyProof: { type: String }, // File path
+    
+    appraisalClaimant: {
+        type: String,
+        default: null
+    },
+    incentiveClaimant: {
+        type: String,
+        default: null
+    },
     
     createdAt: {
         type: Date,

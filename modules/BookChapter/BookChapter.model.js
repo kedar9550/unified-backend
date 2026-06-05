@@ -2,7 +2,8 @@ const mongoose = require('mongoose');
 
 const CoAuthorSchema = new mongoose.Schema({
     name: { type: String, required: true },
-    affiliation: { type: String, required: true }
+    affiliation: { type: String, required: true },
+    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null }
 }, { _id: false });
 
 const BookChapterSchema = new mongoose.Schema({
@@ -45,6 +46,15 @@ const BookChapterSchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
+    
+    appraisalClaimant: {
+        type: String,
+        default: null
+    },
+    incentiveClaimant: {
+        type: String,
+        default: null
+    },
     
     createdAt: {
         type: Date,

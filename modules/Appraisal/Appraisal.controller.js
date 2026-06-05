@@ -408,53 +408,51 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // --- 2. Research Contributions ---
         
         // 2.1 Journals Publication
-        const journals = await Journal.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const journals = await Journal.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            $or: [
+                { facultyId },
+                { 'coAuthors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId');
+
         const researchPapers = [];
         let totalPaperPoints = 0;
 
         for (const j of journals) {
-            // Check if there are other Aditya University co-authors
-            const ausCoAuthorsCount = (j.coAuthors || []).filter(c => 
-                c.affiliation && c.affiliation.toLowerCase().includes("aditya")
-            ).length;
-
+            const ausCoAuthorsCount = (j.coAuthors || []).filter(c => c.employeeId).length;
             const isMultiAUSAuthor = ausCoAuthorsCount > 0;
-            
-            // Check if this specific paper is claimed by someone else in the claims table
-            const claim = await AppraisalResearchClaim.findOne({ researchId: j._id });
-            
+
             let points = 0;
             let claimStatus = "unclaimed";
             let claimedBy = null;
 
-            if (claim) {
-                if (claim.claimedByFacultyId.toString() === facultyId.toString()) {
+            if (j.appraisalClaimant) {
+                if (j.appraisalClaimant === faculty.institutionId) {
                     claimStatus = "claimed_by_me";
-                    // Calculate points
-                    const basePoints = await getJournalBasePoints(j, config);
-                    points = basePoints;
-                    const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
-                    if (jcrIF > 0) {
-                        points += jcrIF; // Points + JCR IF
-                    }
-                } else {
-                    claimStatus = "claimed_by_other";
-                    const claimFaculty = await Employee.findById(claim.claimedByFacultyId).select("name institutionId");
-                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
-                    points = 0;
-                }
-            } else {
-                // If it is unclaimed and has NO other Aditya co-authors, auto-claim or calculate
-                if (!isMultiAUSAuthor) {
                     const basePoints = await getJournalBasePoints(j, config);
                     points = basePoints;
                     const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
                     if (jcrIF > 0) {
                         points += jcrIF;
                     }
-                    claimStatus = "auto_eligible";
                 } else {
-                    // Requires manual claim selection because there are multiple AUS co-authors
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: j.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    points = 0;
+                }
+            } else {
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    const basePoints = await getJournalBasePoints(j, config);
+                    points = basePoints;
+                    const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
+                    if (jcrIF > 0) {
+                        points += jcrIF;
+                    }
+                } else {
                     claimStatus = "requires_claim_action";
                     points = 0;
                 }
@@ -480,7 +478,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         let totalPhdPoints = 0;
 
         phdScholars.forEach(p => {
-            const statusKey = p.scholarStatus ? p.scholarStatus.toLowerCase() : 'pursuing'; // Pursuing vs Awarded
+            const statusKey = p.scholarStatus ? p.scholarStatus.toLowerCase() : 'pursuing';
             const pts = config.research.phdGuidingPoints[statusKey] || (statusKey === 'awarded' ? 20 : 2);
             phdItems.push({
                 scholarId: p._id,
@@ -492,15 +490,41 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         });
 
         // 2.3 Books/Chapters & Conferences
-        const books = await Textbook.find({ facultyId, academicYear: academicYearId, status: "Approved" });
-        const chapters = await BookChapter.find({ facultyId, academicYear: academicYearId, status: "Approved" });
-        const conferences = await Conference.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const books = await Textbook.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            $or: [
+                { facultyId },
+                { 'authors.employeeObjectId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId');
+
+        const chapters = await BookChapter.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            $or: [
+                { facultyId },
+                { 'coAuthors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId');
+
+        const conferences = await Conference.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            $or: [
+                { facultyId },
+                { 'coAuthors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId');
 
         const bookChapterItems = [];
         let totalBookConfPoints = 0;
 
-        books.forEach(b => {
-            const pts = config.research.bookConferencePoints.isbnBook || 10;
+        for (const b of books) {
+            let pts = 0;
+            if (b.appraisalClaimant && b.appraisalClaimant === faculty.institutionId) {
+                pts = config.research.bookConferencePoints.isbnBook || 10;
+            }
             bookChapterItems.push({
                 itemId: b._id,
                 itemType: 'Textbook',
@@ -509,10 +533,13 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
-        });
+        }
 
-        chapters.forEach(c => {
-            const pts = config.research.bookConferencePoints.isbnBookChapter || 5;
+        for (const c of chapters) {
+            let pts = 0;
+            if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId) {
+                pts = config.research.bookConferencePoints.isbnBookChapter || 5;
+            }
             bookChapterItems.push({
                 itemId: c._id,
                 itemType: 'BookChapter',
@@ -521,10 +548,13 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
-        });
+        }
 
-        conferences.forEach(c => {
-            const pts = config.research.bookConferencePoints.scopusConference || 5;
+        for (const c of conferences) {
+            let pts = 0;
+            if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId) {
+                pts = config.research.bookConferencePoints.scopusConference || 5;
+            }
             bookChapterItems.push({
                 itemId: c._id,
                 itemType: 'Conference',
@@ -533,22 +563,32 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
-        });
+        }
 
-        // Capped at config bookConferencePoints.maxPoints (Default: 10)
         const cappedBookConfPoints = Math.min(
             config.research.bookConferencePoints.maxPoints || 10,
             totalBookConfPoints
         );
 
         // 2.4 Patents Published/Granted
-        const patents = await Patent.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const patents = await Patent.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            $or: [
+                { facultyId },
+                { 'coInventors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId');
+
         const patentItems = [];
         let totalPatentPoints = 0;
 
         patents.forEach(p => {
-            const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published'; // Published vs Granted
-            const pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+            let pts = 0;
+            if (p.appraisalClaimant && p.appraisalClaimant === faculty.institutionId) {
+                const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
+                pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+            }
             patentItems.push({
                 patentId: p._id,
                 title: p.patentTitle,
@@ -564,7 +604,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         let totalNovelPoints = 0;
 
         novelProducts.forEach(n => {
-            const statusKey = n.productStatus ? n.productStatus.toLowerCase() : 'developed'; // Developed vs Implemented
+            const statusKey = n.productStatus ? n.productStatus.toLowerCase() : 'developed';
             const pts = config.research.novelProductPoints[statusKey] || (statusKey === 'implemented' ? 20 : 10);
             novelItems.push({
                 productId: n._id,
@@ -576,19 +616,26 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         });
 
         // 2.6 Project / Consultancy
-        const fundedProjects = await FundedProject.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const fundedProjects = await FundedProject.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            facultyId: facultyId
+        }).populate('facultyId', 'name institutionId');
+
         const consultancies = await Consultancy.find({ facultyId, academicYear: academicYearId, status: "Approved" });
 
         const projectItems = [];
         let totalProjectPoints = 0;
 
         fundedProjects.forEach(p => {
-            const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'shortlisted';
             let pts = 0;
-            if (statusKey === 'sanctioned') {
-                pts = (p.totalWorth || 0) * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-            } else {
-                pts = config.research.projectProposalPoints.shortlisted || 5;
+            if (p.appraisalClaimant && p.appraisalClaimant === faculty.institutionId) {
+                const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'shortlisted';
+                if (statusKey === 'sanctioned') {
+                    pts = (p.totalWorth || 0) * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+                } else {
+                    pts = config.research.projectProposalPoints.shortlisted || 5;
+                }
             }
             projectItems.push({
                 projectId: p._id,
@@ -1208,6 +1255,280 @@ exports.evaluateRNDAppraisal = async (req, res) => {
 
         res.json({ success: true, message: "Appraisal successfully finalized and completed.", data: appraisal });
     } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Get unresolved research claims for gatekeeper check
+// @route   GET /api/appraisal/unresolved-claims/:academicYearId
+// @access  Private (Faculty)
+exports.getUnresolvedClaims = async (req, res) => {
+    try {
+        const { academicYearId } = req.params;
+        const facultyId = req.user.userId;
+
+        const unresolved = [];
+
+        // 1. Journals
+        const journals = await Journal.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            $or: [
+                { facultyId },
+                { 'coAuthors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coAuthors.employeeId', 'name institutionId');
+
+        for (const j of journals) {
+            const ausCoAuthors = j.coAuthors.filter(c => c.employeeId);
+            if (ausCoAuthors.length > 0) {
+                const claimants = [
+                    { _id: j.facultyId._id, name: j.facultyId.name, institutionId: j.facultyId.institutionId },
+                    ...ausCoAuthors.map(c => ({ _id: c.employeeId._id, name: c.employeeId.name, institutionId: c.employeeId.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: j._id,
+                    type: 'Journal',
+                    title: j.paperTitle,
+                    info: `Journal: ${j.journalName}`,
+                    applicant: j.facultyId,
+                    isApplicant: j.facultyId._id.toString() === facultyId.toString(),
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        // 2. Patents
+        const patents = await Patent.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            $or: [
+                { facultyId },
+                { 'coInventors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coInventors.employeeId', 'name institutionId');
+
+        for (const p of patents) {
+            const ausCoInventors = p.coInventors.filter(c => c.employeeId);
+            if (ausCoInventors.length > 0) {
+                const claimants = [
+                    { _id: p.facultyId._id, name: p.facultyId.name, institutionId: p.facultyId.institutionId },
+                    ...ausCoInventors.map(c => ({ _id: c.employeeId._id, name: c.employeeId.name, institutionId: c.employeeId.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: p._id,
+                    type: 'Patent',
+                    title: p.title,
+                    info: `Patent Name: ${p.patentName} (Filing No: ${p.filingNo})`,
+                    applicant: p.facultyId,
+                    isApplicant: p.facultyId._id.toString() === facultyId.toString(),
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        // 3. Book Chapters
+        const chapters = await BookChapter.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            $or: [
+                { facultyId },
+                { 'coAuthors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coAuthors.employeeId', 'name institutionId');
+
+        for (const c of chapters) {
+            const ausCoAuthors = c.coAuthors.filter(co => co.employeeId);
+            if (ausCoAuthors.length > 0) {
+                const claimants = [
+                    { _id: c.facultyId._id, name: c.facultyId.name, institutionId: c.facultyId.institutionId },
+                    ...ausCoAuthors.map(co => ({ _id: co.employeeId._id, name: co.employeeId.name, institutionId: co.employeeId.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: c._id,
+                    type: 'BookChapter',
+                    title: c.chapterTitle,
+                    info: `Book: ${c.textBookName}`,
+                    applicant: c.facultyId,
+                    isApplicant: c.facultyId._id.toString() === facultyId.toString(),
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        // 4. Textbooks
+        const textbooks = await Textbook.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            $or: [
+                { facultyId },
+                { 'authors.employeeObjectId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('authors.employeeObjectId', 'name institutionId');
+
+        for (const tb of textbooks) {
+            const ausAuthors = tb.authors.filter(a => a.employeeObjectId);
+            if (ausAuthors.length > 1) {
+                const claimants = [
+                    { _id: tb.facultyId._id, name: tb.facultyId.name, institutionId: tb.facultyId.institutionId },
+                    ...ausAuthors.map(a => ({ _id: a.employeeObjectId._id, name: a.employeeObjectId.name, institutionId: a.employeeObjectId.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: tb._id,
+                    type: 'Textbook',
+                    title: tb.title,
+                    info: `ISBN: ${tb.isbn}`,
+                    applicant: tb.facultyId,
+                    isApplicant: tb.facultyId._id.toString() === facultyId.toString(),
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        // 5. Conferences
+        const conferences = await Conference.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            $or: [
+                { facultyId },
+                { 'coAuthors.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coAuthors.employeeId', 'name institutionId');
+
+        for (const conf of conferences) {
+            const ausCoAuthors = conf.coAuthors.filter(co => co.employeeId);
+            if (ausCoAuthors.length > 0) {
+                const claimants = [
+                    { _id: conf.facultyId._id, name: conf.facultyId.name, institutionId: conf.facultyId.institutionId },
+                    ...ausCoAuthors.map(co => ({ _id: co.employeeId._id, name: co.employeeId.name, institutionId: co.employeeId.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: conf._id,
+                    type: 'Conference',
+                    title: conf.title,
+                    info: `Conference: ${conf.conferenceName}`,
+                    applicant: conf.facultyId,
+                    isApplicant: conf.facultyId._id.toString() === facultyId.toString(),
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        // 6. Funded Projects
+        const projects = await FundedProject.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            facultyId: facultyId
+        }).populate('facultyId', 'name institutionId');
+
+        for (const proj of projects) {
+            if (proj.otherInvestigators && proj.otherInvestigators.trim().length > 0) {
+                const colleagues = await Employee.find({ college: req.user.college }).select('name institutionId');
+                const claimants = [
+                    { _id: proj.facultyId._id, name: proj.facultyId.name, institutionId: proj.facultyId.institutionId },
+                    ...colleagues.map(col => ({ _id: col._id, name: col.name, institutionId: col.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: proj._id,
+                    type: 'FundedProject',
+                    title: proj.title,
+                    info: `Agency: ${proj.fundingAgency} (Amount: ${proj.sanctionedAmount})`,
+                    applicant: proj.facultyId,
+                    isApplicant: true,
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        res.json({ success: true, count: unresolved.length, data: unresolved });
+    } catch (err) {
+        console.error("Get Unresolved Claims Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Resolve a research claim by selecting a claimant
+// @route   POST /api/appraisal/resolve-claim
+// @access  Private (Faculty - Applicant only)
+exports.resolveClaim = async (req, res) => {
+    try {
+        const { researchId, researchType, claimantId } = req.body;
+        const facultyId = req.user.userId;
+
+        if (!researchId || !researchType || !claimantId) {
+            return res.status(400).json({ success: false, message: "Missing required fields." });
+        }
+
+        let model;
+        switch (researchType) {
+            case 'Journal':
+                model = Journal;
+                break;
+            case 'Conference':
+                model = Conference;
+                break;
+            case 'BookChapter':
+                model = BookChapter;
+                break;
+            case 'Textbook':
+                model = Textbook;
+                break;
+            case 'Patent':
+                model = Patent;
+                break;
+            case 'FundedProject':
+                model = FundedProject;
+                break;
+            default:
+                return res.status(400).json({ success: false, message: "Invalid research type." });
+        }
+
+        const record = await model.findById(researchId);
+        if (!record) {
+            return res.status(404).json({ success: false, message: "Publication record not found." });
+        }
+
+        if (record.facultyId.toString() !== facultyId.toString()) {
+            return res.status(403).json({ success: false, message: "Only the applicant can designate the appraisal claimant." });
+        }
+
+        const employee = await Employee.findOne({
+            $or: [
+                { _id: mongoose.isValidObjectId(claimantId) ? claimantId : null },
+                { institutionId: claimantId }
+            ]
+        });
+        if (!employee) {
+            return res.status(404).json({ success: false, message: "Claimant employee not found." });
+        }
+
+        record.appraisalClaimant = employee.institutionId;
+        if (record.status === 'Approved' && (record.applyIncentive === 'Yes' || record.applyIncentive === 'yes')) {
+            record.incentiveClaimant = employee.institutionId;
+        }
+        await record.save();
+
+        res.json({ success: true, message: "Claimant updated successfully.", data: record });
+    } catch (err) {
+        console.error("Resolve Claim Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };

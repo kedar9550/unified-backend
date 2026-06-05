@@ -53,6 +53,10 @@ exports.createConference = async (req, res) => {
             parsedCoAuthors = data.coAuthors;
         }
 
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
         const userAuthorPos = parseInt(data.userAuthorPosition) || 1;
         const totalAuths = parseInt(data.totalAuthors) || 1;
         const calculatedFirstAuthor = userAuthorPos === 1 ? "Yes" : "No";
@@ -64,9 +68,10 @@ exports.createConference = async (req, res) => {
             firstAuthor: calculatedFirstAuthor,
             userAuthorPosition: userAuthorPos,
             totalAuthors: totalAuths,
-            coAuthors: parsedCoAuthors,
+            coAuthors: resolvedAuthors,
             certificate,
             proceedings,
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -99,6 +104,7 @@ exports.getMyConferences = async (req, res) => {
         const conferences = await Conference.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('coAuthors.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         // Add a visibilityRole to indicate if the user is Applicant or Co-Author
@@ -133,7 +139,8 @@ exports.getConferenceById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year');
+            .populate('academicYear', 'year')
+            .populate('coAuthors.employeeId', 'name institutionId');
             
         if (!conference) {
             return res.status(404).json({ success: false, message: 'Conference not found' });
@@ -173,17 +180,22 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = { 
-            status, 
-            rndComment: comment 
-        };
-        
-        if (approvedAmount !== undefined) {
-            updates.approvedAmount = approvedAmount;
+        const conference = await Conference.findById(id);
+        if (!conference) {
+            return res.status(404).json({ success: false, message: 'Conference not found' });
         }
 
-        const conference = await Conference.findByIdAndUpdate(id, updates, { new: true });
+        conference.status = status;
+        conference.rndComment = comment;
+        if (approvedAmount !== undefined) {
+            conference.approvedAmount = approvedAmount;
+        }
 
+        if (status === 'Approved' && (conference.applyIncentive === 'Yes' || conference.applyIncentive === 'yes') && conference.appraisalClaimant) {
+            conference.incentiveClaimant = conference.appraisalClaimant;
+        }
+
+        await conference.save();
         res.json({ success: true, data: conference });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

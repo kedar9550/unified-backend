@@ -69,20 +69,39 @@ exports.createTextbook = async (req, res) => {
         const loggedInUser = await Employee.findById(req.user.userId);
 
         // Map and validate authors
-        const finalAuthors = parsedAuthors.map(author => {
+        const finalAuthors = [];
+        let hasOtherAusAuthors = false;
+
+        for (const author of parsedAuthors) {
             // Is this author the logged in user?
             const isUser = Number(author.authorPosition) === Number(data.userAuthorPosition);
-            
-            return {
+            const empId = isUser ? loggedInUser.institutionId : (author.employeeId || author.empId);
+            let empObjId = null;
+
+            if (empId && (isUser || author.affiliationType === 'Aditya University')) {
+                const emp = await Employee.findOne({ institutionId: String(empId).trim() });
+                if (emp) {
+                    empObjId = emp._id;
+                    if (!isUser) {
+                        hasOtherAusAuthors = true;
+                    }
+                }
+            }
+
+            finalAuthors.push({
                 authorPosition: author.authorPosition,
                 authorName: isUser ? loggedInUser.name : author.authorName,
                 affiliationType: isUser ? 'Aditya University' : author.affiliationType,
-                employeeId: isUser ? loggedInUser.institutionId : (author.employeeId || author.empId),
+                employeeId: empId,
+                employeeObjectId: isUser ? loggedInUser._id : empObjId,
                 affiliationName: isUser ? 'Aditya University' : author.affiliationName,
                 isIncentiveApplicant: isUser ? (data.applyIncentive === 'Yes') : false,
                 contributorOnly: isUser ? (data.applyIncentive === 'No') : true
-            };
-        });
+            });
+        }
+
+        const { getDefaultClaimant } = require('../../utils/claimantHelper');
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
 
         const textbook = new Textbook({
             ...data,
@@ -90,6 +109,7 @@ exports.createTextbook = async (req, res) => {
             college: data.college || 'Not Set',
             facultyId: req.user.userId,
             authors: finalAuthors,
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -141,6 +161,7 @@ exports.getMyTextbooks = async (req, res) => {
         const textbooks = await Textbook.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('authors.employeeObjectId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         // Add a field to indicate if the user is just a co-author for dashboard visibility
@@ -284,7 +305,8 @@ exports.getTextbookById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year');
+            .populate('academicYear', 'year')
+            .populate('authors.employeeObjectId', 'name institutionId');
             
         if (!textbook) {
             return res.status(404).json({ success: false, message: 'Textbook not found' });
@@ -318,17 +340,22 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = { 
-            status, 
-            rndComment: comment 
-        };
-        
-        if (approvedAmount !== undefined) {
-            updates.approvedAmount = approvedAmount;
+        const textbook = await Textbook.findById(id);
+        if (!textbook) {
+            return res.status(404).json({ success: false, message: 'Textbook not found' });
         }
 
-        const textbook = await Textbook.findByIdAndUpdate(id, updates, { new: true });
+        textbook.status = status;
+        textbook.rndComment = comment;
+        if (approvedAmount !== undefined) {
+            textbook.approvedAmount = approvedAmount;
+        }
 
+        if (status === 'Approved' && (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes') && textbook.appraisalClaimant) {
+            textbook.incentiveClaimant = textbook.appraisalClaimant;
+        }
+
+        await textbook.save();
         res.json({ success: true, data: textbook });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

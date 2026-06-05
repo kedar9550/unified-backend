@@ -64,11 +64,16 @@ exports.createBookChapter = async (req, res) => {
             parsedCoAuthors = data.coAuthors;
         }
 
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
         const bookChapter = new BookChapter({
             ...data,
             chapterTitle: trimmedChapterTitle,
             facultyId: req.user.userId,
-            coAuthors: parsedCoAuthors,
+            coAuthors: resolvedAuthors,
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -104,6 +109,7 @@ exports.getMyBookChapters = async (req, res) => {
         const bookChapters = await BookChapter.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('coAuthors.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         const chaptersWithVisibility = bookChapters.map(c => {
@@ -136,7 +142,8 @@ exports.getBookChapterById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year');
+            .populate('academicYear', 'year')
+            .populate('coAuthors.employeeId', 'name institutionId');
 
         if (!bookChapter) {
             return res.status(404).json({ success: false, message: 'Book Chapter not found' });
@@ -218,17 +225,22 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = {
-            status,
-            rndComment: comment
-        };
-
-        if (approvedAmount !== undefined) {
-            updates.approvedAmount = approvedAmount;
+        const chapter = await BookChapter.findById(id);
+        if (!chapter) {
+            return res.status(404).json({ success: false, message: 'Book Chapter not found' });
         }
 
-        const chapter = await BookChapter.findByIdAndUpdate(id, updates, { new: true });
+        chapter.status = status;
+        chapter.rndComment = comment;
+        if (approvedAmount !== undefined) {
+            chapter.approvedAmount = approvedAmount;
+        }
 
+        if (status === 'Approved' && (chapter.applyIncentive === 'Yes' || chapter.applyIncentive === 'yes') && chapter.appraisalClaimant) {
+            chapter.incentiveClaimant = chapter.appraisalClaimant;
+        }
+
+        await chapter.save();
         res.json({ success: true, data: chapter });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

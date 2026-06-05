@@ -81,6 +81,10 @@ exports.createJournal = async (req, res) => {
             parsedCoAuthors = data.coAuthors;
         }
 
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
         let numberOfReferencesBelongingToAGEC = 0;
         if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
             if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
@@ -92,8 +96,9 @@ exports.createJournal = async (req, res) => {
         const journal = new Journal({
             ...data,
             facultyId: req.user.userId,
-            coAuthors: parsedCoAuthors,
+            coAuthors: resolvedAuthors,
             numberOfReferencesBelongingToAGEC,
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -132,6 +137,7 @@ exports.getMyJournals = async (req, res) => {
         const journals = await Journal.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('coAuthors.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         // Add a visibilityRole to indicate if the user is Applicant or Co-Author
@@ -166,7 +172,8 @@ exports.getJournalById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year');
+            .populate('academicYear', 'year')
+            .populate('coAuthors.employeeId', 'name institutionId');
             
         if (!journal) {
             return res.status(404).json({ success: false, message: 'Journal not found' });
@@ -255,27 +262,25 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = { 
-            status, 
-            rndComment: comment 
-        };
-        
-        if (approvedAmount !== undefined) {
-            updates.approvedAmount = approvedAmount;
-        }
-        if (req.body.hIndex !== undefined) {
-            updates.hIndex = req.body.hIndex;
-        }
         const finalJcrImpactFactor = req.body.jcrImpactFactor !== undefined ? req.body.jcrImpactFactor : req.body.impactFactor;
-        if (finalJcrImpactFactor !== undefined) {
-            updates.jcrImpactFactor = finalJcrImpactFactor;
-        }
-        if (req.body.citations !== undefined) {
-            updates.citations = req.body.citations;
+
+        const journal = await Journal.findById(id);
+        if (!journal) {
+            return res.status(404).json({ success: false, message: 'Journal not found' });
         }
 
-        const journal = await Journal.findByIdAndUpdate(id, updates, { new: true });
+        journal.status = status;
+        journal.rndComment = comment;
+        if (approvedAmount !== undefined) journal.approvedAmount = approvedAmount;
+        if (req.body.hIndex !== undefined) journal.hIndex = req.body.hIndex;
+        if (finalJcrImpactFactor !== undefined) journal.jcrImpactFactor = finalJcrImpactFactor;
+        if (req.body.citations !== undefined) journal.citations = req.body.citations;
 
+        if (status === 'Approved' && (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') && journal.appraisalClaimant) {
+            journal.incentiveClaimant = journal.appraisalClaimant;
+        }
+
+        await journal.save();
         res.json({ success: true, data: journal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

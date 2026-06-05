@@ -75,11 +75,19 @@ exports.createProject = async (req, res) => {
             return res.status(400).json({ success: false, message: "Sanction Date cannot be in the future." });
         }
 
+        const hasOtherInvestigators = data.otherInvestigators && data.otherInvestigators.trim().length > 0;
+        let appraisalClaimant = null;
+        if (!hasOtherInvestigators) {
+            const employee = await Employee.findById(req.user.userId);
+            appraisalClaimant = employee ? employee.institutionId : null;
+        }
+
         const project = new FundedProject({
             ...data,
             title: trimmedTitle,
             facultyId: req.user.userId,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -221,17 +229,22 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = { 
-            status, 
-            rndComment: comment 
-        };
-        
-        if (approvedAmount !== undefined) {
-            updates.approvedAmount = approvedAmount;
+        const project = await FundedProject.findById(id);
+        if (!project) {
+            return res.status(404).json({ success: false, message: 'Funded Project not found' });
         }
 
-        const project = await FundedProject.findByIdAndUpdate(id, updates, { new: true });
+        project.status = status;
+        project.rndComment = comment;
+        if (approvedAmount !== undefined) {
+            project.approvedAmount = approvedAmount;
+        }
 
+        if (status === 'Approved' && (project.applyIncentive === 'Yes' || project.applyIncentive === 'yes') && project.appraisalClaimant) {
+            project.incentiveClaimant = project.appraisalClaimant;
+        }
+
+        await project.save();
         res.json({ success: true, data: project });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

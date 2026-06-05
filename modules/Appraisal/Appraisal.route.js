@@ -8,6 +8,8 @@ const {
     getAppraisalConfig,
     saveAppraisalConfig,
     initiateOrGetAppraisal,
+    getUnresolvedClaims,
+    resolveClaim,
     claimResearchPublication,
     submitAppraisal,
     getPendingHODAppraisals,
@@ -56,6 +58,8 @@ router.post("/config", protect, authorize("ADMIN", "UNIPRIME"), saveAppraisalCon
 
 // Faculty Self Appraisal actions
 router.get("/initiate/:academicYearId", protect, authorize("FACULTY"), initiateOrGetAppraisal);
+router.get("/unresolved-claims/:academicYearId", protect, authorize("FACULTY"), getUnresolvedClaims);
+router.post("/resolve-claim", protect, authorize("FACULTY"), resolveClaim);
 router.post("/claim-research", protect, authorize("FACULTY"), upload.single("undertaking"), claimResearchPublication);
 router.post("/submit", protect, authorize("FACULTY"), submitAppraisal);
 

@@ -38,6 +38,15 @@ const FundedProjectSchema = new mongoose.Schema({
     rndComment: { type: String },
     approvedAmount: { type: Number },
     
+    appraisalClaimant: {
+        type: String,
+        default: null
+    },
+    incentiveClaimant: {
+        type: String,
+        default: null
+    },
+    
     createdAt: {
         type: Date,
         default: Date.now

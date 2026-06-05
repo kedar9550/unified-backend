@@ -64,12 +64,17 @@ exports.createPatent = async (req, res) => {
             parsedCoInventors = data.coInventors;
         }
 
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInventors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
         const patent = new Patent({
             ...data,
             title: trimmedTitle,
             facultyId: req.user.userId,
-            coInventors: parsedCoInventors,
+            coInventors: resolvedAuthors,
             patentStatus: data.status, // Map 'status' from frontend to 'patentStatus' in model
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -103,6 +108,7 @@ exports.getMyPatents = async (req, res) => {
         const patents = await Patent.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('coInventors.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         const patentsWithVisibility = patents.map(p => {
@@ -135,7 +141,8 @@ exports.getPatentById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year');
+            .populate('academicYear', 'year')
+            .populate('coInventors.employeeId', 'name institutionId');
             
         if (!patent) {
             return res.status(404).json({ success: false, message: 'Patent not found' });
@@ -217,17 +224,22 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = { 
-            status, 
-            rndComment: comment 
-        };
-        
-        if (approvedAmount !== undefined) {
-            updates.approvedAmount = approvedAmount;
+        const patent = await Patent.findById(id);
+        if (!patent) {
+            return res.status(404).json({ success: false, message: 'Patent not found' });
         }
 
-        const patent = await Patent.findByIdAndUpdate(id, updates, { new: true });
+        patent.status = status;
+        patent.rndComment = comment;
+        if (approvedAmount !== undefined) {
+            patent.approvedAmount = approvedAmount;
+        }
 
+        if (status === 'Approved' && (patent.applyIncentive === 'Yes' || patent.applyIncentive === 'yes') && patent.appraisalClaimant) {
+            patent.incentiveClaimant = patent.appraisalClaimant;
+        }
+
+        await patent.save();
         res.json({ success: true, data: patent });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
