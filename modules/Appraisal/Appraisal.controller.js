@@ -590,6 +590,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 itemType: 'Textbook',
                 title: b.title,
                 isbn: b.isbn,
+                publisher: b.publisher || "N/A",
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
@@ -605,6 +606,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 itemType: 'BookChapter',
                 title: c.chapterTitle,
                 isbn: c.isbnNumber || c.isbn,
+                publisher: c.publisher || "N/A",
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
@@ -619,7 +621,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 itemId: c._id,
                 itemType: 'Conference',
                 title: c.paperTitle,
-                isbn: c.isbn || "",
+                isbn: c.issnIsbn || c.isbn || "N/A",
+                publisher: c.organizer || "N/A",
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
@@ -651,8 +654,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             }
             patentItems.push({
                 patentId: p._id,
-                title: p.patentTitle,
+                title: p.patentTitle || p.title,
                 status: p.patentStatus,
+                filingNo: p.filingNo || "N/A",
+                dateOfFiling: p.dateOfFiling,
+                country: "India",
                 pointsClaimed: pts
             });
             totalPatentPoints += pts;
@@ -712,6 +718,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 productId: n._id,
                 title: n.productName,
                 status: n.category || 'Developed',
+                organizationName: n.organizationName || "N/A",
                 isMultiAUSAuthor,
                 claimStatus,
                 claimedBy,
