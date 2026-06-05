@@ -22,6 +22,8 @@ const FacultyProctoringEntry = require('../FacultyProctoringEntry/FacultyProctor
 const ResourceUtilization = require('../ResourceUtilization/ResourceUtilization.model');
 const Contribution = require('../Contribution/Contribution.model');
 const { getHODDepartments } = require('../../utils/hodHelper');
+const ProctorMapping = require('../ProctorMapping/ProctorMapping.model');
+const Appraisal = require('../Appraisal/Appraisal.model');
 
 exports.getUniprimeDashboardData = async (req, res, next) => {
     try {
@@ -908,6 +910,206 @@ exports.getResearchDeanDashboardData = async (req, res, next) => {
 
     } catch (error) {
         console.error('Error fetching Research Dean dashboard data:', error);
+        next(error);
+    }
+};
+
+exports.getFacultyDashboardData = async (req, res, next) => {
+    try {
+        const employee = await Employee.findById(req.user.userId).select('institutionId').lean();
+        if (!employee) {
+            return res.status(404).json({ message: "Employee not found" });
+        }
+
+        let ayQuery = {};
+        if (req.query.academicYear) {
+            ayQuery = { year: req.query.academicYear };
+        } else {
+            ayQuery = { "programs.isActive": true };
+        }
+        let ayDoc = await AcademicYear.findOne(ayQuery);
+        if (!ayDoc) {
+            ayDoc = await AcademicYear.findOne({}).sort({ year: -1 });
+        }
+
+        const filter = { facultyId: req.user.userId };
+        if (ayDoc) {
+            filter.academicYear = ayDoc._id;
+        }
+
+        const [
+            textbooks,
+            chapters,
+            journals,
+            patents,
+            projects,
+            consultancies,
+            conferences,
+            phds,
+            products,
+            resourceUtils,
+            contributions,
+            proctorAssignments,
+            appraisal
+        ] = await Promise.all([
+            Textbook.find(filter).populate('academicYear', 'year').lean(),
+            BookChapter.find(filter).populate('academicYear', 'year').lean(),
+            Journal.find(filter).populate('academicYear', 'year').lean(),
+            Patent.find(filter).populate('academicYear', 'year').lean(),
+            FundedProject.find(filter).populate('academicYear', 'year').lean(),
+            Consultancy.find(filter).populate('academicYear', 'year').lean(),
+            Conference.find(filter).populate('academicYear', 'year').lean(),
+            PhdApplication.find(filter).populate('academicYear', 'year').lean(),
+            NovelProduct.find(filter).populate('academicYear', 'year').lean(),
+            ResourceUtilization.find({ facultyId: req.user.userId, ...(ayDoc ? { academicYear: ayDoc._id } : {}) }).populate('academicYear', 'year').lean(),
+            Contribution.find({ facultyId: req.user.userId, ...(ayDoc ? { academicYear: ayDoc._id } : {}) }).populate('academicYear', 'year').lean(),
+            ProctorMapping.find({ currentProctorId: employee.institutionId }).lean(),
+            Appraisal.findOne({ facultyId: req.user.userId, ...(ayDoc ? { academicYearId: ayDoc._id } : {}) }).lean()
+        ]);
+
+        const totalResearch = textbooks.length + chapters.length + journals.length + patents.length + 
+                              projects.length + consultancies.length + conferences.length + phds.length + products.length;
+
+        let approvedResearch = 0;
+        let pendingResearch = 0;
+        let rejectedResearch = 0;
+
+        const allResearchItems = [
+            ...textbooks.map(x => ({ ...x, type: 'Textbook' })),
+            ...chapters.map(x => ({ ...x, type: 'Book Chapter' })),
+            ...journals.map(x => ({ ...x, type: 'Journal' })),
+            ...patents.map(x => ({ ...x, type: 'Patent' })),
+            ...projects.map(x => ({ ...x, type: 'Funded Project' })),
+            ...consultancies.map(x => ({ ...x, type: 'Consultancy' })),
+            ...conferences.map(x => ({ ...x, type: 'Conference' })),
+            ...phds.map(x => ({ ...x, type: 'PhD Guiding' })),
+            ...products.map(x => ({ ...x, type: 'Novel Product' }))
+        ];
+
+        allResearchItems.forEach(item => {
+            const status = item.status || "";
+            if (status === "Approved") {
+                approvedResearch++;
+            } else if (status.startsWith("Pending")) {
+                pendingResearch++;
+            } else if (status.startsWith("Rejected")) {
+                rejectedResearch++;
+            }
+        });
+
+        // Research types distribution for chart
+        const researchTypeDistribution = [
+            { name: "Journals", value: journals.length },
+            { name: "Conferences", value: conferences.length },
+            { name: "Patents", value: patents.length },
+            { name: "Books & Chapters", value: textbooks.length + chapters.length },
+            { name: "Projects & Consultancy", value: projects.length + consultancies.length },
+            { name: "PhD Guiding & Tech", value: phds.length + products.length }
+        ];
+
+        // Self Appraisal info
+        let appraisalStatus = "Not Started";
+        let appraisalScore = 0;
+        if (appraisal) {
+            appraisalStatus = appraisal.status || "Draft";
+            appraisalScore = (appraisal.teaching?.totalClaimed || 0) +
+                             (appraisal.research?.totalClaimed || 0) +
+                             (appraisal.valueAddition?.totalClaimed || 0) +
+                             (appraisal.administration?.totalClaimed || 0);
+        }
+
+        // Recent activities feed
+        const recentActivities = [];
+        journals.forEach(item => {
+            recentActivities.push({
+                type: 'Journal',
+                title: item.paperTitle,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+        conferences.forEach(item => {
+            recentActivities.push({
+                type: 'Conference',
+                title: item.paperTitle,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+        patents.forEach(item => {
+            recentActivities.push({
+                type: 'Patent',
+                title: item.title,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+        textbooks.forEach(item => {
+            recentActivities.push({
+                type: 'Text Book',
+                title: item.title,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+        chapters.forEach(item => {
+            recentActivities.push({
+                type: 'Book Chapter',
+                title: item.title,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+        resourceUtils.forEach(item => {
+            recentActivities.push({
+                type: 'Resource Utilization',
+                title: `${item.activityCategory} - ${item.activityType}`,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+        contributions.forEach(item => {
+            recentActivities.push({
+                type: 'Contribution',
+                title: `Category ${item.category} Contribution`,
+                status: item.status,
+                createdAt: item.createdAt
+            });
+        });
+
+        recentActivities.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const finalRecentActivities = recentActivities.slice(0, 5);
+
+        // Recent research submissions list formatted for a table
+        const formattedResearchList = allResearchItems.map(item => ({
+            title: item.paperTitle || item.title || "Untitled",
+            type: item.type,
+            year: item.academicYear?.year || "N/A",
+            status: item.status,
+            createdAt: item.createdAt
+        }));
+        formattedResearchList.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        const recentResearchList = formattedResearchList.slice(0, 5);
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                totalResearch,
+                approvedResearch,
+                pendingResearch,
+                rejectedResearch,
+                proctoredStudentsCount: proctorAssignments.length,
+                activitiesCount: resourceUtils.length + contributions.length,
+                appraisalStatus,
+                appraisalScore,
+                researchTypeDistribution,
+                recentActivities: finalRecentActivities,
+                recentResearchList
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching Faculty dashboard data:', error);
         next(error);
     }
 };
