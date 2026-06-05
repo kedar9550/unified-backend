@@ -310,7 +310,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 proctoringDetail: proctoringEntry,
                 resourceUtilizationDetails: resourceUt,
                 contributionDetails: contributions,
-                administrationDetail: adminRoles
+                administrationDetail: adminRoles,
+                faculty: faculty
             });
         }
 
@@ -1144,7 +1145,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             proctoringDetail: proctoringEntry,
             resourceUtilizationDetails: resourceUt,
             contributionDetails: contributions,
-            administrationDetail: adminRoles
+            administrationDetail: adminRoles,
+            faculty: faculty
         });
 
     } catch (err) {
@@ -1217,6 +1219,60 @@ exports.submitAppraisal = async (req, res) => {
 
         if (appraisal.status !== "Draft" && appraisal.status !== "Rejected by HOD") {
             return res.status(400).json({ success: false, message: "Appraisal has already been submitted." });
+        }
+
+        // Retrieve faculty information for category check
+        const faculty = await Employee.findById(facultyId);
+        if (!faculty) {
+            return res.status(404).json({ success: false, message: "Faculty profile not found." });
+        }
+
+        // Determine thresholds based on category
+        const doc = (faculty.doctorate || "").toLowerCase().trim();
+        const lead = (faculty.leadership || "").toLowerCase().trim();
+        let minMetric21 = 30;
+        if (doc === "yes" && lead === "no") {
+            minMetric21 = 40;
+        }
+
+        // Validate Condition 1: FDP / NPTEL / Coursera course completion
+        const allowedOrg = [
+            "ugc", "aicte", "iit", "iim", "nit", "mhrd r&d lab", "mhrd r&d labs",
+            "nitttr", "niper", "icmr", "nirf ranked institute (below 200)",
+            "nirf ranked institute (below rank 200)", "govt. university", "government university", "nptel"
+        ];
+
+        // 1. Check FDP in Resource Utilization
+        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" } });
+        const hasValidFdp = resourceUt.some(r => {
+            const cat = (r.activityCategory || '').toLowerCase().trim();
+            const type = (r.activityType || '').toLowerCase().trim();
+            const org = (r.organizingInstitutionCategory || '').toLowerCase().trim();
+            const days = Number(r.daysParticipated) || Number(r.duration) || 0;
+            return cat === 'fdp' && type === 'fdp participant' && days >= 5 && allowedOrg.includes(org);
+        });
+
+        // 2. Check NPTEL/Coursera in Contributions
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" } });
+        const hasValidNptelOrCoursera = contributions.some(c => {
+            const cat = parseInt(c.category);
+            return cat === 11 || cat === 12;
+        });
+
+        if (!hasValidFdp && !hasValidNptelOrCoursera) {
+            return res.status(400).json({
+                success: false,
+                message: "Appraisal submission blocked: Faculty must satisfy the FDP / Coursera / NPTEL requirement."
+            });
+        }
+
+        // Validate Condition 2: Metric 2.1 Score
+        const metric21Score = appraisal.research?.papers?.totalClaimed || 0;
+        if (metric21Score < minMetric21) {
+            return res.status(400).json({
+                success: false,
+                message: `Appraisal submission blocked: Minimum Metric 2.1 (Paper Publication) score of ${minMetric21} is required (Current: ${metric21Score}).`
+            });
         }
 
         // Lock and submit
