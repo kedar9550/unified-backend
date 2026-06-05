@@ -18,6 +18,7 @@ const Textbook = require("../Textbook/Textbook.model");
 const BookChapter = require("../BookChapter/BookChapter.model");
 const Patent = require("../Patent/Patent.model");
 const PhdScholar = require("../PhdScholar/PhdScholar.model");
+const PhdApplication = require("../PhdScholar/PhdApplication.model");
 const NovelProduct = require("../NovelProduct/NovelProduct.model");
 const FundedProject = require("../FundedProject/FundedProject.model");
 const Consultancy = require("../Consultancy/Consultancy.model");
@@ -484,22 +485,52 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 }
             }
 
+            // Category/Scope calculation
+            let finalCategory = "";
+            let isJournalMaster = false;
+            if (j.journalName) {
+                const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const match = await mongoose.connection.db.collection('journalmasters').findOne({
+                    title: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
+                });
+                if (match) {
+                    isJournalMaster = true;
+                    finalCategory = match.type || "IEEE / ASME / ASCE / ACM / FT-50 / Scopus Top 10%";
+                }
+            }
+            if (!isJournalMaster) {
+                const type = (j.journalType || "").toUpperCase().trim();
+                const quartile = (j.journalQuartile || "").toUpperCase().trim();
+                if (type && quartile) {
+                    finalCategory = `${type} (${quartile})`;
+                } else if (type) {
+                    finalCategory = type;
+                } else if (quartile) {
+                    finalCategory = quartile;
+                } else {
+                    finalCategory = "Journal";
+                }
+            }
+
+            const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
+
             researchPapers.push({
                 paperId: j._id,
                 paperType: 'Journal',
                 title: j.paperTitle,
-                scope: j.journalQuartile,
+                scope: finalCategory,
                 doi: j.doi,
                 isMultiAUSAuthor,
                 claimStatus,
                 claimedBy,
-                pointsClaimed: Number(points.toFixed(2))
+                pointsClaimed: Number(points.toFixed(2)),
+                impactFactor: jcrIF
             });
             totalPaperPoints += points;
         }
 
         // 2.2 Guiding PhD Scholars
-        const phdScholars = await PhdScholar.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const phdScholars = await PhdApplication.find({ facultyId, academicYear: academicYearId, status: "Approved" });
         const phdItems = [];
         let totalPhdPoints = 0;
 
@@ -508,8 +539,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             const pts = config.research.phdGuidingPoints[statusKey] || (statusKey === 'awarded' ? 20 : 2);
             phdItems.push({
                 scholarId: p._id,
-                name: p.scholarName,
+                name: p.studentName,
                 status: p.scholarStatus,
+                scholarType: p.scholarType || "Full-Time",
+                university: p.university || "Aditya University",
+                admissionOrAwardDate: p.admissionOrAwardDate,
                 pointsClaimed: pts
             });
             totalPhdPoints += pts;

@@ -95,15 +95,19 @@ const AppraisalSchema = new mongoose.Schema({
                 claimStatus: String,
                 claimedBy: String,
                 isMultiAUSAuthor: Boolean,
-                pointsClaimed: Number
+                pointsClaimed: Number,
+                impactFactor: Number
             }],
             totalClaimed: { type: Number, default: 0 }
         },
         phdGuiding: {
             items: [{
-                scholarId: { type: mongoose.Schema.Types.ObjectId, ref: 'PhdScholar' },
+                scholarId: { type: mongoose.Schema.Types.ObjectId, ref: 'PhdApplication' },
                 name: String,
                 status: String, // Pursuing / Awarded
+                scholarType: String,
+                university: String,
+                admissionOrAwardDate: Date,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }

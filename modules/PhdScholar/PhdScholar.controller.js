@@ -74,7 +74,7 @@ exports.createPhdApplication = async (req, res) => {
         const rollNo = data.rollNumber ? data.rollNumber.trim().toUpperCase() : "";
 
         // 1. Mandatory Fields check
-        if (!rollNo || !data.studentName || !data.course || !data.scholarStatus || !data.admissionOrAwardDate || !data.academicYear) {
+        if (!rollNo || !data.studentName || !data.course || !data.scholarStatus || !data.admissionOrAwardDate || !data.academicYear || !data.scholarType || !data.university) {
             return res.status(400).json({ success: false, message: "Please fill all mandatory fields." });
         }
 
@@ -127,6 +127,8 @@ exports.createPhdApplication = async (req, res) => {
             course: data.course,
             branch: data.branch,
             scholarStatus: data.scholarStatus,
+            scholarType: data.scholarType,
+            university: data.university,
             admissionOrAwardDate: data.admissionOrAwardDate,
             document: `/uploads/phdScholars/${req.file.filename}`,
             status: 'Pending at HOD'
@@ -277,6 +279,8 @@ exports.rndAction = async (req, res) => {
                     course: application.course,
                     branch: application.branch,
                     currentStatus: application.scholarStatus,
+                    scholarType: application.scholarType || "Full-Time",
+                    university: application.university || "Aditya University",
                     guideId: application.facultyId
                 },
                 { upsert: true, new: true }

@@ -39,6 +39,16 @@ const PhdApplicationSchema = new mongoose.Schema({
         enum: ['Pursuing', 'Awarded'],
         required: true
     },
+    scholarType: {
+        type: String,
+        enum: ['Full-Time', 'Part-Time'],
+        required: true
+    },
+    university: {
+        type: String,
+        required: true,
+        trim: true
+    },
     admissionOrAwardDate: {
         type: Date,
         required: true
