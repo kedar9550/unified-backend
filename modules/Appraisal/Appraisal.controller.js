@@ -225,7 +225,7 @@ exports.getAppraisalConfig = async (req, res) => {
 // 2. Save/Update Appraisal Point Config (UNIPRIME)
 exports.saveAppraisalConfig = async (req, res) => {
     try {
-        const { academicYearId, teaching, research, valueAddition, administration } = req.body;
+        const { academicYearId, teaching, research, valueAddition, administration, isActive } = req.body;
         if (!academicYearId) {
             return res.status(400).json({ success: false, message: "Academic Year ID is required." });
         }
@@ -236,6 +236,9 @@ exports.saveAppraisalConfig = async (req, res) => {
             config.research = research || config.research;
             config.valueAddition = valueAddition || config.valueAddition;
             config.administration = administration || config.administration;
+            if (isActive !== undefined) {
+                config.isActive = isActive;
+            }
             config.lastUpdatedBy = req.user.userId;
             await config.save();
         } else {
@@ -245,9 +248,17 @@ exports.saveAppraisalConfig = async (req, res) => {
                 research,
                 valueAddition,
                 administration,
+                isActive: isActive || false,
                 lastUpdatedBy: req.user.userId
             });
             await config.save();
+        }
+
+        if (config.isActive) {
+            await AppraisalConfig.updateMany(
+                { _id: { $ne: config._id } },
+                { $set: { isActive: false } }
+            );
         }
 
         res.json({ success: true, data: config });
@@ -291,8 +302,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // Fetch configurations for dynamic calculations
         let config = await AppraisalConfig.findOne({ academicYearId });
-        if (!config) {
-            config = DEFAULT_CONFIG;
+        if (!config || !config.isActive) {
+            return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
         }
 
         // Check profile completeness for alert flag
@@ -1042,6 +1053,11 @@ exports.submitAppraisal = async (req, res) => {
     try {
         const { academicYearId } = req.body;
         const facultyId = req.user.userId;
+
+        const config = await AppraisalConfig.findOne({ academicYearId });
+        if (!config || !config.isActive) {
+            return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
+        }
 
         const appraisal = await Appraisal.findOne({ facultyId, academicYearId });
         if (!appraisal) {

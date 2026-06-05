@@ -7,10 +7,13 @@ const AppraisalResearchClaimSchema = new mongoose.Schema({
     },
     researchType: {
         type: String,
-        enum: ['Journal', 'Conference', 'Textbook', 'BookChapter', 'Patent'],
+        enum: ["Journal", "Patent", "BookChapter", "Textbook", "Conference", "FundedProject"],
         required: true
     },
-    doiOrIsbn: { type: String, required: true },
+    doiOrIsbn: {
+        type: String,
+        required: true
+    },
     academicYearId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "AcademicYear",

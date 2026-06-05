@@ -117,6 +117,10 @@ const AppraisalConfigSchema = new mongoose.Schema({
             otherDept: { type: Number, default: 5 }
         }
     },
+    isActive: {
+        type: Boolean,
+        default: false
+    },
     lastUpdatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Employee"
