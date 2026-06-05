@@ -43,6 +43,21 @@ exports.createNovelProduct = async (req, res) => {
             });
         }
 
+        let parsedCoDevelopers = [];
+        if (typeof data.coDevelopers === 'string') {
+            try {
+                parsedCoDevelopers = JSON.parse(data.coDevelopers);
+            } catch (e) {
+                parsedCoDevelopers = [];
+            }
+        } else if (Array.isArray(data.coDevelopers)) {
+            parsedCoDevelopers = data.coDevelopers;
+        }
+
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoDevelopers, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
         const product = new NovelProduct({
             facultyId: req.user.userId,
             academicYear: data.academicYear,
@@ -52,6 +67,10 @@ exports.createNovelProduct = async (req, res) => {
             organizationName: data.category === 'Implemented' ? data.organizationName.trim() : undefined,
             document: `/uploads/novelProducts/${req.file.filename}`,
             remarks: data.remarks ? data.remarks.trim() : undefined,
+            principalInvestigator: data.principalInvestigator || 'Yes',
+            coDevelopers: resolvedAuthors,
+            applyIncentive: data.applyIncentive || 'No',
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -68,14 +87,24 @@ exports.createNovelProduct = async (req, res) => {
 // @access  Private (Faculty)
 exports.getMyNovelProducts = async (req, res) => {
     try {
-        const products = await NovelProduct.find({ facultyId: req.user.userId })
+        const products = await NovelProduct.find({
+            $or: [
+                { facultyId: req.user.userId },
+                { 'coDevelopers.employeeId': req.user.userId }
+            ]
+        })
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('coDevelopers.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         const list = products.map(p => {
             const obj = p.toObject();
-            obj.visibilityRole = "Applicant";
+            if (p.facultyId && p.facultyId._id.toString() !== req.user.userId.toString()) {
+                obj.visibilityRole = "Co-Developer";
+            } else {
+                obj.visibilityRole = "Applicant";
+            }
             return obj;
         });
 
@@ -99,6 +128,7 @@ exports.getNovelProductById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
+            .populate('coDevelopers.employeeId', 'name institutionId')
             .populate('academicYear', 'year');
             
         if (!product) {
@@ -178,11 +208,19 @@ exports.rndAction = async (req, res) => {
         const { action, comment } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const product = await NovelProduct.findByIdAndUpdate(id, { 
-            status, 
-            rndComment: comment 
-        }, { new: true });
+        const product = await NovelProduct.findById(id);
+        if (!product) {
+            return res.status(404).json({ success: false, message: 'Novel Product / Technology not found' });
+        }
 
+        product.status = status;
+        product.rndComment = comment;
+
+        if (status === 'Approved' && (product.applyIncentive === 'Yes' || product.applyIncentive === 'yes') && product.appraisalClaimant) {
+            product.incentiveClaimant = product.appraisalClaimant;
+        }
+
+        await product.save();
         res.json({ success: true, data: product });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

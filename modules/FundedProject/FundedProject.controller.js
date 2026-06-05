@@ -75,17 +75,26 @@ exports.createProject = async (req, res) => {
             return res.status(400).json({ success: false, message: "Sanction Date cannot be in the future." });
         }
 
-        const hasOtherInvestigators = data.otherInvestigators && data.otherInvestigators.trim().length > 0;
-        let appraisalClaimant = null;
-        if (!hasOtherInvestigators) {
-            const employee = await Employee.findById(req.user.userId);
-            appraisalClaimant = employee ? employee.institutionId : null;
+        let parsedCoInvestigators = [];
+        if (typeof data.coInvestigators === 'string') {
+            try {
+                parsedCoInvestigators = JSON.parse(data.coInvestigators);
+            } catch (e) {
+                parsedCoInvestigators = [];
+            }
+        } else if (Array.isArray(data.coInvestigators)) {
+            parsedCoInvestigators = data.coInvestigators;
         }
+
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInvestigators, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
 
         const project = new FundedProject({
             ...data,
             title: trimmedTitle,
             facultyId: req.user.userId,
+            coInvestigators: resolvedAuthors,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
             appraisalClaimant,
             status: 'Pending at HOD'
@@ -109,6 +118,7 @@ exports.getMyProjects = async (req, res) => {
         const query = {
             $or: [
                 { facultyId: req.user.userId },
+                { 'coInvestigators.employeeId': req.user.userId },
                 ...(user && user.name ? [{ 'otherInvestigators': new RegExp(escapeRegex(user.name.trim()), 'i') }] : [])
             ]
         };
@@ -116,6 +126,7 @@ exports.getMyProjects = async (req, res) => {
         const projects = await FundedProject.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('coInvestigators.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         const projectsWithVisibility = projects.map(p => {
@@ -148,6 +159,7 @@ exports.getProjectById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
+            .populate('coInvestigators.employeeId', 'name institutionId')
             .populate('academicYear', 'year');
             
         if (!project) {

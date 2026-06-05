@@ -81,6 +81,20 @@ async function getJournalBasePoints(j, config) {
     return 10;
 }
 
+// Helper to determine if a claimant is a PI or Co-PI
+function isClaimantEligible(record, claimantInstitutionId) {
+    if (record.facultyId && record.facultyId.institutionId === claimantInstitutionId) {
+        return record.principalInvestigator === 'Yes' || record.coPrincipalInvestigator === 'Yes';
+    }
+    const coList = record.coDevelopers || record.coInvestigators || [];
+    for (const co of coList) {
+        if (co.employeeId && co.employeeId.institutionId === claimantInstitutionId) {
+            return co.principalInvestigator === 'Yes' || co.coPrincipalInvestigator === 'Yes';
+        }
+    }
+    return false;
+}
+
 // Default Appraisal Point Configurations
 const DEFAULT_CONFIG = {
     teaching: {
@@ -610,75 +624,212 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         });
 
         // 2.5 Novel products/Technology
-        const novelProducts = await NovelProduct.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const novelProducts = await NovelProduct.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            $or: [
+                { facultyId },
+                { 'coDevelopers.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coDevelopers.employeeId', 'name institutionId');
+
         const novelItems = [];
         let totalNovelPoints = 0;
 
-        novelProducts.forEach(n => {
-            const statusKey = n.productStatus ? n.productStatus.toLowerCase() : 'developed';
-            const pts = config.research.novelProductPoints[statusKey] || (statusKey === 'implemented' ? 20 : 10);
+        for (const n of novelProducts) {
+            const ausCoDevelopersCount = (n.coDevelopers || []).filter(c => c.employeeId).length;
+            const isMultiAUSAuthor = ausCoDevelopersCount > 0;
+
+            let pts = 0;
+            let claimStatus = "unclaimed";
+            let claimedBy = null;
+
+            const claimantId = n.appraisalClaimant;
+            const isEligible = claimantId ? isClaimantEligible(n, claimantId) : false;
+
+            if (n.appraisalClaimant) {
+                if (n.appraisalClaimant === faculty.institutionId) {
+                    claimStatus = "claimed_by_me";
+                    if (isEligible) {
+                        const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
+                        pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
+                    }
+                } else {
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: n.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    pts = 0;
+                }
+            } else {
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    if (isClaimantEligible(n, faculty.institutionId)) {
+                        const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
+                        pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
+                    }
+                } else {
+                    claimStatus = "requires_claim_action";
+                    pts = 0;
+                }
+            }
+
             novelItems.push({
                 productId: n._id,
-                title: n.productDetails || n.title,
-                status: n.productStatus,
-                pointsClaimed: pts
+                title: n.productName,
+                status: n.category || 'Developed',
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
+                pointsClaimed: Number(pts.toFixed(2))
             });
             totalNovelPoints += pts;
-        });
+        }
 
         // 2.6 Project / Consultancy
         const fundedProjects = await FundedProject.find({
             academicYear: academicYearId,
             status: "Approved",
-            facultyId: facultyId
-        }).populate('facultyId', 'name institutionId');
+            $or: [
+                { facultyId },
+                { 'coInvestigators.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
 
-        const consultancies = await Consultancy.find({ facultyId, academicYear: academicYearId, status: "Approved" });
+        const consultancies = await Consultancy.find({
+            academicYear: academicYearId,
+            status: "Approved",
+            $or: [
+                { facultyId },
+                { 'coInvestigators.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
 
         const projectItems = [];
         let totalProjectPoints = 0;
 
-        fundedProjects.forEach(p => {
+        for (const p of fundedProjects) {
             let pts = 0;
-            if (p.appraisalClaimant && p.appraisalClaimant === faculty.institutionId) {
-                const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'shortlisted';
-                if (statusKey === 'sanctioned') {
-                    pts = (p.totalWorth || 0) * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+            const ausCoInvestigatorsCount = (p.coInvestigators || []).filter(c => c.employeeId).length;
+            const isMultiAUSAuthor = ausCoInvestigatorsCount > 0;
+
+            let claimStatus = "unclaimed";
+            let claimedBy = null;
+
+            const claimantId = p.appraisalClaimant;
+            const isEligible = claimantId ? isClaimantEligible(p, claimantId) : false;
+
+            if (p.appraisalClaimant) {
+                if (p.appraisalClaimant === faculty.institutionId) {
+                    claimStatus = "claimed_by_me";
+                    if (p.applyingSeedGrant !== "Yes" && isEligible) {
+                        const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
+                        if (statusKey === 'sanctioned') {
+                            const amountInLakhs = parseFloat(p.sanctionedAmount) || 0;
+                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+                        } else {
+                            pts = config.research.projectProposalPoints.shortlisted || 5;
+                        }
+                    }
                 } else {
-                    pts = config.research.projectProposalPoints.shortlisted || 5;
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: p.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    pts = 0;
+                }
+            } else {
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    if (p.applyingSeedGrant !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
+                        const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
+                        if (statusKey === 'sanctioned') {
+                            const amountInLakhs = parseFloat(p.sanctionedAmount) || 0;
+                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+                        } else {
+                            pts = config.research.projectProposalPoints.shortlisted || 5;
+                        }
+                    }
+                } else {
+                    claimStatus = "requires_claim_action";
+                    pts = 0;
                 }
             }
+
             projectItems.push({
                 projectId: p._id,
                 projectType: 'FundedProject',
-                title: p.projectTitle || p.title,
+                title: p.title,
                 agency: p.fundingAgency,
-                amountInLakhs: p.totalWorth || 0,
-                status: p.projectStatus,
-                pointsClaimed: pts
+                amountInLakhs: parseFloat(p.sanctionedAmount) || 0,
+                status: p.projectStatus || 'Sanctioned',
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
+                pointsClaimed: Number(pts.toFixed(2))
             });
             totalProjectPoints += pts;
-        });
+        }
 
-        consultancies.forEach(c => {
-            const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'shortlisted';
+        for (const c of consultancies) {
             let pts = 0;
-            if (statusKey === 'sanctioned') {
-                pts = (c.totalWorth || 0) * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+            const ausCoInvestigatorsCount = (c.coInvestigators || []).filter(co => co.employeeId).length;
+            const isMultiAUSAuthor = ausCoInvestigatorsCount > 0;
+
+            let claimStatus = "unclaimed";
+            let claimedBy = null;
+
+            const claimantId = c.appraisalClaimant;
+            const isEligible = claimantId ? isClaimantEligible(c, claimantId) : false;
+
+            if (c.appraisalClaimant) {
+                if (c.appraisalClaimant === faculty.institutionId) {
+                    claimStatus = "claimed_by_me";
+                    if (c.applyingSeedGrant !== "Yes" && isEligible) {
+                        const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
+                        if (statusKey === 'sanctioned') {
+                            const amountInLakhs = parseFloat(c.amount) || 0;
+                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+                        } else {
+                            pts = config.research.projectProposalPoints.shortlisted || 5;
+                        }
+                    }
+                } else {
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: c.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    pts = 0;
+                }
             } else {
-                pts = config.research.projectProposalPoints.shortlisted || 5;
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    if (c.applyingSeedGrant !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
+                        const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
+                        if (statusKey === 'sanctioned') {
+                            const amountInLakhs = parseFloat(c.amount) || 0;
+                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+                        } else {
+                            pts = config.research.projectProposalPoints.shortlisted || 5;
+                        }
+                    }
+                } else {
+                    claimStatus = "requires_claim_action";
+                    pts = 0;
+                }
             }
+
             projectItems.push({
                 projectId: c._id,
                 projectType: 'Consultancy',
-                title: c.projectTitle || c.title,
-                agency: c.fundingAgency || c.agency,
-                amountInLakhs: c.totalWorth || 0,
-                status: c.projectStatus,
-                pointsClaimed: pts
+                title: c.title,
+                agency: c.organization,
+                amountInLakhs: parseFloat(c.amount) || 0,
+                status: c.projectStatus || 'Sanctioned',
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
+                pointsClaimed: Number(pts.toFixed(2))
             });
             totalProjectPoints += pts;
-        });
+        }
 
         // Calculate total research claimed score (citation & h-index are 0 initially or fetched if previously saved)
         const savedCitationPoints = appraisal ? appraisal.research.scopusCitationScore : 0;
@@ -1450,15 +1601,18 @@ exports.getUnresolvedClaims = async (req, res) => {
             academicYear: academicYearId,
             status: 'Approved',
             appraisalClaimant: null,
-            facultyId: facultyId
-        }).populate('facultyId', 'name institutionId');
+            $or: [
+                { facultyId },
+                { 'coInvestigators.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
 
         for (const proj of projects) {
-            if (proj.otherInvestigators && proj.otherInvestigators.trim().length > 0) {
-                const colleagues = await Employee.find({ college: req.user.college }).select('name institutionId');
+            const ausCoInvestigators = proj.coInvestigators.filter(c => c.employeeId);
+            if (ausCoInvestigators.length > 0) {
                 const claimants = [
                     { _id: proj.facultyId._id, name: proj.facultyId.name, institutionId: proj.facultyId.institutionId },
-                    ...colleagues.map(col => ({ _id: col._id, name: col.name, institutionId: col.institutionId }))
+                    ...ausCoInvestigators.map(c => ({ _id: c.employeeId._id, name: c.employeeId.name, institutionId: c.employeeId.institutionId }))
                 ];
                 const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
 
@@ -1468,7 +1622,71 @@ exports.getUnresolvedClaims = async (req, res) => {
                     title: proj.title,
                     info: `Agency: ${proj.fundingAgency} (Amount: ${proj.sanctionedAmount})`,
                     applicant: proj.facultyId,
-                    isApplicant: true,
+                    isApplicant: proj.facultyId._id.toString() === facultyId.toString(),
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        // 7. Consultancy
+        const consultancies = await Consultancy.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            $or: [
+                { facultyId },
+                { 'coInvestigators.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
+
+        for (const c of consultancies) {
+            const ausCoInvestigators = c.coInvestigators.filter(co => co.employeeId);
+            if (ausCoInvestigators.length > 0) {
+                const claimants = [
+                    { _id: c.facultyId._id, name: c.facultyId.name, institutionId: c.facultyId.institutionId },
+                    ...ausCoInvestigators.map(co => ({ _id: co.employeeId._id, name: co.employeeId.name, institutionId: co.employeeId.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: c._id,
+                    type: 'Consultancy',
+                    title: c.title,
+                    info: `Organization: ${c.organization} (Amount: ${c.amount})`,
+                    applicant: c.facultyId,
+                    isApplicant: c.facultyId._id.toString() === facultyId.toString(),
+                    eligibleClaimants: uniqueClaimants
+                });
+            }
+        }
+
+        // 8. Novel Product
+        const novelProducts = await NovelProduct.find({
+            academicYear: academicYearId,
+            status: 'Approved',
+            appraisalClaimant: null,
+            $or: [
+                { facultyId },
+                { 'coDevelopers.employeeId': facultyId }
+            ]
+        }).populate('facultyId', 'name institutionId').populate('coDevelopers.employeeId', 'name institutionId');
+
+        for (const n of novelProducts) {
+            const ausCoDevelopers = n.coDevelopers.filter(cd => cd.employeeId);
+            if (ausCoDevelopers.length > 0) {
+                const claimants = [
+                    { _id: n.facultyId._id, name: n.facultyId.name, institutionId: n.facultyId.institutionId },
+                    ...ausCoDevelopers.map(cd => ({ _id: cd.employeeId._id, name: cd.employeeId.name, institutionId: cd.employeeId.institutionId }))
+                ];
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+
+                unresolved.push({
+                    _id: n._id,
+                    type: 'NovelProduct',
+                    title: n.productName,
+                    info: `Category: ${n.category} (Org: ${n.organizationName || 'N/A'})`,
+                    applicant: n.facultyId,
+                    isApplicant: n.facultyId._id.toString() === facultyId.toString(),
                     eligibleClaimants: uniqueClaimants
                 });
             }
@@ -1512,6 +1730,12 @@ exports.resolveClaim = async (req, res) => {
                 break;
             case 'FundedProject':
                 model = FundedProject;
+                break;
+            case 'Consultancy':
+                model = Consultancy;
+                break;
+            case 'NovelProduct':
+                model = NovelProduct;
                 break;
             default:
                 return res.status(400).json({ success: false, message: "Invalid research type." });

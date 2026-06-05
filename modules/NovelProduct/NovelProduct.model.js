@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+const CoDeveloperSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    affiliation: { type: String, required: true },
+    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    principalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'No' },
+    coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'Yes' }
+}, { _id: false });
+
 const NovelProductSchema = new mongoose.Schema({
     facultyId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -31,7 +39,6 @@ const NovelProductSchema = new mongoose.Schema({
     organizationName: {
         type: String,
         trim: true
-        // Will be validated as mandatory in controller/front-end when category is 'Implemented'
     },
     document: {
         type: String, // Path of uploaded proof document
@@ -40,6 +47,30 @@ const NovelProductSchema = new mongoose.Schema({
     remarks: {
         type: String,
         trim: true
+    },
+    principalInvestigator: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'Yes'
+    },
+    coPrincipalInvestigator: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'No'
+    },
+    coDevelopers: [CoDeveloperSchema],
+    applyIncentive: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'No'
+    },
+    appraisalClaimant: {
+        type: String,
+        default: null
+    },
+    incentiveClaimant: {
+        type: String,
+        default: null
     },
     status: {
         type: String,

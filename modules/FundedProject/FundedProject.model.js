@@ -1,5 +1,13 @@
 const mongoose = require('mongoose');
 
+const CoInvestigatorSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    affiliation: { type: String, required: true },
+    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    principalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'No' },
+    coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'Yes' }
+}, { _id: false });
+
 const FundedProjectSchema = new mongoose.Schema({
     facultyId: {
         type: mongoose.Schema.Types.ObjectId,
@@ -20,6 +28,18 @@ const FundedProjectSchema = new mongoose.Schema({
     scheme: { type: String },
     otherInvestigators: { type: String },
     principalInvestigator: { type: String, enum: ['Yes', 'No'], required: true },
+    coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'], required: true },
+    coInvestigators: [CoInvestigatorSchema],
+    projectStatus: {
+        type: String,
+        enum: ['Shortlisted', 'Sanctioned'],
+        default: 'Sanctioned'
+    },
+    applyIncentive: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'No'
+    },
     recurring: { type: String },
     nonRecurring: { type: String },
     sanctionedAmount: { type: String, required: true },

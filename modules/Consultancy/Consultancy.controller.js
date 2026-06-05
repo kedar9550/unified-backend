@@ -50,10 +50,27 @@ exports.createConsultancy = async (req, res) => {
             }
         }
         
+        let parsedCoInvestigators = [];
+        if (typeof data.coInvestigators === 'string') {
+            try {
+                parsedCoInvestigators = JSON.parse(data.coInvestigators);
+            } catch (e) {
+                parsedCoInvestigators = [];
+            }
+        } else if (Array.isArray(data.coInvestigators)) {
+            parsedCoInvestigators = data.coInvestigators;
+        }
+
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInvestigators, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
         const consultancy = new Consultancy({
             ...data,
             title: trimmedTitle,
             facultyId: req.user.userId,
+            coInvestigators: resolvedAuthors,
+            appraisalClaimant,
             status: 'Pending at HOD'
         });
 
@@ -70,15 +87,25 @@ exports.createConsultancy = async (req, res) => {
 // @access  Private (Faculty)
 exports.getMyConsultancies = async (req, res) => {
     try {
-        const query = { facultyId: req.user.userId };
+        const query = {
+            $or: [
+                { facultyId: req.user.userId },
+                { 'coInvestigators.employeeId': req.user.userId }
+            ]
+        };
         const consultancies = await Consultancy.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('coInvestigators.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         const consultanciesWithVisibility = consultancies.map(c => {
             const cObj = c.toObject();
-            cObj.visibilityRole = "Applicant";
+            if (c.facultyId && c.facultyId._id.toString() !== req.user.userId.toString()) {
+                cObj.visibilityRole = "Co-Investigator";
+            } else {
+                cObj.visibilityRole = "Applicant";
+            }
             return cObj;
         });
 
@@ -102,6 +129,7 @@ exports.getConsultancyById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
+            .populate('coInvestigators.employeeId', 'name institutionId')
             .populate('academicYear', 'year');
             
         if (!consultancy) {
@@ -142,17 +170,22 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
-        const updates = { 
-            status, 
-            rndComment: comment 
-        };
-        
-        if (approvedAmount !== undefined) {
-            updates.approvedAmount = approvedAmount;
+        const consultancy = await Consultancy.findById(id);
+        if (!consultancy) {
+            return res.status(404).json({ success: false, message: 'Consultancy not found' });
         }
 
-        const consultancy = await Consultancy.findByIdAndUpdate(id, updates, { new: true });
+        consultancy.status = status;
+        consultancy.rndComment = comment;
+        if (approvedAmount !== undefined) {
+            consultancy.approvedAmount = approvedAmount;
+        }
 
+        if (status === 'Approved' && (consultancy.applyIncentive === 'Yes' || consultancy.applyIncentive === 'yes') && consultancy.appraisalClaimant) {
+            consultancy.incentiveClaimant = consultancy.appraisalClaimant;
+        }
+
+        await consultancy.save();
         res.json({ success: true, data: consultancy });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
