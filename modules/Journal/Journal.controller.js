@@ -211,7 +211,7 @@ exports.getPendingAtHOD = async (req, res) => {
 exports.hodAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment, hIndex, impactFactor } = req.body;
+        const { action, comment, hIndex, jcrImpactFactor, impactFactor } = req.body;
 
         const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
         const updates = { 
@@ -220,7 +220,8 @@ exports.hodAction = async (req, res) => {
         };
 
         if (hIndex !== undefined) updates.hIndex = hIndex;
-        if (impactFactor !== undefined) updates.impactFactor = impactFactor;
+        const finalJcrImpactFactor = jcrImpactFactor !== undefined ? jcrImpactFactor : impactFactor;
+        if (finalJcrImpactFactor !== undefined) updates.jcrImpactFactor = finalJcrImpactFactor;
         if (req.body.citations !== undefined) updates.citations = req.body.citations;
 
         const journal = await Journal.findByIdAndUpdate(id, updates, { new: true });
@@ -265,8 +266,9 @@ exports.rndAction = async (req, res) => {
         if (req.body.hIndex !== undefined) {
             updates.hIndex = req.body.hIndex;
         }
-        if (req.body.impactFactor !== undefined) {
-            updates.impactFactor = req.body.impactFactor;
+        const finalJcrImpactFactor = req.body.jcrImpactFactor !== undefined ? req.body.jcrImpactFactor : req.body.impactFactor;
+        if (finalJcrImpactFactor !== undefined) {
+            updates.jcrImpactFactor = finalJcrImpactFactor;
         }
         if (req.body.citations !== undefined) {
             updates.citations = req.body.citations;
@@ -365,11 +367,12 @@ exports.getClarivateJournalType = async (req, res) => {
 exports.updateJournalMetrics = async (req, res) => {
     try {
         const { id } = req.params;
-        const { hIndex, impactFactor, citations } = req.body;
+        const { hIndex, jcrImpactFactor, impactFactor, citations } = req.body;
 
         const updates = {};
         if (hIndex !== undefined) updates.hIndex = hIndex;
-        if (impactFactor !== undefined) updates.impactFactor = impactFactor;
+        const finalJcrImpactFactor = jcrImpactFactor !== undefined ? jcrImpactFactor : impactFactor;
+        if (finalJcrImpactFactor !== undefined) updates.jcrImpactFactor = finalJcrImpactFactor;
         if (citations !== undefined) updates.citations = citations;
 
         const journal = await Journal.findByIdAndUpdate(id, updates, { new: true })

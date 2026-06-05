@@ -92,6 +92,9 @@ const AppraisalSchema = new mongoose.Schema({
                 title: String,
                 scope: String,
                 doi: String,
+                claimStatus: String,
+                claimedBy: String,
+                isMultiAUSAuthor: Boolean,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }

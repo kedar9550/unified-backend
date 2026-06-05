@@ -34,6 +34,53 @@ function getPointsFromRanges(val, ranges) {
     return match ? match.points : 0;
 }
 
+// Helper to calculate the base points of a journal publication based on custom rules
+async function getJournalBasePoints(j, config) {
+    const journalPointsConf = config.research?.journalPoints || {};
+    
+    // 1. Check if the journal exists in the journalmasters collection (top category)
+    let isJournalMaster = false;
+    if (j.journalName) {
+        const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = await mongoose.connection.db.collection('journalmasters').findOne({
+            title: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
+        });
+        if (match) {
+            isJournalMaster = true;
+        }
+    }
+
+    if (isJournalMaster) {
+        return journalPointsConf["IEEE / ASME / ASCE / ACM / FT-50 / Scopus Top 10%"] ?? 25;
+    }
+
+    const type = (j.journalType || "").toUpperCase().trim();
+    const quartile = (j.journalQuartile || "").toUpperCase().trim();
+    const isSCIE = (type === 'SCI' || type === 'SCIE');
+    const isScopus = (type === 'SCOPUS');
+    const isQ1orQ2 = (quartile === 'Q1' || quartile === 'Q2');
+    const isQ3orQ4 = (quartile === 'Q3' || quartile === 'Q4');
+    const isESCI = (type === 'ESCI');
+
+    // 2. SCIE and Scopus (Q1 or Q2)
+    if (isSCIE && isQ1orQ2) {
+        return journalPointsConf["SCIE and Scopus (Q1 or Q2)"] ?? 20;
+    }
+
+    // 3. SCIE or Scopus (Q1 or Q2)
+    if (isSCIE || (isScopus && isQ1orQ2)) {
+        return journalPointsConf["SCIE or Scopus (Q1 or Q2)"] ?? 15;
+    }
+
+    // 4. Scopus (Q3 or Q4) or ESCI
+    if (isESCI || (isScopus && isQ3orQ4)) {
+        return journalPointsConf["Scopus (Q3 or Q4) or ESCI"] ?? 10;
+    }
+
+    // Fallback
+    return 10;
+}
+
 // Default Appraisal Point Configurations
 const DEFAULT_CONFIG = {
     teaching: {
@@ -67,10 +114,10 @@ const DEFAULT_CONFIG = {
     },
     research: {
         journalPoints: {
-            "IEEE/ASME/ASCE/ACM/FT-50/Scopus Top 10%": 25,
-            "SCIE/Scopus (Q1/Q2)": 20,
-            "SCIE/Scopus (Q1/Q2) - Co-Author": 15,
-            "Scopus (Q3/Q4)/ESCI": 10
+            "IEEE / ASME / ASCE / ACM / FT-50 / Scopus Top 10%": 25,
+            "SCIE and Scopus (Q1 or Q2)": 20,
+            "SCIE or Scopus (Q1 or Q2)": 15,
+            "Scopus (Q3 or Q4) or ESCI": 10
         },
         phdGuidingPoints: {
             pursuing: 2,
@@ -384,9 +431,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 if (claim.claimedByFacultyId.toString() === facultyId.toString()) {
                     claimStatus = "claimed_by_me";
                     // Calculate points
-                    points = config.research.journalPoints[j.journalQuartile] || 10;
-                    if (j.impactFactor && Number(j.impactFactor) > 0) {
-                        points += Number(j.impactFactor); // Points + IF
+                    const basePoints = await getJournalBasePoints(j, config);
+                    points = basePoints;
+                    const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
+                    if (jcrIF > 0) {
+                        points += jcrIF; // Points + JCR IF
                     }
                 } else {
                     claimStatus = "claimed_by_other";
@@ -397,9 +446,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             } else {
                 // If it is unclaimed and has NO other Aditya co-authors, auto-claim or calculate
                 if (!isMultiAUSAuthor) {
-                    points = config.research.journalPoints[j.journalQuartile] || 10;
-                    if (j.impactFactor && Number(j.impactFactor) > 0) {
-                        points += Number(j.impactFactor);
+                    const basePoints = await getJournalBasePoints(j, config);
+                    points = basePoints;
+                    const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
+                    if (jcrIF > 0) {
+                        points += jcrIF;
                     }
                     claimStatus = "auto_eligible";
                 } else {

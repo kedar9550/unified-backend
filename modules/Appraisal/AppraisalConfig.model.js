@@ -26,10 +26,10 @@ const AppraisalConfigSchema = new mongoose.Schema({
     },
     research: {
         journalPoints: {
-            "IEEE/ASME/ASCE/ACM/FT-50/Scopus Top 10%": { type: Number, default: 25 },
-            "SCIE/Scopus (Q1/Q2)": { type: Number, default: 20 },
-            "SCIE/Scopus (Q1/Q2) - Co-Author": { type: Number, default: 15 },
-            "Scopus (Q3/Q4)/ESCI": { type: Number, default: 10 }
+            "IEEE / ASME / ASCE / ACM / FT-50 / Scopus Top 10%": { type: Number, default: 25 },
+            "SCIE and Scopus (Q1 or Q2)": { type: Number, default: 20 },
+            "SCIE or Scopus (Q1 or Q2)": { type: Number, default: 15 },
+            "Scopus (Q3 or Q4) or ESCI": { type: Number, default: 10 }
         },
         phdGuidingPoints: {
             pursuing: { type: Number, default: 2 },
