@@ -294,6 +294,15 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             return res.status(404).json({ success: false, message: "Faculty not found." });
         }
 
+        // Check profile completeness for alert flag
+        const missingProfileFields = [];
+        if (!faculty.scopusId) missingProfileFields.push("Scopus ID");
+        if (!faculty.wosId) missingProfileFields.push("Web of Science ID");
+        if (!faculty.orcidId) missingProfileFields.push("ORCID ID");
+        if (!faculty.designation) missingProfileFields.push("Designation");
+
+        const isProfileComplete = missingProfileFields.length === 0;
+
         // Check if there is an active saved Appraisal
         let appraisal = await Appraisal.findOne({ facultyId, academicYearId });
 
@@ -312,7 +321,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 resourceUtilizationDetails: resourceUt,
                 contributionDetails: contributions,
                 administrationDetail: adminRoles,
-                faculty: faculty
+                faculty: faculty,
+                isProfileComplete,
+                missingProfileFields
             });
         }
 
@@ -321,15 +332,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         if (!config || !config.isActive) {
             return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
         }
-
-        // Check profile completeness for alert flag
-        const missingProfileFields = [];
-        if (!faculty.scopusId) missingProfileFields.push("Scopus ID");
-        if (!faculty.wosId) missingProfileFields.push("Web of Science ID");
-        if (!faculty.orcidId) missingProfileFields.push("ORCID ID");
-        if (!faculty.designation) missingProfileFields.push("Designation");
-
-        const isProfileComplete = missingProfileFields.length === 0;
 
         // ==========================================
         // DYNAMIC CALCULATIONS
@@ -1345,7 +1347,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find({
             facultyId: { $in: facultyIds },
             status: "Submitted to HOD"
-        }).populate("facultyId", "name institutionId coreDepartment department").populate("academicYearId", "year");
+        }).populate("facultyId", "name institutionId coreDepartment department doctorate leadership").populate("academicYearId", "year");
 
         const appraisalsWithDetails = [];
         for (const app of appraisals) {
