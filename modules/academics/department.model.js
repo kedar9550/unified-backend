@@ -31,6 +31,10 @@ const departmentSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School'
     },
+    schoolIds: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'School'
+    }],
     programId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Program'

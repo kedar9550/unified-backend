@@ -57,7 +57,12 @@ exports.deleteSchool = async (req, res, next) => {
         const school = await School.findById(req.params.id);
         if (!school) return res.status(404).json({ success: false, message: 'School not found' });
         
-        const deptCount = await Department.countDocuments({ schoolId: school._id });
+        const deptCount = await Department.countDocuments({
+            $or: [
+                { schoolId: school._id },
+                { schoolIds: school._id }
+            ]
+        });
         if (deptCount > 0) {
             return res.status(400).json({ success: false, message: 'Cannot delete school with existing departments' });
         }
@@ -118,7 +123,7 @@ exports.getAllDepartments = async (req, res, next) => {
             ];
         }
 
-        const departments = await Department.find(query).populate('schoolId').populate('programId');
+        const departments = await Department.find(query).populate('schoolId').populate('schoolIds').populate('programId');
         res.status(200).json({ success: true, data: departments });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -269,7 +274,7 @@ exports.deleteProgram = async (req, res, next) => {
 // @access  Private (UNIPRIME only)
 exports.createBranch = async (req, res, next) => {
     try {
-        const { programId, departmentId, name, code, status } = req.body;
+        const { programId, departmentId, name, code, status, schoolId } = req.body;
 
         const program = await Program.findById(programId);
         if (!program) {
@@ -281,7 +286,7 @@ exports.createBranch = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Department not found' });
         }
 
-        const branch = new Branch({ programId, departmentId, name, code, status });
+        const branch = new Branch({ programId, departmentId, name, code, status, schoolId });
         const savedBranch = await branch.save();
         res.status(201).json({ success: true, data: savedBranch });
     } catch (error) {
