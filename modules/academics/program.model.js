@@ -37,6 +37,10 @@ const programSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
         index: true
+    },
+    schoolId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'School'
     }
 }, { timestamps: true });
 

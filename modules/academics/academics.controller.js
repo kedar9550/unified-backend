@@ -112,10 +112,13 @@ exports.getAllDepartments = async (req, res, next) => {
             // Find all branches for this program
             const branches = await Branch.find({ programId: req.query.programId }).select('departmentId');
             const deptIds = branches.map(b => b.departmentId);
-            query._id = { $in: deptIds };
+            query.$or = [
+                { programId: req.query.programId },
+                { _id: { $in: deptIds } }
+            ];
         }
 
-        const departments = await Department.find(query).populate('schoolId');
+        const departments = await Department.find(query).populate('schoolId').populate('programId');
         res.status(200).json({ success: true, data: departments });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -167,9 +170,9 @@ exports.deleteDepartment = async (req, res, next) => {
 // @access  Private (UNIPRIME only)
 exports.createProgram = async (req, res, next) => {
     try {
-        const { name, code, type, description, status } = req.body;
+        const { name, code, type, description, status, schoolId, durationYears, programPattern } = req.body;
         
-        const program = new Program({ name, code, type, description, status });
+        const program = new Program({ name, code, type, description, status, schoolId, durationYears, programPattern });
         const savedProgram = await program.save();
         res.status(201).json({ success: true, data: savedProgram });
     } catch (error) {
@@ -197,14 +200,24 @@ exports.getAllPrograms = async (req, res, next) => {
             query.status = true; // Default to active only
         }
 
+        if (req.query.schoolId) {
+            query.schoolId = req.query.schoolId;
+        }
+
         if (req.query.departmentId) {
             // Find all unique programs that have branches in this department
             const branches = await Branch.find({ departmentId: req.query.departmentId }).select('programId');
             const programIds = [...new Set(branches.map(b => b.programId.toString()))];
-            query._id = { $in: programIds };
+            
+            // Also find if the department itself has a direct programId
+            const dept = await Department.findById(req.query.departmentId);
+            if (dept && dept.programId) {
+                programIds.push(dept.programId.toString());
+            }
+            query._id = { $in: [...new Set(programIds)] };
         }
 
-        const programs = await Program.find(query);
+        const programs = await Program.find(query).populate('schoolId');
         res.status(200).json({ success: true, data: programs });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
