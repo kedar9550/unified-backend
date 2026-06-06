@@ -152,6 +152,9 @@ const AppraisalSchema = new mongoose.Schema({
             }],
             totalClaimed: { type: Number, default: 0 }
         },
+        scopusCitations: { type: Number, default: 0 },
+        hIndex2024: { type: Number, default: 0 },
+        hIndex2025: { type: Number, default: 0 },
         scopusCitationScore: { type: Number, default: 0 },
         scopusHIndexScore: { type: Number, default: 0 },
         totalClaimed: { type: Number, default: 0 }

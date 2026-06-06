@@ -53,7 +53,10 @@ const AppraisalConfigSchema = new mongoose.Schema({
             shortlisted: { type: Number, default: 5 },
             sanctionedPerLakh: { type: Number, default: 5 }
         },
-        citationRate: { type: Number, default: 0.2 } // 0.2 points/citation
+        citationRate: { type: Number, default: 0.2 }, // 0.2 points/citation
+        hIndexRateLow: { type: Number, default: 1 },
+        hIndexRateMid: { type: Number, default: 2 },
+        hIndexRateHigh: { type: Number, default: 4 }
     },
     valueAddition: {
         resourceUtilization: {

@@ -156,7 +156,10 @@ const DEFAULT_CONFIG = {
             shortlisted: 5,
             sanctionedPerLakh: 5
         },
-        citationRate: 0.2
+        citationRate: 0.2,
+        hIndexRateLow: 1,
+        hIndexRateMid: 2,
+        hIndexRateHigh: 4
     },
     valueAddition: {
         resourceUtilization: {
@@ -1499,7 +1502,7 @@ exports.getPendingRNDAppraisals = async (req, res) => {
     try {
         const appraisals = await Appraisal.find({
             status: "Pending Research Admin"
-        }).populate("facultyId", "name institutionId coreDepartment department").populate("academicYearId", "year");
+        }).populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college").populate("academicYearId", "year");
 
         res.json({ success: true, data: appraisals });
     } catch (err) {
@@ -1511,13 +1514,24 @@ exports.getPendingRNDAppraisals = async (req, res) => {
 exports.evaluateRNDAppraisal = async (req, res) => {
     try {
         const { id } = req.params;
-        const { scopusCitationScore, scopusHIndexScore, comments } = req.body;
+        const { 
+            scopusCitations, 
+            hIndex2024, 
+            hIndex2025, 
+            scopusCitationScore, 
+            scopusHIndexScore, 
+            comments, 
+            isDraft 
+        } = req.body;
 
         const appraisal = await Appraisal.findById(id);
         if (!appraisal) {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
         }
 
+        if (scopusCitations !== undefined) appraisal.research.scopusCitations = Number(scopusCitations) || 0;
+        if (hIndex2024 !== undefined) appraisal.research.hIndex2024 = Number(hIndex2024) || 0;
+        if (hIndex2025 !== undefined) appraisal.research.hIndex2025 = Number(hIndex2025) || 0;
         appraisal.research.scopusCitationScore = Number(scopusCitationScore) || 0;
         appraisal.research.scopusHIndexScore = Number(scopusHIndexScore) || 0;
         
@@ -1537,10 +1551,19 @@ exports.evaluateRNDAppraisal = async (req, res) => {
             evaluationDate: new Date()
         };
 
-        appraisal.status = "Completed";
+        if (isDraft) {
+            appraisal.status = "Pending Research Admin";
+        } else {
+            appraisal.status = "Completed";
+        }
+
         await appraisal.save();
 
-        res.json({ success: true, message: "Appraisal successfully finalized and completed.", data: appraisal });
+        res.json({ 
+            success: true, 
+            message: isDraft ? "Appraisal draft saved successfully." : "Appraisal successfully finalized and completed.", 
+            data: appraisal 
+        });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
