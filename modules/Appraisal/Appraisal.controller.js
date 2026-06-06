@@ -1318,6 +1318,16 @@ exports.submitAppraisal = async (req, res) => {
             });
         }
 
+        // Update all Draft entries for ResourceUtilization and Contribution to Pending at HOD
+        await ResourceUtilization.updateMany(
+            { facultyId, academicYear: academicYearId, status: "Draft" },
+            { status: "Pending at HOD" }
+        );
+        await Contribution.updateMany(
+            { facultyId, academicYear: academicYearId, status: "Draft" },
+            { status: "Pending at HOD" }
+        );
+
         // Lock and submit
         appraisal.status = "Submitted to HOD";
         await appraisal.save();
@@ -1346,7 +1356,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
 
         const appraisals = await Appraisal.find({
             facultyId: { $in: facultyIds },
-            status: "Submitted to HOD"
+            status: { $in: ["Submitted to HOD", "Rejected by HOD", "Pending Research Admin", "Completed"] }
         }).populate("facultyId", "name institutionId coreDepartment department doctorate leadership").populate("academicYearId", "year");
 
         const appraisalsWithDetails = [];
@@ -1393,6 +1403,17 @@ exports.evaluateHODAppraisal = async (req, res) => {
                 evaluationDate: new Date()
             };
             await appraisal.save();
+
+            // Revert all Pending at HOD and Rejected entries back to Draft
+            await ResourceUtilization.updateMany(
+                { facultyId: appraisal.facultyId, academicYear: appraisal.academicYearId, status: { $in: ["Pending at HOD", "Rejected"] } },
+                { status: "Draft" }
+            );
+            await Contribution.updateMany(
+                { facultyId: appraisal.facultyId, academicYear: appraisal.academicYearId, status: { $in: ["Pending at HOD", "Rejected"] } },
+                { status: "Draft" }
+            );
+
             return res.json({ success: true, message: "Appraisal sent back to faculty.", data: appraisal });
         }
 
