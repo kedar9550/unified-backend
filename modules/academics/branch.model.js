@@ -28,13 +28,18 @@ const branchSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
         index: true
+    },
+    schoolId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'School',
+        index: true
     }
 }, { timestamps: true });
 
-// Enforce unique combination of programId, departmentId, and code
-branchSchema.index({ programId: 1, departmentId: 1, code: 1 }, { unique: true });
+// Enforce unique combination of programId, departmentId, schoolId, and code
+branchSchema.index({ programId: 1, departmentId: 1, schoolId: 1, code: 1 }, { unique: true });
 
-// Enforce unique combination of programId, departmentId, and name
-branchSchema.index({ programId: 1, departmentId: 1, name: 1 }, { unique: true });
+// Enforce unique combination of programId, departmentId, schoolId, and name
+branchSchema.index({ programId: 1, departmentId: 1, schoolId: 1, name: 1 }, { unique: true });
 
 module.exports = mongoose.model('Branch', branchSchema);
