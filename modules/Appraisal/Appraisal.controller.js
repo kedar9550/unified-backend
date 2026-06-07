@@ -402,10 +402,36 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             academicYearId
         }).populate("branchId", "code");
 
+        // Filter: If both Phase 1 and Phase 2 feedbacks exist for a course/section, consider Phase 2. Otherwise, consider whichever is present.
+        const feedbackGroups = {};
+        feedbackResults.forEach(res => {
+            const subjectKey = (res.subjectCode || res.subjectName || "").trim().toLowerCase();
+            const sectionKey = (res.section || "").trim().toLowerCase();
+            const branchKey = (res.branchId?.code || res.branch || "").trim().toLowerCase();
+            const semYrKey = (res.semesterNumber || res.yearNumber || "").trim().toLowerCase();
+            const key = `${subjectKey}_${sectionKey}_${branchKey}_${semYrKey}`;
+
+            if (!feedbackGroups[key]) {
+                feedbackGroups[key] = [];
+            }
+            feedbackGroups[key].push(res);
+        });
+
+        const filteredFeedbackResults = [];
+        Object.values(feedbackGroups).forEach(group => {
+            const phase2Record = group.find(r => r.phase === 2);
+            if (phase2Record) {
+                filteredFeedbackResults.push(phase2Record);
+            } else {
+                group.sort((a, b) => (b.phase || 0) - (a.phase || 0));
+                filteredFeedbackResults.push(group[0]);
+            }
+        });
+
         const feedbackItems = [];
         let totalFeedbackClaimed = 0;
 
-        feedbackResults.forEach(res => {
+        filteredFeedbackResults.forEach(res => {
             const feedPoints = getPointsFromRanges(res.percentage || res.overallPercentage, config.teaching.feedbackPoints);
             const semDisplay = res.yearNumber ? `YEAR-${res.yearNumber}` : res.semesterNumber ? `SEM-${res.semesterNumber}` : "";
             const branchDisplay = res.branchId?.code || res.branch || "";

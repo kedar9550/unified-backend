@@ -445,7 +445,7 @@ const getResults = async (req, res) => {
             .populate("semesterTypeId", "name")
             .populate("programId", "name")
             .populate("branchId", "code name")
-            .sort({ createdAt: -1 });
+            .sort({ subjectCode: 1, section: 1, phase: 1 });
 
         const formatted = results.map((r) => {
             const obj = r.toObject();
