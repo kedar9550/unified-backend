@@ -311,7 +311,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // If appraisal is already submitted/evaluated, return it as-is
         if (appraisal && appraisal.status !== "Draft") {
-            const proctoringEntry = await FacultyProctoringEntry.findOne({ facultyId, academicYear: academicYearId });
+            const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId })
+                .populate("programId", "name code programPattern")
+                .populate("branchId", "name code");
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
             const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
@@ -320,7 +322,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 success: true, 
                 isCalculatedFresh: false, 
                 data: appraisal,
-                proctoringDetail: proctoringEntry,
+                proctoringDetail: proctoringEntries,
+                proctoringDetails: proctoringEntries,
                 resourceUtilizationDetails: resourceUt,
                 contributionDetails: contributions,
                 administrationDetail: adminRoles,
@@ -422,24 +425,40 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const feedbackAverage = feedbackItems.length > 0 ? Number((totalFeedbackClaimed / feedbackItems.length).toFixed(2)) : 0;
 
         // 1.3 Proctoring Pass Percentage
-        const proctoringEntry = await FacultyProctoringEntry.findOne({
+        const proctoringEntries = await FacultyProctoringEntry.find({
             facultyId,
             academicYear: academicYearId
-        });
+        }).populate("programId", "name code programPattern").populate("branchId", "name code");
+
+        let hasProctoringDuties = appraisal?.teaching?.proctoring?.hasProctoringDuties ?? null;
+        if (proctoringEntries.length > 0) {
+            hasProctoringDuties = "Yes";
+        }
 
         const proctoringItems = [];
         let totalProctorPoints = 0;
 
-        if (proctoringEntry && (proctoringEntry.status === "Approved" || proctoringEntry.status === "Pending")) {
-            const procPoints = getPointsFromRanges(proctoringEntry.passPercentage, config.teaching.proctoringPoints);
-            proctoringItems.push({
-                totalStudents: proctoringEntry.totalStudents || 0,
-                appeared: proctoringEntry.studentsAppeared || 0,
-                passed: proctoringEntry.studentsPassed || 0,
-                percentage: proctoringEntry.passPercentage || 0,
-                pointsClaimed: procPoints
-            });
-            totalProctorPoints += procPoints;
+        if (hasProctoringDuties === "Yes") {
+            for (const entry of proctoringEntries) {
+                if (entry.status === "Approved" || entry.status === "Pending") {
+                    const procPoints = getPointsFromRanges(entry.passPercentage, config.teaching.proctoringPoints);
+                    proctoringItems.push({
+                        programId: entry.programId?._id,
+                        programCode: entry.programId?.code,
+                        branchId: entry.branchId?._id,
+                        branchCode: entry.branchId?.code,
+                        semesterNumber: entry.semesterNumber,
+                        yearNumber: entry.yearNumber,
+                        section: entry.section,
+                        totalStudents: entry.totalStudents || 0,
+                        appeared: entry.eligibleStudents || 0,
+                        passed: entry.passedStudents || 0,
+                        percentage: entry.passPercentage || 0,
+                        pointsClaimed: procPoints
+                    });
+                    totalProctorPoints += procPoints;
+                }
+            }
         }
 
         const proctoringAverage = proctoringItems.length > 0 ? Number((totalProctorPoints / proctoringItems.length).toFixed(2)) : 0;
@@ -1156,7 +1175,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             teaching: {
                 passPercentage: { courses: theoryPP, averagePoints: ppAverage },
                 feedback: { courses: feedbackItems, averagePoints: feedbackAverage },
-                proctoring: { entries: proctoringItems, averagePoints: proctoringAverage },
+                proctoring: { entries: proctoringItems, averagePoints: proctoringAverage, hasProctoringDuties: hasProctoringDuties },
                 coAttainment: { courses: theoryCO, averagePoints: coAverage },
                 totalClaimed: totalTeachingPoints
             },
@@ -1198,7 +1217,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             isProfileComplete,
             missingProfileFields,
             data: appraisal,
-            proctoringDetail: proctoringEntry,
+            proctoringDetail: proctoringEntries,
+            proctoringDetails: proctoringEntries,
             resourceUtilizationDetails: resourceUt,
             contributionDetails: contributions,
             administrationDetail: adminRoles,
@@ -1377,13 +1397,16 @@ exports.getPendingHODAppraisals = async (req, res) => {
             const facultyId = app.facultyId._id;
             const academicYearId = app.academicYearId._id;
 
-            const proctoringEntry = await FacultyProctoringEntry.findOne({ facultyId, academicYear: academicYearId });
+            const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId })
+                .populate("programId", "name code programPattern")
+                .populate("branchId", "name code");
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
             const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
             const appObj = app.toObject();
-            appObj.proctoringDetail = proctoringEntry;
+            appObj.proctoringDetail = proctoringEntries;
+            appObj.proctoringDetails = proctoringEntries;
             appObj.resourceUtilizationDetails = resourceUt;
             appObj.contributionDetails = contributions;
             appObj.administrationDetail = adminRoles;
@@ -1925,3 +1948,84 @@ exports.resolveClaim = async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     }
 };
+
+// @desc    Update Proctoring Duties option (Yes/No) for Appraisal
+// @route   POST /api/appraisal/proctoring-duties
+// @access  Private (Faculty)
+exports.updateProctoringDuties = async (req, res) => {
+    try {
+        const { academicYearId, hasProctoringDuties } = req.body;
+        const facultyId = req.user.userId;
+
+        if (!academicYearId || !["Yes", "No"].includes(hasProctoringDuties)) {
+            return res.status(400).json({ success: false, message: "Invalid request parameters." });
+        }
+
+        let appraisal = await Appraisal.findOne({ facultyId, academicYearId });
+        if (!appraisal) {
+            return res.status(404).json({ success: false, message: "Appraisal draft not found. Please initiate first." });
+        }
+
+        if (appraisal.status !== "Draft" && appraisal.status !== "Rejected by HOD") {
+            return res.status(400).json({ success: false, message: "Appraisal has already been submitted." });
+        }
+
+        // Save the selection
+        appraisal.teaching.proctoring.hasProctoringDuties = hasProctoringDuties;
+
+        if (hasProctoringDuties === "No") {
+            // If No, clear entries and averagePoints
+            appraisal.teaching.proctoring.entries = [];
+            appraisal.teaching.proctoring.averagePoints = 0;
+        } else {
+            // If Yes, pull live proctoring entries and calculate
+            const config = await AppraisalConfig.findOne({ academicYearId });
+            const activeConfig = config || { teaching: { proctoringPoints: DEFAULT_CONFIG.teaching.proctoringPoints } };
+
+            const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId })
+                .populate("programId", "name code programPattern")
+                .populate("branchId", "name code");
+
+            const proctoringItems = [];
+            let totalProctorPoints = 0;
+
+            for (const entry of proctoringEntries) {
+                const procPoints = getPointsFromRanges(entry.passPercentage, activeConfig.teaching.proctoringPoints || DEFAULT_CONFIG.teaching.proctoringPoints);
+                proctoringItems.push({
+                    programId: entry.programId?._id,
+                    programCode: entry.programId?.code,
+                    branchId: entry.branchId?._id,
+                    branchCode: entry.branchId?.code,
+                    semesterNumber: entry.semesterNumber,
+                    yearNumber: entry.yearNumber,
+                    section: entry.section,
+                    totalStudents: entry.totalStudents || 0,
+                    appeared: entry.eligibleStudents || 0,
+                    passed: entry.passedStudents || 0,
+                    percentage: entry.passPercentage || 0,
+                    pointsClaimed: procPoints
+                });
+                totalProctorPoints += procPoints;
+            }
+
+            const proctoringAverage = proctoringItems.length > 0 ? Number((totalProctorPoints / proctoringItems.length).toFixed(2)) : 0;
+            appraisal.teaching.proctoring.entries = proctoringItems;
+            appraisal.teaching.proctoring.averagePoints = proctoringAverage;
+        }
+
+        // Recalculate teaching totals
+        const ppAverage = appraisal.teaching.passPercentage?.averagePoints || 0;
+        const feedbackAverage = appraisal.teaching.feedback?.averagePoints || 0;
+        const proctoringAverage = appraisal.teaching.proctoring?.averagePoints || 0;
+        const coAverage = appraisal.teaching.coAttainment?.averagePoints || 0;
+        
+        appraisal.teaching.totalClaimed = Math.min(80, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
+
+        await appraisal.save();
+        res.json({ success: true, message: "Proctoring duties response saved.", data: appraisal });
+    } catch (err) {
+        console.error("Save Proctoring Duties Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+

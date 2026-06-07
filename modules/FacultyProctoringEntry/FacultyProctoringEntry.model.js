@@ -11,20 +11,42 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
         ref: "AcademicYear",
         required: true
     },
+    programId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Program",
+        required: true
+    },
+    branchId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Branch",
+        required: true
+    },
+    semesterNumber: {
+        type: Number,
+        default: null
+    },
+    yearNumber: {
+        type: Number,
+        default: null
+    },
+    section: {
+        type: Number,
+        required: true
+    },
     totalStudents: {
         type: Number,
         required: true,
-        min: [0, "Total students cannot be negative"]
+        min: [0, "Total allotted students cannot be negative"]
     },
-    studentsAppeared: {
+    eligibleStudents: {
         type: Number,
         required: true,
-        min: [0, "Students appeared cannot be negative"]
+        min: [0, "Eligible students cannot be negative"]
     },
-    studentsPassed: {
+    passedStudents: {
         type: Number,
         required: true,
-        min: [0, "Students passed cannot be negative"]
+        min: [0, "Passed students cannot be negative"]
     },
     passPercentage: {
         type: Number,
@@ -52,10 +74,10 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-// Enforce unique manual proctoring entry per academic year per faculty
+// Index for query performance on faculty and academic year
 FacultyProctoringEntrySchema.index(
-    { facultyId: 1, academicYear: 1 },
-    { unique: true }
+    { facultyId: 1, academicYear: 1 }
 );
 
 module.exports = mongoose.model("FacultyProctoringEntry", FacultyProctoringEntrySchema);
+

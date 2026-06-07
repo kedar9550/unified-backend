@@ -15,7 +15,8 @@ const {
     getPendingHODAppraisals,
     evaluateHODAppraisal,
     getPendingRNDAppraisals,
-    evaluateRNDAppraisal
+    evaluateRNDAppraisal,
+    updateProctoringDuties
 } = require("./Appraisal.controller");
 
 const { protect, authorize } = require("../../middlewares/authMiddleware");
@@ -62,6 +63,7 @@ router.get("/unresolved-claims/:academicYearId", protect, authorize("FACULTY"), 
 router.post("/resolve-claim", protect, authorize("FACULTY"), resolveClaim);
 router.post("/claim-research", protect, authorize("FACULTY"), upload.single("undertaking"), claimResearchPublication);
 router.post("/submit", protect, authorize("FACULTY"), submitAppraisal);
+router.post("/proctoring-duties", protect, authorize("FACULTY"), updateProctoringDuties);
 
 // HOD Appraisal actions
 router.get("/pending-hod", protect, authorize("DEPARTMENT HOD", "HOD"), getPendingHODAppraisals);

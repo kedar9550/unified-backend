@@ -62,13 +62,21 @@ const AppraisalSchema = new mongoose.Schema({
         },
         proctoring: {
             entries: [{
+                programId: { type: mongoose.Schema.Types.ObjectId, ref: "Program" },
+                programCode: String,
+                branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch" },
+                branchCode: String,
+                semesterNumber: Number,
+                yearNumber: Number,
+                section: Number,
                 totalStudents: Number,
                 appeared: Number,
                 passed: Number,
                 percentage: Number,
                 pointsClaimed: Number
             }],
-            averagePoints: { type: Number, default: 0 }
+            averagePoints: { type: Number, default: 0 },
+            hasProctoringDuties: { type: String, enum: ["Yes", "No", null], default: null }
         },
         coAttainment: {
             courses: [{
