@@ -190,6 +190,30 @@ exports.getApplicationById = async (req, res) => {
     }
 };
 
+// @desc    Get all Ph.D. applications for a specific faculty
+// @route   GET /api/research/phd-scholar/by-faculty/:facultyId
+// @access  Private (HOD, R&D)
+exports.getApplicationsByFaculty = async (req, res) => {
+    try {
+        const { facultyId } = req.params;
+        const applications = await PhdApplication.find({ facultyId })
+            .populate({
+                path: 'facultyId',
+                select: 'name institutionId department coreDepartment designation phone contactNumber college profileImage',
+                populate: [
+                    { path: 'department', select: 'name' },
+                    { path: 'coreDepartment', select: 'name' }
+                ]
+            })
+            .populate('academicYear', 'year')
+            .sort({ createdAt: -1 });
+            
+        res.json({ success: true, data: applications });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
 // @desc    Get pending Ph.D. applications at HOD
 // @route   GET /api/research/phd-scholar/pending-hod
 // @access  Private (HOD)

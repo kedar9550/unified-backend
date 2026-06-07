@@ -39,6 +39,7 @@ router.get('/validate/:rollNo', protect, phdScholarController.validateScholar);
 // Faculty: Submit and View own history
 router.post('/', protect, upload.single('document'), phdScholarController.createPhdApplication);
 router.get('/', protect, phdScholarController.getMyApplications);
+router.get('/by-faculty/:facultyId', protect, authorize('HOD', 'RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), phdScholarController.getApplicationsByFaculty);
 router.get('/:id', protect, phdScholarController.getApplicationById);
 
 // HOD: View pending and Action

@@ -420,6 +420,8 @@ exports.getResearchRequests = async (req, res) => {
                 .sort({ createdAt: -1 })
                 .lean();
 
+            // Group by faculty
+            const facultyGroups = {};
             for (const item of phdApps) {
                 const fac = item.facultyId;
                 if (!fac) continue;
@@ -431,18 +433,40 @@ exports.getResearchRequests = async (req, res) => {
                     if (!matchesTitle && !matchesName && !matchesId) continue;
                 }
                 
-                allRequests.push({
-                    _id: item._id,
-                    type: 'Ph.D. Scholar',
-                    faculty: fac,
-                    title: `${item.studentName} (${item.rollNumber} - ${item.scholarStatus})`,
-                    status: item.status,
-                    createdAt: item.createdAt,
-                    academicYear: item.academicYear,
-                    hodComment: item.hodComment,
-                    rndComment: item.rndComment
-                });
+                const facIdStr = fac._id.toString();
+                if (!facultyGroups[facIdStr]) {
+                    facultyGroups[facIdStr] = {
+                        _id: facIdStr, // Using faculty ID as the ID for routing
+                        type: 'Ph.D. Scholar',
+                        faculty: fac,
+                        title: `Ph.D. Scholars under ${fac.name}`,
+                        status: item.status, // take the status of the first one, or maybe compute a collective status
+                        createdAt: item.createdAt,
+                        academicYear: item.academicYear,
+                        isGrouped: true,
+                        scholarsCount: 1,
+                        originalIds: [item._id]
+                    };
+                } else {
+                    facultyGroups[facIdStr].scholarsCount++;
+                    facultyGroups[facIdStr].originalIds.push(item._id);
+                    // Update latest created date
+                    if (new Date(item.createdAt) > new Date(facultyGroups[facIdStr].createdAt)) {
+                        facultyGroups[facIdStr].createdAt = item.createdAt;
+                    }
+                    // Determine collective status if mixed (e.g., if one is Pending, show Pending)
+                    if (item.status && item.status.includes('Pending')) {
+                        facultyGroups[facIdStr].status = item.status;
+                    }
+                }
             }
+
+            for (const key in facultyGroups) {
+                const group = facultyGroups[key];
+                group.title = `Ph.D. Scholars under ${group.faculty.name} (${group.scholarsCount} Scholars)`;
+                allRequests.push(group);
+            }
+            console.log(`[DEBUG] Ph.D. Scholars fetched: ${phdApps.length}, groups created: ${Object.keys(facultyGroups).length}`);
         }
 
         // Fetch Novel Products
