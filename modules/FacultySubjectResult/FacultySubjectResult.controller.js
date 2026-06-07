@@ -141,24 +141,9 @@ const uploadUnifiedResults = async (req, res) => {
                     ayCache[academicyear] = ayId;
                 }
 
-                // --- DUPLICATE CHECK ---
+                // --- DUPLICATE CHECK REMOVED ---
                 const trimmedCourseCode = coursecode.trim();
                 const trimmedSection = section.trim();
-                const duplicateKey = `${ayId}_${trimmedCourseCode}_${trimmedSection}`;
-
-                if (processedKeys.has(duplicateKey)) {
-                    throw new Error(`Duplicate entry for Course '${trimmedCourseCode}' Section '${trimmedSection}' in this CSV`);
-                }
-                
-                const existing = await FacultySubjectResult.findOne({
-                    academicYearId: ayId,
-                    courseCode: trimmedCourseCode,
-                    section: trimmedSection
-                });
-                if (existing) {
-                    throw new Error(`Record already exists for Course '${trimmedCourseCode}' Section '${trimmedSection}' in this Academic Year`);
-                }
-                processedKeys.add(duplicateKey);
                 // -----------------------
 
                 // 4. Resolve Branch
@@ -177,9 +162,16 @@ const uploadUnifiedResults = async (req, res) => {
                 }
 
                 // 5. Validate Course Type
-                const finalCourseType = coursetype.toUpperCase().trim();
-                if (!["THEORY", "PRACTICAL", "INTEGRATED"].includes(finalCourseType)) {
-                    throw new Error(`Invalid Course Type '${coursetype}'. Allowed: THEORY, PRACTICAL, INTEGRATED`);
+                const courseTypeInput = (coursetype || "").trim().toUpperCase();
+                let finalCourseType;
+                if (courseTypeInput === "T") {
+                    finalCourseType = "THEORY";
+                } else if (courseTypeInput === "P") {
+                    finalCourseType = "PRACTICAL";
+                } else if (courseTypeInput === "I") {
+                    finalCourseType = "INTEGRATED";
+                } else {
+                    throw new Error(`Invalid Course Type '${coursetype}'. Allowed values: T (Theory), P (Practical), I (Integrated)`);
                 }
 
                 // 6. Program Logic (SEM vs YEAR)
@@ -478,6 +470,7 @@ const getResults = async (req, res) => {
         const results = await FacultySubjectResult.find(query)
             .populate("academicYearId", "year")
             .populate("semesterTypeId", "name")
+            .populate("branchId", "code")
             .sort({ createdAt: -1 });
 
         // Flatten populated fields for frontend consumption
@@ -499,6 +492,7 @@ const getResults = async (req, res) => {
                 academicYear: obj.academicYearId?.year || "",
                 semesterType: semType,
                 semesterDisplay,
+                branchCode: obj.branchId?.code || obj.branch || "",
                 // Alias for frontend compatibility
                 subjectName: obj.courseName,
                 subjectCode: obj.courseCode,
@@ -518,6 +512,19 @@ const updateResult = async (req, res) => {
     try {
         const { id } = req.params;
         const updates = req.body;
+
+        if (updates.courseType !== undefined) {
+            const courseTypeInput = (updates.courseType || "").trim().toUpperCase();
+            if (courseTypeInput === "T" || courseTypeInput === "THEORY") {
+                updates.courseType = "THEORY";
+            } else if (courseTypeInput === "P" || courseTypeInput === "PRACTICAL") {
+                updates.courseType = "PRACTICAL";
+            } else if (courseTypeInput === "I" || courseTypeInput === "INTEGRATED") {
+                updates.courseType = "INTEGRATED";
+            } else {
+                return res.status(400).json({ message: `Invalid Course Type '${updates.courseType}'. Allowed values: T (Theory), P (Practical), I (Integrated)` });
+            }
+        }
 
         // Recalculate pass percentage if appeared or passed is updated
         if (updates.appeared !== undefined || updates.passed !== undefined) {
@@ -589,6 +596,18 @@ const createResult = async (req, res) => {
             return res.status(400).json({ message: "facultyId, courseName, academicYearId, and semesterTypeId are required." });
         }
 
+        const courseTypeInput = (courseType || "").trim().toUpperCase();
+        let finalCourseType;
+        if (courseTypeInput === "T" || courseTypeInput === "THEORY") {
+            finalCourseType = "THEORY";
+        } else if (courseTypeInput === "P" || courseTypeInput === "PRACTICAL") {
+            finalCourseType = "PRACTICAL";
+        } else if (courseTypeInput === "I" || courseTypeInput === "INTEGRATED") {
+            finalCourseType = "INTEGRATED";
+        } else {
+            return res.status(400).json({ message: `Invalid Course Type '${courseType}'. Allowed values: T (Theory), P (Practical), I (Integrated)` });
+        }
+
         const app = Number(appeared) || 0;
         const pas = Number(passed) || 0;
         const passPercentage = app > 0 ? ((pas / app) * 100).toFixed(2) : 0;
@@ -598,7 +617,7 @@ const createResult = async (req, res) => {
             facultyName,
             courseName,
             courseCode,
-            courseType: courseType?.toUpperCase(),
+            courseType: finalCourseType,
             branch,
             section,
             semester: Number(semester) || undefined,
@@ -641,6 +660,7 @@ const getCoAttainment = async (req, res) => {
         const results = await FacultySubjectResult.find(query)
             .populate("academicYearId", "year")
             .populate("semesterTypeId", "name")
+            .populate("branchId", "code")
             .sort({ createdAt: -1 });
 
         const formatted = results.map((r) => {
@@ -663,6 +683,7 @@ const getCoAttainment = async (req, res) => {
                 semester: obj.semesterNumber || obj.yearNumber,
                 semesterDisplay,
                 branch: obj.branch,
+                branchCode: obj.branchId?.code || obj.branch || "",
                 section: obj.section,
                 semesterType: semType,
                 academicYear: obj.academicYearId?.year || "",

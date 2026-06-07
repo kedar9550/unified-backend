@@ -444,7 +444,7 @@ const getResults = async (req, res) => {
             .populate("academicYearId", "year")
             .populate("semesterTypeId", "name")
             .populate("programId", "name")
-            .populate("branchId", "name")
+            .populate("branchId", "code name")
             .sort({ createdAt: -1 });
 
         const formatted = results.map((r) => {
@@ -464,7 +464,8 @@ const getResults = async (req, res) => {
                 ...obj,
                 academicYear: obj.academicYearId?.year || "",
                 semesterType: semType,
-                semesterDisplay
+                semesterDisplay,
+                branchCode: obj.branchId?.code || obj.branch || "",
             };
         });
 

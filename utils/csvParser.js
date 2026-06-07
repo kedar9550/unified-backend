@@ -14,8 +14,8 @@ const parseCSV = (buffer) => {
     // Normalize line endings
     const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
 
-    // Filter empty lines
-    const nonEmpty = lines.filter(l => l.trim() !== '');
+    // Filter empty lines and comment lines starting with #
+    const nonEmpty = lines.filter(l => l.trim() !== '' && !l.trim().startsWith('#'));
 
     if (nonEmpty.length < 2) {
         throw new Error('CSV must have a header row and at least one data row');

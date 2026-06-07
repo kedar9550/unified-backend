@@ -345,7 +345,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const subjectResults = await FacultySubjectResult.find({
             facultyId: faculty.institutionId,
             academicYearId
-        });
+        }).populate("branchId", "code");
 
         // 1.1 THEORY Courses Pass Percentage Points
         const theoryPP = [];
@@ -357,11 +357,16 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         subjectResults.forEach(res => {
             if (res.courseType === "THEORY") {
+                const semDisplay = res.yearNumber ? `YEAR-${res.yearNumber}` : res.semesterNumber ? `SEM-${res.semesterNumber}` : "";
+                const branchDisplay = res.branchId?.code || res.branch || "";
+                const secDisplay = res.section ? `- SEC ${res.section}` : "";
+                const secBranchSem = `${semDisplay} ${branchDisplay} ${secDisplay}`.trim().replace(/\s+/g, ' ');
+
                 // PP points
                 const ppPoints = getPointsFromRanges(res.passPercentage, config.teaching.passPercentagePoints);
                 theoryPP.push({
                     courseName: res.courseName,
-                    secBranchSem: `${res.section || ''} - ${res.branch || ''}`,
+                    secBranchSem: secBranchSem,
                     appeared: res.appeared || 0,
                     passed: res.passed || 0,
                     percentage: res.passPercentage || 0,
@@ -376,7 +381,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 
                 theoryCO.push({
                     courseName: res.courseName,
-                    secBranchSem: `${res.section || ''} - ${res.branch || ''}`,
+                    secBranchSem: secBranchSem,
                     noOfCos: res.noOfCos || 0,
                     noOfCosAttained: reached,
                     pointsClaimed: coPoints
@@ -392,16 +397,21 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
             academicYearId
-        });
+        }).populate("branchId", "code");
 
         const feedbackItems = [];
         let totalFeedbackClaimed = 0;
 
         feedbackResults.forEach(res => {
             const feedPoints = getPointsFromRanges(res.percentage || res.overallPercentage, config.teaching.feedbackPoints);
+            const semDisplay = res.yearNumber ? `YEAR-${res.yearNumber}` : res.semesterNumber ? `SEM-${res.semesterNumber}` : "";
+            const branchDisplay = res.branchId?.code || res.branch || "";
+            const secDisplay = res.section ? `- SEC ${res.section}` : "";
+            const secBranchSem = `${semDisplay} ${branchDisplay} ${secDisplay}`.trim().replace(/\s+/g, ' ');
+
             feedbackItems.push({
                 courseName: res.subjectName,
-                secBranchSem: `${res.section || ''} - ${res.branch || ''}`,
+                secBranchSem: secBranchSem,
                 noOfStudents: res.totalStudents || 0,
                 feedbackPercentage: res.percentage || res.overallPercentage || 0,
                 pointsClaimed: feedPoints
