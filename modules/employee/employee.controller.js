@@ -713,6 +713,48 @@ const getStaffData = async (req, res) => {
     }
 };
 
+/**
+ * Get All Employees
+ */
+const getAllEmployees = async (req, res) => {
+    try {
+        const users = await Employee.aggregate([
+            { $sort: { name: 1 } },
+            {
+                $lookup: {
+                    from: 'userapproles',
+                    localField: '_id',
+                    foreignField: 'userId',
+                    as: 'userAppRoles'
+                }
+            },
+            {
+                $lookup: {
+                    from: 'roles',
+                    localField: 'userAppRoles.role',
+                    foreignField: '_id',
+                    as: 'roles'
+                }
+            },
+            {
+                $project: {
+                    name: 1,
+                    institutionId: 1,
+                    email: 1,
+                    department: 1,
+                    coreDepartment: 1,
+                    designation: 1,
+                    userType: { $literal: 'Employee' },
+                    roles: 1
+                }
+            }
+        ]);
+        res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -726,5 +768,6 @@ module.exports = {
     bulkUpdateEmployees,
     adminUpdateEmployee,
     changePassword,
-    getStaffData
+    getStaffData,
+    getAllEmployees
 };
