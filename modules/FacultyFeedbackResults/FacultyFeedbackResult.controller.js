@@ -31,8 +31,7 @@ const uploadCSV = async (req, res) => {
             "semester_or_year",
             "totalstudents",
             "givenstudents",
-            "percentage",
-            "overallpercentage"
+            "percentage"
         ];
 
         validateHeaders(rows, requiredHeaders);
@@ -83,7 +82,7 @@ const uploadCSV = async (req, res) => {
                 const total = Number(totalstudents);
                 const given = Number(givenstudents);
                 const perc = Number(percentage);
-                const overallPerc = Number(overallpercentage);
+                const overallPerc = (overallpercentage !== undefined && overallpercentage !== "") ? Number(overallpercentage) : perc;
                 const phs = Number(phase);
 
                 if (isNaN(total)) throw new Error(`Invalid totalStudents count: ${totalstudents}`);
@@ -219,6 +218,26 @@ const uploadCSV = async (req, res) => {
 
         if (results.length > 0) {
             await FacultyFeedResult.insertMany(results);
+            
+            const uniqueCombos = [];
+            const seenKeys = new Set();
+            for (const r of results) {
+                const key = `${r.facultyId}_${r.academicYearId}_${r.programId}_${r.branchId}_${r.subjectCode}_${r.section}_${r.semesterNumber}_${r.yearNumber}`;
+                if (!seenKeys.has(key)) {
+                    seenKeys.add(key);
+                    uniqueCombos.push({
+                        facultyId: r.facultyId,
+                        academicYearId: r.academicYearId,
+                        programId: r.programId,
+                        branchId: r.branchId,
+                        subjectCode: r.subjectCode,
+                        section: r.section,
+                        semesterNumber: r.semesterNumber,
+                        yearNumber: r.yearNumber
+                    });
+                }
+            }
+            await updateOverallPercentageForCombinations(uniqueCombos);
         }
 
         res.json({
@@ -474,7 +493,6 @@ const getResults = async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 };
-
 /**
  * Update a particular record
  */
@@ -492,6 +510,17 @@ const updateResult = async (req, res) => {
         if (!updatedRecord) {
             return res.status(404).json({ message: "Record not found" });
         }
+
+        await updateOverallPercentageForCombinations([{
+            facultyId: updatedRecord.facultyId,
+            academicYearId: updatedRecord.academicYearId,
+            programId: updatedRecord.programId,
+            branchId: updatedRecord.branchId,
+            subjectCode: updatedRecord.subjectCode,
+            section: updatedRecord.section,
+            semesterNumber: updatedRecord.semesterNumber,
+            yearNumber: updatedRecord.yearNumber
+        }]);
 
         res.json({
             message: "Record updated successfully",
@@ -519,6 +548,17 @@ const deleteResult = async (req, res) => {
         }
 
         await FacultyFeedResult.findByIdAndDelete(id);
+
+        await updateOverallPercentageForCombinations([{
+            facultyId: record.facultyId,
+            academicYearId: record.academicYearId,
+            programId: record.programId,
+            branchId: record.branchId,
+            subjectCode: record.subjectCode,
+            section: record.section,
+            semesterNumber: record.semesterNumber,
+            yearNumber: record.yearNumber
+        }]);
 
         res.json({ message: "Record deleted successfully" });
     } catch (error) {
@@ -551,12 +591,62 @@ const deleteBulk = async (req, res) => {
             _id: { $in: ids }
         });
 
+        const uniqueCombos = [];
+        const seenKeys = new Set();
+        for (const r of allRecords) {
+            const key = `${r.facultyId}_${r.academicYearId}_${r.programId}_${r.branchId}_${r.subjectCode}_${r.section}_${r.semesterNumber}_${r.yearNumber}`;
+            if (!seenKeys.has(key)) {
+                seenKeys.add(key);
+                uniqueCombos.push({
+                    facultyId: r.facultyId,
+                    academicYearId: r.academicYearId,
+                    programId: r.programId,
+                    branchId: r.branchId,
+                    subjectCode: r.subjectCode,
+                    section: r.section,
+                    semesterNumber: r.semesterNumber,
+                    yearNumber: r.yearNumber
+                });
+            }
+        }
+        await updateOverallPercentageForCombinations(uniqueCombos);
+
         res.json({
             message: `Deleted ${result.deletedCount} records successfully.`,
             deletedCount: result.deletedCount
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+};
+
+/**
+ * Helper to update overallPercentage for a set of combinations
+ */
+const updateOverallPercentageForCombinations = async (combinations) => {
+    try {
+        for (const combo of combinations) {
+            const query = {
+                facultyId: combo.facultyId,
+                academicYearId: combo.academicYearId,
+                programId: combo.programId,
+                branchId: combo.branchId,
+                subjectCode: combo.subjectCode,
+                section: combo.section,
+                semesterNumber: combo.semesterNumber || null,
+                yearNumber: combo.yearNumber || null
+            };
+
+            const records = await FacultyFeedResult.find(query);
+            if (records.length > 0) {
+                const sum = records.reduce((acc, r) => acc + (r.percentage || 0), 0);
+                const average = Number((sum / records.length).toFixed(2));
+
+                await FacultyFeedResult.updateMany(query, { $set: { overallPercentage: average } });
+            }
+        }
+    } catch (err) {
+        console.error("Error updating overall percentage for combinations:", err);
     }
 };
 
@@ -595,6 +685,17 @@ const createResult = async (req, res) => {
             overallPercentage: Number(overallPercentage) || 0,
             uploadedBy: req.user.userId,
         });
+
+        await updateOverallPercentageForCombinations([{
+            facultyId: record.facultyId,
+            academicYearId: record.academicYearId,
+            programId: record.programId,
+            branchId: record.branchId,
+            subjectCode: record.subjectCode,
+            section: record.section,
+            semesterNumber: record.semesterNumber,
+            yearNumber: record.yearNumber
+        }]);
 
         res.status(201).json({ message: "Record created successfully", data: record });
     } catch (error) {
