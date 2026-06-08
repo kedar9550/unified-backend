@@ -6,7 +6,7 @@ const {
     removeLeadershipRole,
     getLeadershipRoles,
     getEmployeeLeadershipRoles
-} = require('./LeadershipRole.controller');
+} = require('./leadershipRole.controller');
 
 // Secure all endpoints in this router so only UNIPRIME users can access them
 router.use(protect);

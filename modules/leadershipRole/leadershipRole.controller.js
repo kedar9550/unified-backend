@@ -1,4 +1,4 @@
-const LeadershipRole = require('./LeadershipRole.model');
+const LeadershipRole = require('./leadershipRole.model');
 const Employee = require('../employee/employee.model');
 
 // @desc    Assign leadership role to employee
