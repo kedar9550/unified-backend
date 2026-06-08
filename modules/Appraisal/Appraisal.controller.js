@@ -417,32 +417,30 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             feedbackGroups[key].push(res);
         });
 
-        const filteredFeedbackResults = [];
-        Object.values(feedbackGroups).forEach(group => {
-            const phase2Record = group.find(r => r.phase === 2);
-            if (phase2Record) {
-                filteredFeedbackResults.push(phase2Record);
-            } else {
-                group.sort((a, b) => (b.phase || 0) - (a.phase || 0));
-                filteredFeedbackResults.push(group[0]);
-            }
-        });
-
         const feedbackItems = [];
         let totalFeedbackClaimed = 0;
 
-        filteredFeedbackResults.forEach(res => {
-            const feedPoints = getPointsFromRanges(res.percentage || res.overallPercentage, config.teaching.feedbackPoints);
-            const semDisplay = res.yearNumber ? `YEAR-${res.yearNumber}` : res.semesterNumber ? `SEM-${res.semesterNumber}` : "";
-            const branchDisplay = res.branchId?.code || res.branch || "";
-            const secDisplay = res.section ? `- SEC ${res.section}` : "";
+        Object.values(feedbackGroups).forEach(group => {
+            if (group.length === 0) return;
+
+            // Calculate overall percentage from all phases in the group
+            const sum = group.reduce((acc, r) => acc + (r.percentage || 0), 0);
+            const overallPercentage = Number((sum / group.length).toFixed(2));
+
+            // Calculate points based on the overall percentage
+            const feedPoints = getPointsFromRanges(overallPercentage, config.teaching.feedbackPoints);
+
+            const sampleRecord = group[0];
+            const semDisplay = sampleRecord.yearNumber ? `YEAR-${sampleRecord.yearNumber}` : sampleRecord.semesterNumber ? `SEM-${sampleRecord.semesterNumber}` : "";
+            const branchDisplay = sampleRecord.branchId?.code || sampleRecord.branch || "";
+            const secDisplay = sampleRecord.section ? `- SEC ${sampleRecord.section}` : "";
             const secBranchSem = `${semDisplay} ${branchDisplay} ${secDisplay}`.trim().replace(/\s+/g, ' ');
 
             feedbackItems.push({
-                courseName: res.subjectName,
+                courseName: sampleRecord.subjectName,
                 secBranchSem: secBranchSem,
-                noOfStudents: res.totalStudents || 0,
-                feedbackPercentage: res.percentage || res.overallPercentage || 0,
+                noOfStudents: sampleRecord.totalStudents || 0,
+                feedbackPercentage: overallPercentage,
                 pointsClaimed: feedPoints
             });
             totalFeedbackClaimed += feedPoints;
