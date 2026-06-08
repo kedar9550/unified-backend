@@ -2,6 +2,7 @@ const AcademicYear = require('../academicYear/academicYear.model');
 const Department = require('../academics/department.model');
 const Program = require('../academics/program.model');
 const Branch = require('../academics/branch.model');
+const School = require('../academics/school.model');
 const Employee = require('../employee/employee.model');
 const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
@@ -35,6 +36,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             branchesCount,
             usersCount,
             rolesCount,
+            schoolsCount,
             allYearObjs
         ] = await Promise.all([
             AcademicYear.countDocuments(),
@@ -43,6 +45,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             Branch.countDocuments(),
             Employee.countDocuments(),
             Role.countDocuments(),
+            School.countDocuments(),
             AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean()
         ]);
 
@@ -166,6 +169,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
                 departmentsCount,
                 programsCount,
                 branchesCount,
+                schoolsCount,
                 usersCount,
                 rolesCount,
                 departmentsList: mappedDepartments,
