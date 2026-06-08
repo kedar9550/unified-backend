@@ -1565,7 +1565,7 @@ exports.evaluateHODAppraisal = async (req, res) => {
 exports.getPendingRNDAppraisals = async (req, res) => {
     try {
         const appraisals = await Appraisal.find({
-            status: "Pending Research Admin"
+            status: { $in: ["Pending Research Admin", "Completed"] }
         }).populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college").populate("academicYearId", "year");
 
         res.json({ success: true, data: appraisals });
