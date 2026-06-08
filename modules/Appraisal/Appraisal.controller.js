@@ -710,7 +710,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             let pts = 0;
             if (p.appraisalClaimant && p.appraisalClaimant === faculty.institutionId) {
                 const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
-                pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+                if (statusKey === 'published' || statusKey === 'granted') {
+                    pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+                }
             }
             patentItems.push({
                 patentId: p._id,
@@ -718,7 +720,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 status: p.patentStatus,
                 filingNo: p.filingNo || "N/A",
                 dateOfFiling: p.dateOfFiling,
-                country: "India",
+                country: p.patentFiledCountry || "India",
                 pointsClaimed: pts
             });
             totalPatentPoints += pts;
@@ -826,7 +828,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     if (p.applyingSeedGrant !== "Yes" && isEligible) {
                         const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
                         if (statusKey === 'sanctioned') {
-                            const amountInLakhs = parseFloat(p.sanctionedAmount) || 0;
+                            const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
                             pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                         } else {
                             pts = config.research.projectProposalPoints.shortlisted || 5;
@@ -844,7 +846,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     if (p.applyingSeedGrant !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
                         const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
                         if (statusKey === 'sanctioned') {
-                            const amountInLakhs = parseFloat(p.sanctionedAmount) || 0;
+                            const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
                             pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                         } else {
                             pts = config.research.projectProposalPoints.shortlisted || 5;
@@ -861,7 +863,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 projectType: 'FundedProject',
                 title: p.title,
                 agency: p.fundingAgency,
-                amountInLakhs: parseFloat(p.sanctionedAmount) || 0,
+                amountInLakhs: Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2)),
                 status: p.projectStatus || 'Sanctioned',
                 isMultiAUSAuthor,
                 claimStatus,
@@ -888,7 +890,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     if (c.applyingSeedGrant !== "Yes" && isEligible) {
                         const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
                         if (statusKey === 'sanctioned') {
-                            const amountInLakhs = parseFloat(c.amount) || 0;
+                            const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
                             pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                         } else {
                             pts = config.research.projectProposalPoints.shortlisted || 5;
@@ -906,7 +908,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     if (c.applyingSeedGrant !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
                         const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
                         if (statusKey === 'sanctioned') {
-                            const amountInLakhs = parseFloat(c.amount) || 0;
+                            const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
                             pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                         } else {
                             pts = config.research.projectProposalPoints.shortlisted || 5;
@@ -923,7 +925,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 projectType: 'Consultancy',
                 title: c.title,
                 agency: c.organization,
-                amountInLakhs: parseFloat(c.amount) || 0,
+                amountInLakhs: Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2)),
                 status: c.projectStatus || 'Sanctioned',
                 isMultiAUSAuthor,
                 claimStatus,

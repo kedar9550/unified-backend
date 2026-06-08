@@ -11,7 +11,7 @@ exports.createPatent = async (req, res) => {
         const data = req.body;
         
         // 1. Mandatory Fields Validation
-        if (!data.title || !data.patentName || !data.applyingSeedGrant || !data.dateOfFiling || !data.filingNo) {
+        if (!data.title || !data.patentName || !data.applyingSeedGrant || !data.dateOfFiling || !data.filingNo || !data.patentFiledCountry) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 

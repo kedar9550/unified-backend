@@ -135,6 +135,9 @@ const AppraisalSchema = new mongoose.Schema({
                 patentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Patent' },
                 title: String,
                 status: String, // Published / Granted
+                filingNo: String,
+                dateOfFiling: Date,
+                country: { type: String, default: 'India' },
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }

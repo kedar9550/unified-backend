@@ -26,6 +26,7 @@ const PatentSchema = new mongoose.Schema({
     area: { type: String, required: true },
     filingNo: { type: String, required: true },
     dateOfFiling: { type: Date, required: true },
+    patentFiledCountry: { type: String, required: true, default: 'India' },
     patentStatus: { type: String, required: true }, // 'Filed', 'Published', etc.
     coInventors: [CoInventorSchema],
     month: { type: String, required: true },
