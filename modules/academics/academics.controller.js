@@ -1,7 +1,7 @@
 const Department = require('./department.model');
 const Program = require('./program.model');
 const Branch = require('./branch.model');
-const School = require('./school.model');
+const School = require('./school.model'); 
 
 // ====================
 // SCHOOL CONTROLLERS
