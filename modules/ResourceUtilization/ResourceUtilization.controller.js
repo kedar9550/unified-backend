@@ -4,6 +4,23 @@ const Employee = require('../employee/employee.model');
 const { isFutureDate } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
 
+const normalizeDurationToWeeks = (duration) => {
+    if (typeof duration === 'number') {
+        return Math.round(duration / 7);
+    }
+    if (typeof duration === 'string') {
+        const dLower = duration.toLowerCase();
+        if (dLower.includes('week')) {
+            return parseInt(dLower) || 0;
+        }
+        if (dLower.includes('day')) {
+            return Math.round(parseInt(dLower) / 7) || 0;
+        }
+        return parseInt(dLower) || 0;
+    }
+    return 0;
+};
+
 // @desc    Submit new resource utilization activity (saves as Draft by default)
 // @route   POST /api/value-addition/resource-utilization
 // @access  Private (Faculty)
@@ -94,17 +111,47 @@ exports.createResourceUtilization = async (req, res) => {
         }
 
         // Cross-module NPTEL duplicate check
-        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NPTEL" && data.courseFdpName) {
-            const existingContribution = await Contribution.findOne({
+        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NPTEL") {
+            const existingContributions = await Contribution.find({
                 facultyId: req.user.userId,
+                academicYear: data.academicYear,
                 category: 11,
-                courseName: { $regex: new RegExp("^" + data.courseFdpName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
                 status: { $ne: 'Rejected' }
             });
-            if (existingContribution) {
+
+            // Auto-calculate duration in days for FDP comparison
+            const start = new Date(data.fromDate);
+            const end = new Date(data.toDate);
+            const diffTime = Math.abs(end - start);
+            const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+
+            const certNoInput = data.certificateNumber ? data.certificateNumber.trim().toLowerCase() : "";
+            const courseNameInput = data.courseFdpName ? data.courseFdpName.trim().toLowerCase() : "";
+
+            let conflictFound = false;
+            for (const c of existingContributions) {
+                const certNoExist = c.certificateNumber ? c.certificateNumber.trim().toLowerCase() : "";
+                const courseNameExist = c.courseName ? c.courseName.trim().toLowerCase() : "";
+
+                if (certNoInput && certNoExist) {
+                    if (certNoInput === certNoExist) {
+                        conflictFound = true;
+                        break;
+                    }
+                } else {
+                    const nameMatch = courseNameInput === courseNameExist;
+                    const durationMatch = normalizeDurationToWeeks(calcDuration) === normalizeDurationToWeeks(c.duration);
+                    if (nameMatch && durationMatch) {
+                        conflictFound = true;
+                        break;
+                    }
+                }
+            }
+
+            if (conflictFound) {
                 return res.status(400).json({
                     success: false,
-                    message: `This NPTEL course has already been submitted under Contribution (Category 11 - NPTEL Course Completion) with status: "${existingContribution.status}". Duplicates are not allowed.`
+                    message: "This NPTEL certificate is already claimed in Metric 3.2. A certificate can be considered only in one metric."
                 });
             }
         }
@@ -151,6 +198,7 @@ exports.createResourceUtilization = async (req, res) => {
             daysParticipated: data.daysParticipated ? parseInt(data.daysParticipated) : undefined,
             proof: `/uploads/resource-utilization/${req.file.filename}`,
             status: 'Draft', // Always save as Draft first
+            certificateNumber: data.certificateNumber || undefined,
 
             // new FDP fields
             courseFdpName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.courseFdpName : undefined,
@@ -322,31 +370,47 @@ exports.updateResourceUtilization = async (req, res) => {
         }
 
         // Cross-module NPTEL duplicate check
-        if (category === "FDP" && type === "FDP Participant") {
+        if (category === "FDP" && type === "FDP Participant" && (data.organizingInstitutionCategory || record.organizingInstitutionCategory) === "NPTEL") {
+            const existingContributions = await Contribution.find({
+                facultyId: req.user.userId,
+                academicYear: data.academicYear || record.academicYear,
+                category: 11,
+                status: { $ne: 'Rejected' }
+            });
+
+            const certNoInput = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
+            const certNoInputNorm = certNoInput ? certNoInput.trim().toLowerCase() : "";
+
             const courseFdpNameVal = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
-            const orgInstCatVal = data.organizingInstitutionCategory !== undefined ? data.organizingInstitutionCategory : record.organizingInstitutionCategory;
-            
-            if (orgInstCatVal === "NPTEL" && courseFdpNameVal) {
-                const existingContribution = await Contribution.findOne({
-                    facultyId: req.user.userId,
-                    category: 11,
-                    courseName: { $regex: new RegExp("^" + courseFdpNameVal.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
-                    status: { $ne: 'Rejected' }
-                });
-                if (existingContribution) {
-                    return res.status(400).json({
-                        success: false,
-                        message: `This NPTEL course has already been submitted under Contribution (Category 11 - NPTEL Course Completion) with status: "${existingContribution.status}". Duplicates are not allowed.`
-                    });
+            const courseNameInput = courseFdpNameVal ? courseFdpNameVal.trim().toLowerCase() : "";
+
+            let conflictFound = false;
+            for (const c of existingContributions) {
+                const certNoExist = c.certificateNumber ? c.certificateNumber.trim().toLowerCase() : "";
+                const courseNameExist = c.courseName ? c.courseName.trim().toLowerCase() : "";
+
+                if (certNoInputNorm && certNoExist) {
+                    if (certNoInputNorm === certNoExist) {
+                        conflictFound = true;
+                        break;
+                    }
+                } else {
+                    const nameMatch = courseNameInput === courseNameExist;
+                    const durationMatch = normalizeDurationToWeeks(duration) === normalizeDurationToWeeks(c.duration);
+                    if (nameMatch && durationMatch) {
+                        conflictFound = true;
+                        break;
+                    }
                 }
             }
-        }
 
-        // Auto-calculate duration in days
-        const start = new Date(from);
-        const end = new Date(to);
-        const diffTime = Math.abs(end - start);
-        const duration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+            if (conflictFound) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This NPTEL certificate is already claimed in Metric 3.2. A certificate can be considered only in one metric."
+                });
+            }
+        }
 
         // Update fields
         record.academicYear = data.academicYear || record.academicYear;
@@ -359,6 +423,7 @@ exports.updateResourceUtilization = async (req, res) => {
         record.remarks = data.remarks !== undefined ? data.remarks : record.remarks;
         record.sessionsConducted = data.sessionsConducted !== undefined ? (data.sessionsConducted ? parseInt(data.sessionsConducted) : undefined) : record.sessionsConducted;
         record.daysParticipated = data.daysParticipated !== undefined ? (data.daysParticipated ? parseInt(data.daysParticipated) : undefined) : record.daysParticipated;
+        record.certificateNumber = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
 
         if (category === "FDP" && type === "FDP Participant") {
             record.courseFdpName = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;

@@ -1354,20 +1354,27 @@ exports.submitAppraisal = async (req, res) => {
             const type = (r.activityType || '').toLowerCase().trim();
             const org = (r.organizingInstitutionCategory || '').toLowerCase().trim();
             const days = Number(r.daysParticipated) || Number(r.duration) || 0;
-            return cat === 'fdp' && type === 'fdp participant' && days >= 5 && allowedOrg.includes(org);
+            if (cat === 'fdp' && type === 'fdp participant' && days >= 5 && allowedOrg.includes(org)) {
+                if (org.includes("nirf")) {
+                    const rank = Number(r.nirfRank);
+                    return !isNaN(rank) && rank > 0 && rank < 200;
+                }
+                return true;
+            }
+            return false;
         });
 
-        // 2. Check NPTEL/Coursera in Contributions
+        // 2. Check Coursera (>= 40 Hours) in Contributions
         const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" } });
-        const hasValidNptelOrCoursera = contributions.some(c => {
+        const hasValidCoursera40Hours = contributions.some(c => {
             const cat = parseInt(c.category);
-            return cat === 11 || cat === 12;
+            return cat === 12 && Number(c.courseHours) >= 40;
         });
 
-        if (!hasValidFdp && !hasValidNptelOrCoursera) {
+        if (!hasValidFdp && !hasValidCoursera40Hours) {
             return res.status(400).json({
                 success: false,
-                message: "Appraisal submission blocked: Faculty must satisfy the FDP / Coursera / NPTEL requirement."
+                message: "Appraisal submission blocked: Faculty must satisfy the FDP (at least 5 days from allowed organizers) / Coursera (at least 40 Hours) requirement."
             });
         }
 

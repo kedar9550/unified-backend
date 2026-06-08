@@ -4,6 +4,23 @@ const Employee = require('../employee/employee.model');
 const { isFutureDate } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
 
+const normalizeDurationToWeeks = (duration) => {
+    if (typeof duration === 'number') {
+        return Math.round(duration / 7);
+    }
+    if (typeof duration === 'string') {
+        const dLower = duration.toLowerCase();
+        if (dLower.includes('week')) {
+            return parseInt(dLower) || 0;
+        }
+        if (dLower.includes('day')) {
+            return Math.round(parseInt(dLower) / 7) || 0;
+        }
+        return parseInt(dLower) || 0;
+    }
+    return 0;
+};
+
 // Validate fields based on Category
 const validateCategoryFields = (category, data) => {
     const cat = parseInt(category);
@@ -111,6 +128,12 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
                 return "Dates cannot be in the future.";
             }
+            if (data.courseHours === undefined || data.courseHours === null || data.courseHours === "") {
+                return "Course Duration (Hours) is mandatory.";
+            }
+            if (isNaN(Number(data.courseHours)) || Number(data.courseHours) < 40) {
+                return "Coursera Course must be at least 40 Hours.";
+            }
             break;
         case 13:
             if (!data.grantName || !data.fromDate || !data.toDate) {
@@ -202,19 +225,42 @@ exports.createContribution = async (req, res) => {
         }
 
         // Cross-module NPTEL duplicate check
-        if (categoryNum === 11 && data.courseName) {
-            const existingResUt = await ResourceUtilization.findOne({
+        if (categoryNum === 11) {
+            const existingFdp = await ResourceUtilization.find({
                 facultyId: req.user.userId,
+                academicYear: data.academicYear,
                 activityCategory: 'FDP',
-                activityType: 'FDP Participant',
                 organizingInstitutionCategory: 'NPTEL',
-                courseFdpName: { $regex: new RegExp("^" + data.courseName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
                 status: { $ne: 'Rejected' }
             });
-            if (existingResUt) {
+
+            const certNoInput = data.certificateNumber ? data.certificateNumber.trim().toLowerCase() : "";
+            const courseNameInput = data.courseName ? data.courseName.trim().toLowerCase() : "";
+
+            let conflictFound = false;
+            for (const r of existingFdp) {
+                const certNoExist = r.certificateNumber ? r.certificateNumber.trim().toLowerCase() : "";
+                const courseNameExist = r.courseFdpName ? r.courseFdpName.trim().toLowerCase() : "";
+
+                if (certNoInput && certNoExist) {
+                    if (certNoInput === certNoExist) {
+                        conflictFound = true;
+                        break;
+                    }
+                } else {
+                    const nameMatch = courseNameInput === courseNameExist;
+                    const durationMatch = normalizeDurationToWeeks(data.duration) === normalizeDurationToWeeks(r.duration);
+                    if (nameMatch && durationMatch) {
+                        conflictFound = true;
+                        break;
+                    }
+                }
+            }
+
+            if (conflictFound) {
                 return res.status(400).json({
                     success: false,
-                    message: `This NPTEL course has already been submitted under Resource Utilization (FDP Participant) with status: "${existingResUt.status}". Duplicates are not allowed.`
+                    message: "This NPTEL certificate is already claimed in Metric 3.1. A certificate can be considered only in one metric."
                 });
             }
         }
@@ -252,6 +298,9 @@ exports.createContribution = async (req, res) => {
             facilityName: categoryNum === 10 ? data.facilityName : undefined,
             
             grantName: categoryNum === 13 ? data.grantName : undefined,
+            
+            courseHours: categoryNum === 12 ? Number(data.courseHours) : undefined,
+            certificateNumber: data.certificateNumber || undefined,
             
             proof: `/uploads/contributions/${req.file.filename}`,
             status: 'Draft' // Always save as Draft first
@@ -337,22 +386,47 @@ exports.updateContribution = async (req, res) => {
 
         // Cross-module NPTEL duplicate check
         if (categoryNum === 11) {
+            const existingFdp = await ResourceUtilization.find({
+                facultyId: req.user.userId,
+                academicYear: data.academicYear || record.academicYear,
+                activityCategory: 'FDP',
+                organizingInstitutionCategory: 'NPTEL',
+                status: { $ne: 'Rejected' }
+            });
+
+            const certNoInput = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
+            const certNoInputNorm = certNoInput ? certNoInput.trim().toLowerCase() : "";
+            
             const courseNameVal = data.courseName !== undefined ? data.courseName : record.courseName;
-            if (courseNameVal) {
-                const existingResUt = await ResourceUtilization.findOne({
-                    facultyId: req.user.userId,
-                    activityCategory: 'FDP',
-                    activityType: 'FDP Participant',
-                    organizingInstitutionCategory: 'NPTEL',
-                    courseFdpName: { $regex: new RegExp("^" + courseNameVal.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
-                    status: { $ne: 'Rejected' }
-                });
-                if (existingResUt) {
-                    return res.status(400).json({
-                        success: false,
-                        message: `This NPTEL course has already been submitted under Resource Utilization (FDP Participant) with status: "${existingResUt.status}". Duplicates are not allowed.`
-                    });
+            const courseNameInput = courseNameVal ? courseNameVal.trim().toLowerCase() : "";
+
+            const durationVal = data.duration !== undefined ? data.duration : record.duration;
+
+            let conflictFound = false;
+            for (const r of existingFdp) {
+                const certNoExist = r.certificateNumber ? r.certificateNumber.trim().toLowerCase() : "";
+                const courseNameExist = r.courseFdpName ? r.courseFdpName.trim().toLowerCase() : "";
+
+                if (certNoInputNorm && certNoExist) {
+                    if (certNoInputNorm === certNoExist) {
+                        conflictFound = true;
+                        break;
+                    }
+                } else {
+                    const nameMatch = courseNameInput === courseNameExist;
+                    const durationMatch = normalizeDurationToWeeks(durationVal) === normalizeDurationToWeeks(r.duration);
+                    if (nameMatch && durationMatch) {
+                        conflictFound = true;
+                        break;
+                    }
                 }
+            }
+
+            if (conflictFound) {
+                return res.status(400).json({
+                    success: false,
+                    message: "This NPTEL certificate is already claimed in Metric 3.1. A certificate can be considered only in one metric."
+                });
             }
         }
 
@@ -388,6 +462,9 @@ exports.updateContribution = async (req, res) => {
         record.facilityName = categoryNum === 10 ? (data.facilityName || record.facilityName) : undefined;
         
         record.grantName = categoryNum === 13 ? (data.grantName || record.grantName) : undefined;
+
+        record.courseHours = categoryNum === 12 ? (data.courseHours !== undefined ? Number(data.courseHours) : record.courseHours) : undefined;
+        record.certificateNumber = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
 
         if (req.file) {
             if (req.file.size > 500 * 1024) {

@@ -46,6 +46,9 @@ const ContributionSchema = new mongoose.Schema({
     
     grantName: { type: String }, // Cat 13
     sanctionDate: { type: Date }, // Cat 13
+
+    courseHours: { type: Number }, // Cat 12
+    certificateNumber: { type: String },
     
     proof: {
         type: String,
