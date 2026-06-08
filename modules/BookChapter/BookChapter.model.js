@@ -22,6 +22,7 @@ const BookChapterSchema = new mongoose.Schema({
     
     textBookName: { type: String, required: true },
     chapterTitle: { type: String, required: true },
+    isbnNumber: { type: String },
     yearOfPublication: { type: String, required: true },
     firstAuthor: { type: String, enum: ['Yes', 'No'], required: true },
     authorPosition: { type: String },

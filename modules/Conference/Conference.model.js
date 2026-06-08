@@ -28,6 +28,7 @@ const ConferenceSchema = new mongoose.Schema({
     month: { type: String },
     year: { type: String },
     issnIsbn: { type: String },
+    publisher: { type: String },
     indexing: { type: String },
     presentationType: { type: String, enum: ['Oral', 'Poster', 'Keynote'] },
     firstAuthor: { type: String, enum: ['Yes', 'No'] },

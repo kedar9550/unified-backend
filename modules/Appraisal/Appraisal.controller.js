@@ -645,11 +645,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (b.appraisalClaimant && b.appraisalClaimant === faculty.institutionId) {
                 pts = config.research.bookConferencePoints.isbnBook || 10;
             }
+            const isbn = b.isbn || b.isbnNumber || null;
             bookChapterItems.push({
                 itemId: b._id,
                 itemType: 'Textbook',
-                title: b.title,
-                isbn: b.isbn,
+                title: isbn ? `${b.title} (${isbn})` : b.title,
+                isbn: isbn || "",
                 publisher: b.publisher || "N/A",
                 pointsClaimed: pts
             });
@@ -661,11 +662,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId) {
                 pts = config.research.bookConferencePoints.isbnBookChapter || 5;
             }
+            const isbn = c.isbnNumber || null;
             bookChapterItems.push({
                 itemId: c._id,
                 itemType: 'BookChapter',
-                title: c.chapterTitle,
-                isbn: c.isbnNumber || c.isbn,
+                title: isbn ? `${c.chapterTitle} - ${c.textBookName} (${isbn})` : `${c.chapterTitle} - ${c.textBookName}`,
+                isbn: isbn || "",
                 publisher: c.publisher || "N/A",
                 pointsClaimed: pts
             });
@@ -677,12 +679,13 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId) {
                 pts = config.research.bookConferencePoints.scopusConference || 5;
             }
+            const issn = c.issnIsbn || null;
             bookChapterItems.push({
                 itemId: c._id,
                 itemType: 'Conference',
-                title: c.paperTitle,
-                isbn: c.issnIsbn || c.isbn || "N/A",
-                publisher: c.organizer || "N/A",
+                title: issn ? `${c.title} (${issn})` : c.title,
+                isbn: issn || "",
+                publisher: c.publisher || c.organizer || "N/A",
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;

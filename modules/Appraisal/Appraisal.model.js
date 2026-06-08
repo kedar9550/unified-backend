@@ -126,6 +126,7 @@ const AppraisalSchema = new mongoose.Schema({
                 itemType: { type: String, enum: ['Textbook', 'BookChapter', 'Conference'] },
                 title: String,
                 isbn: String,
+                publisher: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 } // Capped at max 10 points
