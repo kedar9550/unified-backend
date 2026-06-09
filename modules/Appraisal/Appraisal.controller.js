@@ -38,7 +38,7 @@ function getPointsFromRanges(val, ranges) {
 // Helper to calculate the base points of a journal publication based on custom rules
 async function getJournalBasePoints(j, config) {
     const journalPointsConf = config.research?.journalPoints || {};
-    
+
     // 1. Check if the journal exists in the journalmasters collection (top category)
     let isJournalMaster = false;
     if (j.journalName) {
@@ -318,9 +318,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
-            return res.json({ 
-                success: true, 
-                isCalculatedFresh: false, 
+            return res.json({
+                success: true,
+                isCalculatedFresh: false,
                 data: appraisal,
                 proctoringDetail: proctoringEntries,
                 proctoringDetails: proctoringEntries,
@@ -353,7 +353,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // 1.1 THEORY Courses Pass Percentage Points
         const theoryPP = [];
         let totalPPClaimed = 0;
-        
+
         // 1.4 THEORY Courses CO Attainment Points
         const theoryCO = [];
         let totalCOClaimed = 0;
@@ -381,7 +381,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 const reached = res.noOfCosAttained || 0;
                 const coPointsMap = config.teaching.coAttainmentPoints || DEFAULT_CONFIG.teaching.coAttainmentPoints;
                 const coPoints = coPointsMap[reached] || 0;
-                
+
                 theoryCO.push({
                     courseName: res.courseName,
                     secBranchSem: secBranchSem,
@@ -492,7 +492,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const totalTeachingPoints = Math.min(80, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
 
         // --- 2. Research Contributions ---
-        
+
         // 2.1 Journals Publication
         const journals = await Journal.find({
             academicYear: academicYearId,
@@ -573,19 +573,37 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
             const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
 
-            researchPapers.push({
-                paperId: j._id,
-                paperType: 'Journal',
-                title: j.paperTitle,
-                scope: finalCategory,
-                doi: j.doi,
-                isMultiAUSAuthor,
-                claimStatus,
-                claimedBy,
-                pointsClaimed: Number(points.toFixed(2)),
-                impactFactor: jcrIF
-            });
-            totalPaperPoints += points;
+            // researchPapers.push({
+            //     paperId: j._id,
+            //     paperType: 'Journal',
+            //     title: j.paperTitle,
+            //     scope: finalCategory,
+            //     doi: j.doi,
+            //     isMultiAUSAuthor,
+            //     claimStatus,
+            //     claimedBy,
+            //     pointsClaimed: Number(points.toFixed(2)),
+            //     impactFactor: jcrIF
+            // });
+            // totalPaperPoints += points;
+
+            if (claimStatus !== "claimed_by_other" && claimStatus !== "requires_claim_action") {
+
+                researchPapers.push({
+                    paperId: j._id,
+                    paperType: 'Journal',
+                    title: j.paperTitle,
+                    scope: finalCategory,
+                    doi: j.doi,
+                    isMultiAUSAuthor,
+                    claimStatus,
+                    claimedBy,
+                    pointsClaimed: Number(points.toFixed(2)),
+                    impactFactor: jcrIF
+                });
+                totalPaperPoints += points;
+
+            }
         }
 
         // 2.2 Guiding PhD Scholars
@@ -948,7 +966,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         ).toFixed(2));
 
         // --- 3. Extension / Value Addition ---
-        
+
         // 3.1 Faculty resource utilization
         const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
         const resUtilItems = [];
@@ -968,7 +986,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 let pts = 0;
                 const activityRole = (r.activityType || '').toLowerCase();
                 const activityCat = (r.activityCategory || '').toLowerCase();
-                
+
                 if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
                     pts = (r.sessionsConducted || 1) * (resourceUtConf.resourcePerson ?? 2);
                 } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
@@ -1024,7 +1042,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (c.status === "Approved" || c.status === "Pending at HOD") {
                 let pts = 5; // default fallback
                 let activityName = "Expertise / Recognition Activity";
-                
+
                 switch (c.category) {
                     case 1:
                         pts = expPointsConf.memberBOS ?? 5;
@@ -1139,7 +1157,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     const name = r.roleName.toLowerCase();
                     const level = (r.level || '').toLowerCase();
                     const isCentral = level.includes('central') || level.includes('institute');
-                    
+
                     if (name.includes('dean') || name.includes('coe')) {
                         pts = adminConf.deanCentral ?? 20;
                     } else if (name.includes('hod')) {
@@ -1278,9 +1296,9 @@ exports.claimResearchPublication = async (req, res) => {
                 return res.status(400).json({ success: false, message: "You have already claimed this publication." });
             }
             const claimant = await Employee.findById(existingClaim.claimedByFacultyId).select("name institutionId");
-            return res.status(400).json({ 
-                success: false, 
-                message: `This publication has already been claimed by ${claimant?.name || 'another faculty member'} (${claimant?.institutionId || ''}).` 
+            return res.status(400).json({
+                success: false,
+                message: `This publication has already been claimed by ${claimant?.name || 'another faculty member'} (${claimant?.institutionId || ''}).`
             });
         }
 
@@ -1415,7 +1433,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
         const { getHODDepartments } = require("../../utils/hodHelper");
 
         const deptIds = await getHODDepartments(req.user);
-        
+
         // Find all faculty in HOD's department
         const facultyIds = await Employee.find({
             $or: [
@@ -1584,14 +1602,14 @@ exports.getPendingRNDAppraisals = async (req, res) => {
 exports.evaluateRNDAppraisal = async (req, res) => {
     try {
         const { id } = req.params;
-        const { 
-            scopusCitations, 
-            hIndex2024, 
-            hIndex2025, 
-            scopusCitationScore, 
-            scopusHIndexScore, 
-            comments, 
-            isDraft 
+        const {
+            scopusCitations,
+            hIndex2024,
+            hIndex2025,
+            scopusCitationScore,
+            scopusHIndexScore,
+            comments,
+            isDraft
         } = req.body;
 
         const appraisal = await Appraisal.findById(id);
@@ -1604,14 +1622,14 @@ exports.evaluateRNDAppraisal = async (req, res) => {
         if (hIndex2025 !== undefined) appraisal.research.hIndex2025 = Number(hIndex2025) || 0;
         appraisal.research.scopusCitationScore = Number(scopusCitationScore) || 0;
         appraisal.research.scopusHIndexScore = Number(scopusHIndexScore) || 0;
-        
+
         // Recalculate total research points
-        const baseResearch = appraisal.research.papers.totalClaimed + 
-                             appraisal.research.phdGuiding.totalClaimed + 
-                             appraisal.research.booksChapters.totalClaimed + 
-                             appraisal.research.patents.totalClaimed + 
-                             appraisal.research.novelProducts.totalClaimed + 
-                             appraisal.research.projectsConsultancies.totalClaimed;
+        const baseResearch = appraisal.research.papers.totalClaimed +
+            appraisal.research.phdGuiding.totalClaimed +
+            appraisal.research.booksChapters.totalClaimed +
+            appraisal.research.patents.totalClaimed +
+            appraisal.research.novelProducts.totalClaimed +
+            appraisal.research.projectsConsultancies.totalClaimed;
 
         appraisal.research.totalClaimed = Number((baseResearch + appraisal.research.scopusCitationScore + appraisal.research.scopusHIndexScore).toFixed(2));
 
@@ -1629,10 +1647,10 @@ exports.evaluateRNDAppraisal = async (req, res) => {
 
         await appraisal.save();
 
-        res.json({ 
-            success: true, 
-            message: isDraft ? "Appraisal draft saved successfully." : "Appraisal successfully finalized and completed.", 
-            data: appraisal 
+        res.json({
+            success: true,
+            message: isDraft ? "Appraisal draft saved successfully." : "Appraisal successfully finalized and completed.",
+            data: appraisal
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -2055,7 +2073,7 @@ exports.updateProctoringDuties = async (req, res) => {
         const feedbackAverage = appraisal.teaching.feedback?.averagePoints || 0;
         const proctoringAverage = appraisal.teaching.proctoring?.averagePoints || 0;
         const coAverage = appraisal.teaching.coAttainment?.averagePoints || 0;
-        
+
         appraisal.teaching.totalClaimed = Math.min(80, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
 
         await appraisal.save();
