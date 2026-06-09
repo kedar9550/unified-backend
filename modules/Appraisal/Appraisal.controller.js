@@ -1495,15 +1495,12 @@ exports.evaluateHODAppraisal = async (req, res) => {
             };
             await appraisal.save();
 
-            // Revert all Pending at HOD and Rejected entries back to Draft
-            await ResourceUtilization.updateMany(
-                { facultyId: appraisal.facultyId, academicYear: appraisal.academicYearId, status: { $in: ["Pending at HOD", "Rejected"] } },
-                { status: "Draft" }
-            );
-            await Contribution.updateMany(
-                { facultyId: appraisal.facultyId, academicYear: appraisal.academicYearId, status: { $in: ["Pending at HOD", "Rejected"] } },
-                { status: "Draft" }
-            );
+            // NOTE: Individual record statuses (Approved, Rejected, Pending at HOD) are NOT
+            // automatically reverted here. Per the workflow spec, rejected records must NEVER
+            // automatically become Draft. Only when the faculty explicitly edits and saves a
+            // Rejected record does it transition: Rejected → Draft (done in each module's
+            // update controller). Pending at HOD records likewise stay as-is so the HOD can
+            // continue verifying them individually.
 
             return res.json({ success: true, message: "Appraisal sent back to faculty.", data: appraisal });
         }
@@ -1512,10 +1509,12 @@ exports.evaluateHODAppraisal = async (req, res) => {
             const facultyId = appraisal.facultyId;
             const academicYearId = appraisal.academicYearId;
 
-            // Check if any entries are Rejected
-            const hasRejectedProctoring = await FacultyProctoringEntry.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
-            const hasRejectedResourceUt = await ResourceUtilization.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
-            const hasRejectedContribution = await Contribution.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
+            // Check if any ACTIVE (not removed from appraisal) entries are still Rejected.
+            // Records the faculty removed from the appraisal (removedFromAppraisal: true)
+            // must NOT block approval — they are no longer part of this submission.
+            const hasRejectedProctoring = await FacultyProctoringEntry.exists({ facultyId, academicYear: academicYearId, status: "Rejected", removedFromAppraisal: { $ne: true } });
+            const hasRejectedResourceUt = await ResourceUtilization.exists({ facultyId, academicYear: academicYearId, status: "Rejected", removedFromAppraisal: { $ne: true } });
+            const hasRejectedContribution = await Contribution.exists({ facultyId, academicYear: academicYearId, status: "Rejected", removedFromAppraisal: { $ne: true } });
             const hasRejectedAdmin = await FacultyAdministration.exists({ facultyId, academicYear: academicYearId, status: "Rejected" });
 
             if (hasRejectedProctoring || hasRejectedResourceUt || hasRejectedContribution || hasRejectedAdmin) {

@@ -258,9 +258,14 @@ exports.updateResourceUtilization = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized to update this record." });
         }
 
-        if (record.status !== 'Draft') {
-            return res.status(400).json({ success: false, message: "Submitted, Approved, or Rejected entries cannot be edited." });
+        // Allow editing of Draft OR Rejected records.
+        // Approved and Pending at HOD records are locked.
+        if (record.status !== 'Draft' && record.status !== 'Rejected') {
+            return res.status(400).json({ success: false, message: "Only Draft or Rejected entries can be edited." });
         }
+
+        // Track whether this was a rejected record before we change anything
+        const wasRejected = record.status === 'Rejected';
 
         const category = data.activityCategory || record.activityCategory;
         const type = data.activityType || record.activityType;
@@ -466,6 +471,13 @@ exports.updateResourceUtilization = async (req, res) => {
                 });
             }
             record.proof = `/uploads/resource-utilization/${req.file.filename}`;
+        }
+
+        // If the faculty edited a Rejected record, transition it back to Draft so it can be re-submitted.
+        // HOD remarks (hodComment) are intentionally preserved for faculty reference.
+        // This is the ONLY place where Rejected → Draft should ever happen.
+        if (wasRejected) {
+            record.status = 'Draft';
         }
 
         await record.save();
