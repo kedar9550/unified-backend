@@ -120,8 +120,36 @@ const EmployeeSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
+const isLeadershipDesignation = (designation) => {
+    if (!designation) return false;
+    const cleanDesig = designation.toLowerCase().replace(/[^a-z0-9]/g, ' ');
+    const leadershipRoles = ['Deans', 'Associate Deans', 'CoE', 'HoD', 'Chancellor', 'Pro-chancellor', 'Registrar', 'Vice-chancellor', 'Director Academics', 'Head'];
+    return leadershipRoles.some(role => {
+        if (!role) return false;
+        let cleanRole = role.toLowerCase().trim();
+        if (cleanRole.endsWith('s') && !['coe', 'chancellor', 'pro-chancellor', 'vice-chancellor', 'registrar'].includes(cleanRole)) {
+            cleanRole = cleanRole.slice(0, -1);
+        }
+        cleanRole = cleanRole.replace(/[^a-z0-9]/g, ' ');
+        return cleanDesig.includes(cleanRole);
+    });
+};
+
+function handleEmployeeUpdate(update) {
+    if (!update) return;
+    if (update.$set && update.$set.designation !== undefined) {
+        update.$set.leadership = isLeadershipDesignation(update.$set.designation) ? "yes" : "no";
+    } else if (update.designation !== undefined) {
+        update.leadership = isLeadershipDesignation(update.designation) ? "yes" : "no";
+    }
+}
+
 // hash password
 EmployeeSchema.pre("save", async function () {
+    if (this.isModified("designation") || this.isNew) {
+        this.leadership = isLeadershipDesignation(this.designation) ? "yes" : "no";
+    }
+
     if (this.isModified("qualification")) {
         const qual = (this.qualification || "").toUpperCase().trim();
         if (qual === "PHD") {
@@ -136,9 +164,22 @@ EmployeeSchema.pre("save", async function () {
     this.password = await bcrypt.hash(this.password, salt);
 });
 
+EmployeeSchema.pre("updateOne", function () {
+    handleEmployeeUpdate(this.getUpdate());
+});
+
+EmployeeSchema.pre("findOneAndUpdate", function () {
+    handleEmployeeUpdate(this.getUpdate());
+});
+
+EmployeeSchema.pre("updateMany", function () {
+    handleEmployeeUpdate(this.getUpdate());
+});
+
 // compare password
 EmployeeSchema.methods.comparePassword = function (password) {
     return bcrypt.compare(password, this.password);
 };
 
 module.exports = mongoose.model("Employee", EmployeeSchema);
+
