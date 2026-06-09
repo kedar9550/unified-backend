@@ -36,7 +36,6 @@ const FacultyFeedResultSchema = new mongoose.Schema({
     totalStudents: Number,
     givenStudents: Number,
     percentage: Number,
-    overallPercentage: Number,
 
     uploadedBy: {
         type: mongoose.Schema.Types.ObjectId,

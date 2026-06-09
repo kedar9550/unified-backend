@@ -201,7 +201,7 @@ exports.getFeedbackDashboardData = async (req, res, next) => {
             totalFacultiesCount,
             processedFeedbacksCount,
             avgRatingData,
-            lowRatingsCount,
+            lowRatingsData,
             recentFeedbacks,
             discrepancies,
             allYearObjs
@@ -212,10 +212,28 @@ exports.getFeedbackDashboardData = async (req, res, next) => {
             FacultyFeedResult.countDocuments(),
             // Avg Rating
             FacultyFeedResult.aggregate([
-                { $group: { _id: null, avg: { $avg: "$overallPercentage" } } }
+                { $group: { _id: null, avg: { $avg: "$percentage" } } }
             ]),
             // Low Ratings
-            FacultyFeedResult.countDocuments({ overallPercentage: { $lt: 60 } }),
+            FacultyFeedResult.aggregate([
+                {
+                    $group: {
+                        _id: {
+                            facultyId: "$facultyId",
+                            academicYearId: "$academicYearId",
+                            programId: "$programId",
+                            branchId: "$branchId",
+                            subjectCode: "$subjectCode",
+                            section: "$section",
+                            semesterNumber: "$semesterNumber",
+                            yearNumber: "$yearNumber"
+                        },
+                        avgPerc: { $avg: "$percentage" }
+                    }
+                },
+                { $match: { avgPerc: { $lt: 60 } } },
+                { $count: "count" }
+            ]),
             // Recent Feedbacks
             FacultyFeedResult.find()
                 .sort({ createdAt: -1 })
@@ -233,6 +251,7 @@ exports.getFeedbackDashboardData = async (req, res, next) => {
         ]);
 
         const avgRatingValue = avgRatingData.length > 0 ? (avgRatingData[0].avg / 20).toFixed(1) : "0.0";
+        const lowRatingsCount = lowRatingsData.length > 0 ? lowRatingsData[0].count : 0;
         const activeYearObjs = allYearObjs.filter(ay => ay.programs && ay.programs.some(p => p.isActive));
         
         const activeYearStr = activeYearObjs.length > 0 
@@ -257,7 +276,7 @@ exports.getFeedbackDashboardData = async (req, res, next) => {
                     name: f.facultyName,
                     dept: f.branch,
                     subject: `${f.subjectName} (${f.subjectCode})`,
-                    rating: (f.overallPercentage / 20).toFixed(1),
+                    rating: (f.percentage / 20).toFixed(1),
                     status: "Processed",
                     time: f.createdAt,
                     avatar: ""
