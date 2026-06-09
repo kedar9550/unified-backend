@@ -592,10 +592,42 @@ exports.getResearchReports = async (req, res) => {
             }));
         }
 
-        // 3. Journals (Assuming a Journal model exists or using generic logic)
-        // If Journal model doesn't exist, we skip or add a placeholder
-        // Based on user screenshots, I should try to find where Journals are stored.
-        // I'll add a dummy for now if not found.
+        // 3. Fetch Journals
+        if (!type || type === 'All' || type === 'Journal') {
+            const journals = await Journal.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+
+            reportData.journals = journals.map(item => {
+                // Determine category for frontend mapping: Q1, Q2, or SCOPUS
+                let category = 'SCOPUS';
+                const quartile = (item.journalQuartile || '').toUpperCase().trim();
+                
+                if (quartile === 'Q1') {
+                    category = 'Q1';
+                } else if (quartile === 'Q2') {
+                    category = 'Q2';
+                }
+
+                return {
+                    sNo: '',
+                    dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                    facultyName: item.facultyId?.name || 'N/A',
+                    empId: item.facultyId?.institutionId || 'N/A',
+                    journalName: item.journalName || 'N/A',
+                    paperTitle: item.paperTitle || 'N/A',
+                    year: item.academicYear?.year || item.publishedYear || 'N/A',
+                    amount: item.approvedAmount || 0,
+                    panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                    category: category
+                };
+            });
+        }
 
         res.json({ success: true, data: reportData });
 
