@@ -4,6 +4,7 @@ const AcademicYear = require("../academicYear/academicYear.model");
 const Program = require("../academics/program.model");
 const Branch = require("../academics/branch.model");
 const { getHODDepartments } = require("../../utils/hodHelper");
+const { syncAppraisalOnProctoringRejection } = require("../../utils/appraisalSyncHelper");
 
 // @desc    Submit a new manual proctoring record
 // @route   POST /api/faculty-proctoring
@@ -288,6 +289,12 @@ exports.deleteEntry = async (req, res) => {
             return res.status(400).json({ success: false, message: "Approved proctoring entries cannot be deleted." });
         }
 
+        if (entry.status === "Rejected") {
+            entry.removedFromAppraisal = true;
+            await entry.save();
+            return res.json({ success: true, message: "Proctoring entry removed from appraisal." });
+        }
+
         await entry.deleteOne();
         res.json({ success: true, message: "Proctoring entry deleted successfully." });
     } catch (err) {
@@ -384,6 +391,12 @@ exports.hodAction = async (req, res) => {
             return res.status(404).json({ success: false, message: "Proctoring entry not found." });
         }
 
+        // Sync appraisal status if rejection
+        if (action === "Reject") {
+            // Need original entry data for matching - fetch from the updated entry
+            await syncAppraisalOnProctoringRejection([entry]);
+        }
+
         res.json({ success: true, data: entry });
     } catch (err) {
         console.error("HOD Proctoring Action Error:", err);
@@ -404,6 +417,14 @@ exports.hodBulkAction = async (req, res) => {
 
         const status = action === "Approve" ? "Approved" : "Rejected";
 
+        // If rejecting, fetch the entries first so we have their field values for appraisal matching
+        let entriesToSync = [];
+        if (action === "Reject") {
+            entriesToSync = await FacultyProctoringEntry.find(
+                { facultyId, academicYear, status: "Pending" }
+            );
+        }
+
         const updateResult = await FacultyProctoringEntry.updateMany(
             { facultyId, academicYear, status: "Pending" },
             {
@@ -415,6 +436,11 @@ exports.hodBulkAction = async (req, res) => {
                 }
             }
         );
+
+        // Sync appraisal status if rejection
+        if (action === "Reject" && entriesToSync.length > 0) {
+            await syncAppraisalOnProctoringRejection(entriesToSync);
+        }
 
         res.json({
             success: true,

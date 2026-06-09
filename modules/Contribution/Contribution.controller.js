@@ -3,6 +3,7 @@ const ResourceUtilization = require('../ResourceUtilization/ResourceUtilization.
 const Employee = require('../employee/employee.model');
 const { isFutureDate } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
+const { syncAppraisalOnContributionRejection } = require('../../utils/appraisalSyncHelper');
 
 const normalizeDurationToWeeks = (duration) => {
     if (typeof duration === 'number') {
@@ -213,7 +214,8 @@ exports.createContribution = async (req, res) => {
                 academicYear: data.academicYear,
                 category: categoryNum,
                 [field]: { $regex: new RegExp("^" + value.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             };
             const existing = await Contribution.findOne(query);
             if (existing) {
@@ -231,7 +233,8 @@ exports.createContribution = async (req, res) => {
                 academicYear: data.academicYear,
                 activityCategory: 'FDP',
                 organizingInstitutionCategory: 'NPTEL',
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             });
 
             const certNoInput = data.certificateNumber ? data.certificateNumber.trim().toLowerCase() : "";
@@ -373,7 +376,8 @@ exports.updateContribution = async (req, res) => {
                 academicYear: data.academicYear || record.academicYear,
                 category: categoryNum,
                 [field]: { $regex: new RegExp("^" + value.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             };
             const existing = await Contribution.findOne(query);
             if (existing) {
@@ -391,7 +395,8 @@ exports.updateContribution = async (req, res) => {
                 academicYear: data.academicYear || record.academicYear,
                 activityCategory: 'FDP',
                 organizingInstitutionCategory: 'NPTEL',
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             });
 
             const certNoInput = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
@@ -499,8 +504,12 @@ exports.deleteContribution = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized to delete this record." });
         }
 
-        if (record.status !== 'Draft') {
-            return res.status(400).json({ success: false, message: "Only draft entries can be deleted." });
+        if (record.status === 'Rejected') {
+            record.removedFromAppraisal = true;
+            await record.save();
+            return res.json({ success: true, message: "Record removed from appraisal." });
+        } else if (record.status !== 'Draft') {
+            return res.status(400).json({ success: false, message: "Only draft or rejected entries can be deleted/removed." });
         }
 
         await Contribution.findByIdAndDelete(id);
@@ -598,6 +607,12 @@ exports.hodAction = async (req, res) => {
         record.hodComment = comment || "";
 
         await record.save();
+
+        // Sync appraisal status if rejection
+        if (action === 'Reject') {
+            await syncAppraisalOnContributionRejection([id]);
+        }
+
         res.json({ success: true, data: record });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -625,6 +640,11 @@ exports.bulkHODAction = async (req, res) => {
             { _id: { $in: ids } },
             updateData
         );
+
+        // Sync appraisal status if rejection
+        if (action === 'Reject') {
+            await syncAppraisalOnContributionRejection(ids);
+        }
 
         res.json({
             success: true,

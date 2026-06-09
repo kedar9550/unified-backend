@@ -311,11 +311,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // If appraisal is already submitted/evaluated, return it as-is
         if (appraisal && appraisal.status !== "Draft") {
-            const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId })
+            const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } })
                 .populate("programId", "name code programPattern")
                 .populate("branchId", "name code");
-            const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
-            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
+            const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
             return res.json({ 
@@ -451,7 +451,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // 1.3 Proctoring Pass Percentage
         const proctoringEntries = await FacultyProctoringEntry.find({
             facultyId,
-            academicYear: academicYearId
+            academicYear: academicYearId,
+            removedFromAppraisal: { $ne: true }
         }).populate("programId", "name code programPattern").populate("branchId", "name code");
 
         let hasProctoringDuties = appraisal?.teaching?.proctoring?.hasProctoringDuties ?? null;
@@ -949,7 +950,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // --- 3. Extension / Value Addition ---
         
         // 3.1 Faculty resource utilization
-        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
+        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
         const resUtilItems = [];
         let totalResPoints = 0;
 
@@ -997,7 +998,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         });
 
         // 3.2 Faculty Expertise/Recognition/Contribution
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
         const contItems = [];
         let totalContPoints = 0;
 
@@ -1348,7 +1349,7 @@ exports.submitAppraisal = async (req, res) => {
         ];
 
         // 1. Check FDP in Resource Utilization
-        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" } });
+        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" }, removedFromAppraisal: { $ne: true } });
         const hasValidFdp = resourceUt.some(r => {
             const cat = (r.activityCategory || '').toLowerCase().trim();
             const type = (r.activityType || '').toLowerCase().trim();
@@ -1365,7 +1366,7 @@ exports.submitAppraisal = async (req, res) => {
         });
 
         // 2. Check Coursera (>= 40 Hours) in Contributions
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" }, removedFromAppraisal: { $ne: true } });
         const hasValidCoursera40Hours = contributions.some(c => {
             const cat = parseInt(c.category);
             return cat === 12 && Number(c.courseHours) >= 40;
@@ -1433,11 +1434,11 @@ exports.getPendingHODAppraisals = async (req, res) => {
             const facultyId = app.facultyId._id;
             const academicYearId = app.academicYearId._id;
 
-            const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId })
+            const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } })
                 .populate("programId", "name code programPattern")
                 .populate("branchId", "name code");
-            const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId });
-            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId });
+            const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
             const appObj = app.toObject();

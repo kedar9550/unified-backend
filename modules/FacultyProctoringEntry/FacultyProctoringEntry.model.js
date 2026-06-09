@@ -59,6 +59,10 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
         enum: ["Pending", "Approved", "Rejected"],
         default: "Pending"
     },
+    removedFromAppraisal: {
+        type: Boolean,
+        default: false
+    },
     approvedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Employee",

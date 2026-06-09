@@ -3,6 +3,7 @@ const Contribution = require('../Contribution/Contribution.model');
 const Employee = require('../employee/employee.model');
 const { isFutureDate } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
+const { syncAppraisalOnResourceUtilizationRejection } = require('../../utils/appraisalSyncHelper');
 
 const normalizeDurationToWeeks = (duration) => {
     if (typeof duration === 'number') {
@@ -100,7 +101,8 @@ exports.createResourceUtilization = async (req, res) => {
                 academicYear: data.academicYear,
                 activityCategory: data.activityCategory,
                 organizationName: { $regex: new RegExp("^" + data.organizationName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             });
             if (existing) {
                 return res.status(400).json({
@@ -116,7 +118,8 @@ exports.createResourceUtilization = async (req, res) => {
                 facultyId: req.user.userId,
                 academicYear: data.academicYear,
                 category: 11,
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             });
 
             // Auto-calculate duration in days for FDP comparison
@@ -359,7 +362,8 @@ exports.updateResourceUtilization = async (req, res) => {
                 academicYear: academicYearVal,
                 activityCategory: category,
                 organizationName: { $regex: new RegExp("^" + orgName.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             });
             if (existing) {
                 return res.status(400).json({
@@ -375,7 +379,8 @@ exports.updateResourceUtilization = async (req, res) => {
                 facultyId: req.user.userId,
                 academicYear: data.academicYear || record.academicYear,
                 category: 11,
-                status: { $ne: 'Rejected' }
+                status: { $ne: 'Rejected' },
+                removedFromAppraisal: { $ne: true }
             });
 
             const certNoInput = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
@@ -486,8 +491,12 @@ exports.deleteResourceUtilization = async (req, res) => {
             return res.status(403).json({ success: false, message: "Unauthorized to delete this record." });
         }
 
-        if (record.status !== 'Draft') {
-            return res.status(400).json({ success: false, message: "Only draft entries can be deleted." });
+        if (record.status === 'Rejected') {
+            record.removedFromAppraisal = true;
+            await record.save();
+            return res.json({ success: true, message: "Record removed from appraisal." });
+        } else if (record.status !== 'Draft') {
+            return res.status(400).json({ success: false, message: "Only draft or rejected entries can be deleted/removed." });
         }
 
         await ResourceUtilization.findByIdAndDelete(id);
@@ -582,6 +591,12 @@ exports.hodAction = async (req, res) => {
         record.hodComment = comment || "";
 
         await record.save();
+
+        // Sync appraisal status if rejection
+        if (action === 'Reject') {
+            await syncAppraisalOnResourceUtilizationRejection([id]);
+        }
+
         res.json({ success: true, data: record });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -609,6 +624,11 @@ exports.bulkHODAction = async (req, res) => {
             { _id: { $in: ids } },
             updateData
         );
+
+        // Sync appraisal status if rejection
+        if (action === 'Reject') {
+            await syncAppraisalOnResourceUtilizationRejection(ids);
+        }
 
         res.json({
             success: true,

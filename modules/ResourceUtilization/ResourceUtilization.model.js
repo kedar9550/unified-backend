@@ -74,6 +74,10 @@ const ResourceUtilizationSchema = new mongoose.Schema({
         enum: ['Draft', 'Pending at HOD', 'Approved', 'Rejected'],
         default: 'Draft'
     },
+    removedFromAppraisal: {
+        type: Boolean,
+        default: false
+    },
     certificateNumber: {
         type: String
     },

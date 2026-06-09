@@ -59,6 +59,10 @@ const ContributionSchema = new mongoose.Schema({
         enum: ['Draft', 'Pending at HOD', 'Approved', 'Rejected'],
         default: 'Draft'
     },
+    removedFromAppraisal: {
+        type: Boolean,
+        default: false
+    },
     hodComment: {
         type: String
     },

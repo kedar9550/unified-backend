@@ -2,6 +2,7 @@ const FacultyAdministration = require("./FacultyAdministration.model");
 const Employee = require("../employee/employee.model");
 const AcademicYear = require("../academicYear/academicYear.model");
 const { getHODDepartments } = require("../../utils/hodHelper");
+const { syncAppraisalOnAdministrationRejection } = require("../../utils/appraisalSyncHelper");
 
 // @desc    Submit or update administrative roles
 // @route   POST /api/faculty-administration
@@ -41,25 +42,39 @@ exports.createOrUpdateEntry = async (req, res) => {
                 existingRolesMap[r.roleName] = r;
             });
 
-            // Map through incoming roles and preserve approval status for unchanged roles
+            // Map through incoming roles and preserve approval status for unchanged or removed roles
             const updatedRoles = formattedRoles.map(newRole => {
                 const existing = existingRolesMap[newRole.roleName];
-                if (existing && newRole.isResponsible && existing.isResponsible) {
-                    const isSame = 
-                        existing.level === newRole.level &&
-                        existing.details === newRole.details;
-                    
-                    if (isSame) {
+                if (existing) {
+                    if (!newRole.isResponsible) {
+                        // Role was removed from appraisal, preserve its audit details
                         return {
                             roleName: newRole.roleName,
-                            isResponsible: newRole.isResponsible,
-                            level: newRole.level,
-                            details: newRole.details,
+                            isResponsible: false,
+                            level: existing.level || "",
+                            details: existing.details || "",
                             status: existing.status || "Pending",
                             approvedBy: existing.approvedBy || null,
                             approvalDate: existing.approvalDate || null,
                             remarks: existing.remarks || ""
                         };
+                    } else if (existing.isResponsible) {
+                        const isSame = 
+                            existing.level === newRole.level &&
+                            existing.details === newRole.details;
+                        
+                        if (isSame) {
+                            return {
+                                roleName: newRole.roleName,
+                                isResponsible: newRole.isResponsible,
+                                level: newRole.level,
+                                details: newRole.details,
+                                status: existing.status || "Pending",
+                                approvedBy: existing.approvedBy || null,
+                                approvalDate: existing.approvalDate || null,
+                                remarks: existing.remarks || ""
+                            };
+                        }
                     }
                 }
                 return newRole;
@@ -225,6 +240,11 @@ exports.hodActionRole = async (req, res) => {
             .populate("roles.approvedBy", "name");
 
         res.json({ success: true, data: populatedEntry });
+
+        // Sync appraisal status if rejection (after response sent)
+        if (action === "Reject") {
+            syncAppraisalOnAdministrationRejection(entry.facultyId, entry.academicYear, [roleName]);
+        }
     } catch (err) {
         console.error("HOD Administration Action Role Error:", err);
         res.status(500).json({ success: false, message: err.message });
