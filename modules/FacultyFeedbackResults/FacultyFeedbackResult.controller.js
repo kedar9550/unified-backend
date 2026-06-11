@@ -8,9 +8,22 @@ const Employee = require("../employee/employee.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const mongoose = require("mongoose");
 
+const normalizeSubjectType = (val) => {
+    if (!val) return undefined;
+    const trimmed = String(val).trim().toUpperCase();
+    if (trimmed === "T" || trimmed === "THEORY") {
+        return "Theory";
+    } else if (trimmed === "P" || trimmed === "PRACTICAL") {
+        return "Practical";
+    } else if (trimmed === "I" || trimmed === "INTEGRATED") {
+        return "Integrated";
+    }
+    return val;
+};
+
 /**
  * Bulk insert from CSV
- * headers: facultyId, academicYear, program, branch, subjectName, subjectCode, section, phase, semester_or_year, totalStudents, givenStudents, percentage, overallPercentage
+ * headers: facultyId, academicYear, program, branch, subjectName, subjectCode, subjectType, section, phase, semester_or_year, totalStudents, givenStudents, percentage, overallPercentage
  */
 const uploadCSV = async (req, res) => {
     try {
@@ -19,6 +32,14 @@ const uploadCSV = async (req, res) => {
         }
 
         const rows = parseCSV(req.file.buffer);
+        
+        // Normalize subjectType variations to 'subjecttype'
+        rows.forEach(row => {
+            if (row.subject_type !== undefined && row.subjecttype === undefined) {
+                row.subjecttype = row.subject_type;
+            }
+        });
+
         const requiredHeaders = [
             "facultyid",
             "academicyear",
@@ -26,6 +47,7 @@ const uploadCSV = async (req, res) => {
             "branch",
             "subjectname",
             "subjectcode",
+            "subjecttype",
             "section",
             "phase",
             "semester_or_year",
@@ -57,6 +79,7 @@ const uploadCSV = async (req, res) => {
                 branch: branchName,
                 subjectname,
                 subjectcode,
+                subjecttype,
                 section,
                 phase,
                 semester_or_year,
@@ -75,6 +98,12 @@ const uploadCSV = async (req, res) => {
                 if (!programName) throw new Error("Program is missing");
                 if (!branchName) throw new Error("Branch is missing");
                 if (!subjectcode) throw new Error("Subject Code is missing");
+                
+                const normalizedSubjType = normalizeSubjectType(subjecttype);
+                if (!normalizedSubjType || !["Theory", "Practical", "Integrated"].includes(normalizedSubjType)) {
+                    throw new Error(`Invalid subject type '${subjecttype}' (must be T, P, or I)`);
+                }
+
                 if (semester_or_year === undefined || semester_or_year === "") throw new Error("Semester/Year is missing");
                 if (phase === undefined || phase === "") throw new Error("Phase is missing");
 
@@ -197,6 +226,7 @@ const uploadCSV = async (req, res) => {
                     yearNumber,
                     subjectName: subjectname ? subjectname.trim() : "",
                     subjectCode: trimmedSubjectCode,
+                    subjectType: normalizedSubjType,
                     branch: branchDoc.name,
                     section: trimmedSection,
                     phase: phs,
@@ -477,6 +507,10 @@ const updateResult = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
+        if (updates.subjectType !== undefined) {
+            updates.subjectType = normalizeSubjectType(updates.subjectType);
+        }
+
         const updatedRecord = await FacultyFeedResult.findByIdAndUpdate(
             id,
             { $set: updates },
@@ -562,7 +596,7 @@ const deleteBulk = async (req, res) => {
 const createResult = async (req, res) => {
     try {
         const {
-            facultyId, facultyName, subjectName, subjectCode, branch, section, phase,
+            facultyId, facultyName, subjectName, subjectCode, subjectType, branch, section, phase,
             academicYearId, semesterTypeId, totalStudents, givenStudents, percentage,
             programId, branchId, semesterNumber, yearNumber
         } = req.body;
@@ -571,11 +605,14 @@ const createResult = async (req, res) => {
             return res.status(400).json({ message: "facultyId, subjectName, academicYearId, and semesterTypeId are required." });
         }
 
+        const normalizedSubjType = normalizeSubjectType(subjectType);
+
         const record = await FacultyFeedResult.create({
             facultyId,
             facultyName,
             subjectName,
             subjectCode,
+            subjectType: normalizedSubjType,
             branch, // legacy string
             programId,
             branchId,
