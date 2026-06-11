@@ -44,7 +44,7 @@ async function getJournalBasePoints(j, config) {
     if (j.journalName) {
         const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const match = await mongoose.connection.db.collection('journalmasters').findOne({
-            title: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
+            journalTitle: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
         });
         if (match) {
             isJournalMaster = true;
@@ -79,7 +79,7 @@ async function getJournalBasePoints(j, config) {
     }
 
     // Fallback
-    return 10;
+    return 0;
 }
 
 // Helper to determine if a claimant is a PI or Co-PI
@@ -550,7 +550,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (j.journalName) {
                 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const match = await mongoose.connection.db.collection('journalmasters').findOne({
-                    title: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
+                    journalTitle: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
                 });
                 if (match) {
                     isJournalMaster = true;

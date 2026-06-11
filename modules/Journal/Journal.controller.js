@@ -93,12 +93,21 @@ exports.createJournal = async (req, res) => {
             numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
         }
 
+        // Fetch JCR Impact Factor from JournalImpactFactor collection
+        const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
+        const jifRecord = await JournalImpactFactor.findOne({ 
+            journalName: new RegExp(`^${escapeRegex((data.journalName || '').trim())}$`, 'i') 
+        });
+        
+        const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;
+
         const journal = new Journal({
             ...data,
             facultyId: req.user.userId,
             coAuthors: resolvedAuthors,
             numberOfReferencesBelongingToAGEC,
             appraisalClaimant,
+            jcrImpactFactor,
             status: 'Pending at HOD'
         });
 
