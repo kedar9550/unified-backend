@@ -130,4 +130,7 @@ const AppraisalConfigSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
+// Ensure only one AppraisalConfig can be active at a time at the database level
+AppraisalConfigSchema.index({ isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true } });
+
 module.exports = mongoose.model("AppraisalConfig", AppraisalConfigSchema);
