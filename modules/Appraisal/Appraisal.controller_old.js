@@ -955,28 +955,14 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             totalProjectPoints += pts;
         }
 
-        // Calculate total research claimed score (citation & h-index are null initially or fetched if previously saved)
-        const savedCitations = appraisal ? appraisal.research.scopusCitations : null;
-        const savedHIndex2024 = appraisal ? appraisal.research.hIndex2024 : null;
-        const savedHIndex2025 = appraisal ? appraisal.research.hIndex2025 : null;
-        const savedCitationStatus = appraisal ? (appraisal.research.scopusCitationStatus || "Pending") : "Pending";
-        const savedHIndexStatus = appraisal ? (appraisal.research.scopusHIndexStatus || "Pending") : "Pending";
-        const savedCitationRemarks = appraisal ? (appraisal.research.scopusCitationRemarks || "") : "";
-        const savedHIndexRemarks = appraisal ? (appraisal.research.scopusHIndexRemarks || "") : "";
-
+        // Calculate total research claimed score (citation & h-index are 0 initially or fetched if previously saved)
         const savedCitationPoints = appraisal ? appraisal.research.scopusCitationScore : 0;
         const savedHIndexPoints = appraisal ? appraisal.research.scopusHIndexScore : 0;
-
-        const appraisalStatus = appraisal ? appraisal.status : "Draft";
-        const isDraftOrRejected = appraisalStatus === "Draft" || appraisalStatus === "Rejected by HOD";
-
-        const citationScoreFinal = (savedCitationStatus === "Approved" || isDraftOrRejected) ? savedCitationPoints : 0;
-        const hIndexPointsFinal = (savedHIndexStatus === "Approved" || isDraftOrRejected) ? savedHIndexPoints : 0;
 
         const totalResearchPoints = Number((
             totalPaperPoints + totalPhdPoints + cappedBookConfPoints +
             totalPatentPoints + totalNovelPoints + totalProjectPoints +
-            citationScoreFinal + hIndexPointsFinal
+            savedCitationPoints + savedHIndexPoints
         ).toFixed(2));
 
         // --- 3. Extension / Value Addition ---
@@ -1248,13 +1234,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 patents: { items: patentItems, totalClaimed: totalPatentPoints },
                 novelProducts: { items: novelItems, totalClaimed: totalNovelPoints },
                 projectsConsultancies: { items: projectItems, totalClaimed: totalProjectPoints },
-                scopusCitations: savedCitations,
-                hIndex2024: savedHIndex2024,
-                hIndex2025: savedHIndex2025,
-                scopusCitationStatus: savedCitationStatus,
-                scopusHIndexStatus: savedHIndexStatus,
-                scopusCitationRemarks: savedCitationRemarks,
-                scopusHIndexRemarks: savedHIndexRemarks,
                 scopusCitationScore: savedCitationPoints,
                 scopusHIndexScore: savedHIndexPoints,
                 totalClaimed: totalResearchPoints
@@ -1628,10 +1607,6 @@ exports.evaluateRNDAppraisal = async (req, res) => {
             hIndex2025,
             scopusCitationScore,
             scopusHIndexScore,
-            scopusCitationStatus,
-            scopusHIndexStatus,
-            scopusCitationRemarks,
-            scopusHIndexRemarks,
             comments,
             isDraft
         } = req.body;
@@ -1641,16 +1616,11 @@ exports.evaluateRNDAppraisal = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
         }
 
-        if (scopusCitations !== undefined) appraisal.research.scopusCitations = scopusCitations === null ? null : Number(scopusCitations);
-        if (hIndex2024 !== undefined) appraisal.research.hIndex2024 = hIndex2024 === null ? null : Number(hIndex2024);
-        if (hIndex2025 !== undefined) appraisal.research.hIndex2025 = hIndex2025 === null ? null : Number(hIndex2025);
-        if (scopusCitationScore !== undefined) appraisal.research.scopusCitationScore = Number(scopusCitationScore) || 0;
-        if (scopusHIndexScore !== undefined) appraisal.research.scopusHIndexScore = Number(scopusHIndexScore) || 0;
-
-        if (scopusCitationStatus !== undefined) appraisal.research.scopusCitationStatus = scopusCitationStatus;
-        if (scopusHIndexStatus !== undefined) appraisal.research.scopusHIndexStatus = scopusHIndexStatus;
-        if (scopusCitationRemarks !== undefined) appraisal.research.scopusCitationRemarks = scopusCitationRemarks;
-        if (scopusHIndexRemarks !== undefined) appraisal.research.scopusHIndexRemarks = scopusHIndexRemarks;
+        if (scopusCitations !== undefined) appraisal.research.scopusCitations = Number(scopusCitations) || 0;
+        if (hIndex2024 !== undefined) appraisal.research.hIndex2024 = Number(hIndex2024) || 0;
+        if (hIndex2025 !== undefined) appraisal.research.hIndex2025 = Number(hIndex2025) || 0;
+        appraisal.research.scopusCitationScore = Number(scopusCitationScore) || 0;
+        appraisal.research.scopusHIndexScore = Number(scopusHIndexScore) || 0;
 
         // Recalculate total research points
         const baseResearch = appraisal.research.papers.totalClaimed +
@@ -1660,10 +1630,7 @@ exports.evaluateRNDAppraisal = async (req, res) => {
             appraisal.research.novelProducts.totalClaimed +
             appraisal.research.projectsConsultancies.totalClaimed;
 
-        const citationScoreFinal = appraisal.research.scopusCitationStatus === "Approved" ? appraisal.research.scopusCitationScore : 0;
-        const hIndexPointsFinal = appraisal.research.scopusHIndexStatus === "Approved" ? appraisal.research.scopusHIndexScore : 0;
-
-        appraisal.research.totalClaimed = Number((baseResearch + citationScoreFinal + hIndexPointsFinal).toFixed(2));
+        appraisal.research.totalClaimed = Number((baseResearch + appraisal.research.scopusCitationScore + appraisal.research.scopusHIndexScore).toFixed(2));
 
         appraisal.rndEvaluation = {
             comments,
@@ -2112,217 +2079,6 @@ exports.updateProctoringDuties = async (req, res) => {
         res.json({ success: true, message: "Proctoring duties response saved.", data: appraisal });
     } catch (err) {
         console.error("Save Proctoring Duties Error:", err);
-        res.status(500).json({ success: false, message: err.message });
-    }
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SCOPUS HELPER FUNCTIONS
-// ─────────────────────────────────────────────────────────────────────────────
-
-const SCOPUS_API_KEY = process.env.SCOPUS_API_KEY || "0436d4fe788649172354545ceca9e650";
-const SCOPUS_SEARCH_BASE = "https://api.elsevier.com/content/search/scopus";
-
-/**
- * Fetches all papers for an author in a given date range.
- * Handles pagination automatically (25 per page — safe for institutional keys).
- * @param {string} authorId  - Scopus Author ID
- * @param {string} dateRange - e.g. "2025" or "1900-2024"
- * @returns {Promise<Array>} - array of entry objects with citedby-count
- */
-async function scopusFetchAllPapers(authorId, dateRange) {
-    const allEntries = [];
-    let start = 0;
-    const count = 25;
-
-    while (true) {
-        const params = new URLSearchParams({
-            query: `AU-ID(${authorId})`,
-            date: dateRange,
-            count,
-            start,
-            field: "citedby-count",
-            sort: "citedby-count",
-            apiKey: SCOPUS_API_KEY,
-            httpAccept: "application/json"
-        });
-
-        const response = await fetch(`${SCOPUS_SEARCH_BASE}?${params.toString()}`);
-
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Scopus API error ${response.status}: ${errText.slice(0, 200)}`);
-        }
-
-        const data = await response.json();
-        const sr = data["search-results"] || {};
-        const total = parseInt(sr["opensearch:totalResults"] || "0");
-        const entries = sr["entry"] || [];
-
-        // Guard: empty result set
-        if (!entries.length || entries[0]?.error) break;
-
-        allEntries.push(...entries);
-        if (start + count >= total) break;
-        start += count;
-    }
-
-    return allEntries;
-}
-
-/**
- * Computes h-index from an array of Scopus paper entries.
- * h-index = largest h where h papers each have >= h citations.
- */
-function computeHIndex(entries) {
-    const citations = entries
-        .map(e => parseInt(e["citedby-count"] || "0"))
-        .sort((a, b) => b - a);
-
-    let h = 0;
-    for (let i = 0; i < citations.length; i++) {
-        if (citations[i] >= i + 1) h = i + 1;
-        else break;
-    }
-    return h;
-}
-
-/**
- * Computes appraisal points for h-index raise based on rules:
- *   h ≤ 5  → 1 pt per step
- *   5 < h ≤ 10 → 2 pts per step
- *   h > 10 → 4 pts per step
- */
-function computeHIndexPoints(hPrev, hNew) {
-    let pts = 0;
-    for (let h = hPrev + 1; h <= hNew; h++) {
-        if (h <= 5)       pts += 1;
-        else if (h <= 10) pts += 2;
-        else              pts += 4;
-    }
-    return pts;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// @desc    Fetch Scopus citation & h-index data for a faculty member
-// @route   GET /api/appraisal/scopus-data/:academicYearId
-// @access  Private (Faculty)
-// ─────────────────────────────────────────────────────────────────────────────
-exports.getScopusData = async (req, res) => {
-    try {
-        const { academicYearId } = req.params;
-        let facultyId = req.user.userId;
-        if (req.query.facultyId && ["ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT HOD", "HOD"].includes(req.user.role)) {
-            facultyId = req.query.facultyId;
-        }
-
-        // Get faculty and their Scopus ID
-        const faculty = await Employee.findById(facultyId).select("name scopusId institutionId");
-        if (!faculty) {
-            return res.status(404).json({ success: false, message: "Faculty not found." });
-        }
-
-        const scopusId = faculty.scopusId;
-        if (!scopusId) {
-            return res.status(400).json({
-                success: false,
-                message: "Scopus ID not found in your profile. Please update your profile first."
-            });
-        }
-
-        // Get appraisal config for citation/hindex rates
-        const config = await AppraisalConfig.findOne({ academicYearId });
-        const citationRate   = config?.research?.citationRate   ?? 0.2;
-        const hRateLow       = config?.research?.hIndexRateLow  ?? 1;
-        const hRateMid       = config?.research?.hIndexRateMid  ?? 2;
-        const hRateHigh      = config?.research?.hIndexRateHigh ?? 4;
-
-        // ── Fetch from Scopus ──────────────────────────────────
-        // 1. Papers published in 2025 → sum their citedby-count
-        const papers2025     = await scopusFetchAllPapers(scopusId, "2025");
-        const citations2025  = papers2025.reduce(
-            (sum, e) => sum + parseInt(e["citedby-count"] || "0"), 0
-        );
-
-        // 2. Cumulative papers up to end of 2024 → h-index 2024
-        const papersUpto2024 = await scopusFetchAllPapers(scopusId, "1900-2024");
-        const hIndex2024     = computeHIndex(papersUpto2024);
-
-        // 3. Cumulative papers up to end of 2025 → h-index 2025
-        const papersUpto2025 = await scopusFetchAllPapers(scopusId, "1900-2025");
-        const hIndex2025     = computeHIndex(papersUpto2025);
-
-        // ── Score Calculation ──────────────────────────────────
-        const citationScore  = Math.round(citations2025 * citationRate * 10) / 10;
-        const hIndexRaise    = Math.max(0, hIndex2025 - hIndex2024);
-        const hIndexPoints   = computeHIndexPoints(hIndex2024, hIndex2025);
-
-        // ── Save to Appraisal document ─────────────────────────
-        const appraisal = await Appraisal.findOne({ facultyId, academicYearId });
-        if (appraisal) {
-            const isEvaluator = ["ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT HOD", "HOD"].includes(req.user.role);
-            if (appraisal.status === "Draft" || appraisal.status === "Rejected by HOD" || isEvaluator) {
-                appraisal.research.scopusCitations      = citations2025;
-                appraisal.research.hIndex2024           = hIndex2024;
-                appraisal.research.hIndex2025           = hIndex2025;
-                appraisal.research.scopusCitationScore  = citationScore;
-                appraisal.research.scopusHIndexScore     = hIndexPoints;
-
-                // Recalculate total research points
-                const paperPts   = appraisal.research.papers?.totalClaimed          || 0;
-                const phdPts     = appraisal.research.phdGuiding?.totalClaimed      || 0;
-                const bookPts    = appraisal.research.booksChapters?.totalClaimed   || 0;
-                const patentPts  = appraisal.research.patents?.totalClaimed         || 0;
-                const novelPts   = appraisal.research.novelProducts?.totalClaimed   || 0;
-                const projPts    = appraisal.research.projectsConsultancies?.totalClaimed || 0;
-
-                const citationScoreFinal = (appraisal.research.scopusCitationStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? citationScore : 0;
-                const hIndexPointsFinal = (appraisal.research.scopusHIndexStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? hIndexPoints : 0;
-
-                appraisal.research.totalClaimed = Number((
-                    paperPts + phdPts + bookPts + patentPts + novelPts + projPts +
-                    citationScoreFinal + hIndexPointsFinal
-                ).toFixed(2));
-
-                await appraisal.save();
-            }
-        }
-
-        return res.json({
-            success: true,
-            data: {
-                scopusId,
-                papersIn2025:       papers2025.length,
-                citations2025,
-                hIndex2024,
-                hIndex2025,
-                hIndexRaise,
-                scores: {
-                    citationScore,   // 2.7
-                    hIndexPoints,    // 2.8
-                    total: Math.round((citationScore + hIndexPoints) * 10) / 10
-                },
-                ratesUsed: {
-                    citationRate,
-                    hRateLow,
-                    hRateMid,
-                    hRateHigh
-                }
-            }
-        });
-
-    } catch (err) {
-        console.error("Scopus Data Fetch Error:", err);
-
-        // Friendly error for Scopus API failures
-        if (err.message?.includes("Scopus API error")) {
-            return res.status(502).json({
-                success: false,
-                message: "Could not reach Scopus API. Please try again later.",
-                detail: err.message
-            });
-        }
-
         res.status(500).json({ success: false, message: err.message });
     }
 };

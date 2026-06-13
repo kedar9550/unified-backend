@@ -164,9 +164,13 @@ const AppraisalSchema = new mongoose.Schema({
             }],
             totalClaimed: { type: Number, default: 0 }
         },
-        scopusCitations: { type: Number, default: 0 },
-        hIndex2024: { type: Number, default: 0 },
-        hIndex2025: { type: Number, default: 0 },
+        scopusCitations: { type: Number, default: null },
+        hIndex2024: { type: Number, default: null },
+        hIndex2025: { type: Number, default: null },
+        scopusCitationStatus: { type: String, enum: ["Pending", "Approved", "Rejected"], default: "Pending" },
+        scopusHIndexStatus: { type: String, enum: ["Pending", "Approved", "Rejected"], default: "Pending" },
+        scopusCitationRemarks: { type: String, default: "" },
+        scopusHIndexRemarks: { type: String, default: "" },
         scopusCitationScore: { type: Number, default: 0 },
         scopusHIndexScore: { type: Number, default: 0 },
         totalClaimed: { type: Number, default: 0 }

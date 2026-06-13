@@ -16,8 +16,7 @@ const {
     evaluateHODAppraisal,
     getPendingRNDAppraisals,
     evaluateRNDAppraisal,
-    updateProctoringDuties,
-    getScopusData
+    updateProctoringDuties
 } = require("./Appraisal.controller");
 
 const { protect, authorize } = require("../../middlewares/authMiddleware");
@@ -65,9 +64,6 @@ router.post("/resolve-claim", protect, authorize("FACULTY"), resolveClaim);
 router.post("/claim-research", protect, authorize("FACULTY"), upload.single("undertaking"), claimResearchPublication);
 router.post("/submit", protect, authorize("FACULTY"), submitAppraisal);
 router.post("/proctoring-duties", protect, authorize("FACULTY"), updateProctoringDuties);
-
-// Scopus citation & h-index fetch (calls Scopus API from backend, saves to appraisal)
-router.get("/scopus-data/:academicYearId", protect, authorize("FACULTY", "ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT HOD", "HOD"), getScopusData);
 
 // HOD Appraisal actions
 router.get("/pending-hod", protect, authorize("DEPARTMENT HOD", "HOD"), getPendingHODAppraisals);
