@@ -17,7 +17,12 @@ const ConferenceSchema = new mongoose.Schema({
         ref: 'AcademicYear',
         required: true
     },
-    
+
+    // ── NEW: DOI & Scopus tracking fields ──────────────────────────────────────
+    doi: { type: String, default: null },
+    scopusSubtype: { type: String, default: "cp" }, // 'cp' = confirmed conference paper
+    // ────────────────────────────────────────────────────────────────────────────
+
     title: { type: String, required: true },
     conferenceName: { type: String, required: true },
     level: { type: String, enum: ['National', 'International'], required: true },
@@ -35,16 +40,16 @@ const ConferenceSchema = new mongoose.Schema({
     totalAuthors: { type: Number },
     userAuthorPosition: { type: Number },
     coAuthors: [CoAuthorSchema],
-    
+
     applyIncentive: { type: String, enum: ['Yes', 'No'] },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
     college: { type: String },
     panNumber: { type: String },
-    
+
     // Files
     certificate: { type: String },
     proceedings: { type: String },
-    
+
     status: {
         type: String,
         enum: ['Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
@@ -53,7 +58,7 @@ const ConferenceSchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
-    
+
     appraisalClaimant: {
         type: String,
         default: null
@@ -62,7 +67,7 @@ const ConferenceSchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    
+
     createdAt: {
         type: Date,
         default: Date.now

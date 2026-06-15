@@ -18,7 +18,7 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ 
+const upload = multer({
     storage: storage,
     limits: { fileSize: 1024 * 1024 }, // 1MB limit
     fileFilter: (req, file, cb) => {
@@ -29,7 +29,18 @@ const upload = multer({
     }
 });
 
-// --- Routes ---
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTES
+// ─────────────────────────────────────────────────────────────────────────────
+
+// [NEW] DOI Validation via Scopus — call this before form submission
+// POST /api/research/conference/validate-doi
+// Body: { "doi": "10.1109/ICCR55977.2022.9995935" }
+//
+// ✅ Returns 200 with fetched data if it's a valid conference paper
+// ❌ Returns 422 if it's a journal/article
+// ❌ Returns 404 if DOI not found in Scopus
+router.post('/validate-doi', protect, conferenceController.validateDOI);
 
 // Faculty: Submit and View own
 router.post('/', protect, upload.fields([
