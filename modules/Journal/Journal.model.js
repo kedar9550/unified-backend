@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const CoAuthorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null }
+    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    authorPosition: { type: Number, default: null }
 }, { _id: false });
 
 const JournalSchema = new mongoose.Schema({
