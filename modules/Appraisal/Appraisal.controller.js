@@ -7,6 +7,8 @@ const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
 const Employee = require("../employee/employee.model");
 const AcademicYear = require("../academicYear/academicYear.model");
 const Department = require("../academics/department.model");
+const Program = require("../academics/program.model");
+const Branch = require("../academics/branch.model");
 const FacultySubjectResult = require("../FacultySubjectResult/FacultySubjectResult.model");
 const FacultyFeedResult = require("../FacultyFeedbackResults/FacultyFeedResult.model");
 const FacultyProctoringEntry = require("../FacultyProctoringEntry/FacultyProctoringEntry.model");
@@ -465,24 +467,22 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         if (hasProctoringDuties === "Yes") {
             for (const entry of proctoringEntries) {
-                if (entry.status === "Approved" || entry.status === "Pending") {
-                    const procPoints = getPointsFromRanges(entry.passPercentage, config.teaching.proctoringPoints);
-                    proctoringItems.push({
-                        programId: entry.programId?._id,
-                        programCode: entry.programId?.code,
-                        branchId: entry.branchId?._id,
-                        branchCode: entry.branchId?.code,
-                        semesterNumber: entry.semesterNumber,
-                        yearNumber: entry.yearNumber,
-                        section: entry.section,
-                        totalStudents: entry.totalStudents || 0,
-                        appeared: entry.eligibleStudents || 0,
-                        passed: entry.passedStudents || 0,
-                        percentage: entry.passPercentage || 0,
-                        pointsClaimed: procPoints
-                    });
-                    totalProctorPoints += procPoints;
-                }
+                const procPoints = getPointsFromRanges(entry.passPercentage, config.teaching.proctoringPoints);
+                proctoringItems.push({
+                    programId: entry.programId?._id,
+                    programCode: entry.programId?.code || entry.programme,
+                    branchId: entry.branchId?._id,
+                    branchCode: entry.branchId?.code || entry.branch,
+                    semesterNumber: entry.semesterNumber,
+                    yearNumber: entry.yearNumber,
+                    section: entry.section,
+                    totalStudents: entry.totalStudents || 0,
+                    appeared: entry.eligibleStudents || 0,
+                    passed: entry.passedStudents || 0,
+                    percentage: entry.passPercentage || 0,
+                    pointsClaimed: procPoints
+                });
+                totalProctorPoints += procPoints;
             }
         }
 

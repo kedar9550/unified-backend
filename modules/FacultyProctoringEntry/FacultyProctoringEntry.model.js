@@ -6,9 +6,21 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
         ref: "Employee",
         required: true
     },
+    empId: {
+        type: String,
+        required: true
+    },
+    facultyName: {
+        type: String,
+        required: true
+    },
     academicYear: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "AcademicYear",
+        required: true
+    },
+    programme: {
+        type: String,
         required: true
     },
     programId: {
@@ -16,10 +28,13 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
         ref: "Program",
         required: true
     },
+    branch: {
+        type: String,
+        required: true
+    },
     branchId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "Branch",
-        required: true
+        ref: "Branch"
     },
     semesterNumber: {
         type: Number,
@@ -30,7 +45,7 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
         default: null
     },
     section: {
-        type: Number,
+        type: String,
         required: true
     },
     totalStudents: {
@@ -54,27 +69,9 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
         min: [0, "Pass percentage cannot be negative"],
         max: [100, "Pass percentage cannot exceed 100"]
     },
-    status: {
-        type: String,
-        enum: ["Pending", "Approved", "Rejected"],
-        default: "Pending"
-    },
     removedFromAppraisal: {
         type: Boolean,
         default: false
-    },
-    approvedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Employee",
-        default: null
-    },
-    approvalDate: {
-        type: Date,
-        default: null
-    },
-    remarks: {
-        type: String,
-        default: ""
     }
 }, { timestamps: true });
 

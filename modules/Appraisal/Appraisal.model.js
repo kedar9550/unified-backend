@@ -68,7 +68,7 @@ const AppraisalSchema = new mongoose.Schema({
                 branchCode: String,
                 semesterNumber: Number,
                 yearNumber: Number,
-                section: Number,
+                section: String,
                 totalStudents: Number,
                 appeared: Number,
                 passed: Number,
