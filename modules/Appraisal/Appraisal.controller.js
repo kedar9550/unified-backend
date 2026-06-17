@@ -401,7 +401,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // 1.2 Course Feedback
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
-            academicYearId
+            academicYearId,
+            subjectType: "Theory"
         }).populate("branchId", "code");
 
         // Filter: If both Phase 1 and Phase 2 feedbacks exist for a course/section, consider Phase 2. Otherwise, consider whichever is present.
@@ -425,24 +426,25 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         Object.values(feedbackGroups).forEach(group => {
             if (group.length === 0) return;
 
-            // Calculate overall percentage from all phases in the group
-            const sum = group.reduce((acc, r) => acc + (r.percentage || 0), 0);
-            const overallPercentage = Number((sum / group.length).toFixed(2));
+            // Select Phase 2 record if present, otherwise default to whichever is present (e.g. Phase 1)
+            const phase2Record = group.find(r => r.phase === 2);
+            const targetRecord = phase2Record || group[0];
 
-            // Calculate points based on the overall percentage
-            const feedPoints = getPointsFromRanges(overallPercentage, config.teaching.feedbackPoints);
+            const selectedPercentage = targetRecord.percentage || 0;
 
-            const sampleRecord = group[0];
-            const semDisplay = sampleRecord.yearNumber ? `YEAR-${sampleRecord.yearNumber}` : sampleRecord.semesterNumber ? `SEM-${sampleRecord.semesterNumber}` : "";
-            const branchDisplay = sampleRecord.branchId?.code || sampleRecord.branch || "";
-            const secDisplay = sampleRecord.section ? `- SEC ${sampleRecord.section}` : "";
+            // Calculate points based on the selected percentage
+            const feedPoints = getPointsFromRanges(selectedPercentage, config.teaching.feedbackPoints);
+
+            const semDisplay = targetRecord.yearNumber ? `YEAR-${targetRecord.yearNumber}` : targetRecord.semesterNumber ? `SEM-${targetRecord.semesterNumber}` : "";
+            const branchDisplay = targetRecord.branchId?.code || targetRecord.branch || "";
+            const secDisplay = targetRecord.section ? `- SEC ${targetRecord.section}` : "";
             const secBranchSem = `${semDisplay} ${branchDisplay} ${secDisplay}`.trim().replace(/\s+/g, ' ');
 
             feedbackItems.push({
-                courseName: sampleRecord.subjectName,
+                courseName: targetRecord.subjectName,
                 secBranchSem: secBranchSem,
-                noOfStudents: sampleRecord.totalStudents || 0,
-                feedbackPercentage: overallPercentage,
+                noOfStudents: targetRecord.totalStudents || 0,
+                feedbackPercentage: selectedPercentage,
                 pointsClaimed: feedPoints
             });
             totalFeedbackClaimed += feedPoints;
