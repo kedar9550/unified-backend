@@ -146,7 +146,7 @@ exports.getMyJournals = async (req, res) => {
         const journals = await Journal.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
-            .populate('coAuthors.employeeId', 'name institutionId')
+
             .sort({ createdAt: -1 });
 
         // Add a visibilityRole to indicate if the user is Applicant or Co-Author
@@ -182,7 +182,7 @@ exports.getJournalById = async (req, res) => {
                 ]
             })
             .populate('academicYear', 'year')
-            .populate('coAuthors.employeeId', 'name institutionId');
+
             
         if (!journal) {
             return res.status(404).json({ success: false, message: 'Journal not found' });

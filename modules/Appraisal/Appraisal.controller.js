@@ -91,7 +91,7 @@ function isClaimantEligible(record, claimantInstitutionId) {
     }
     const coList = record.coDevelopers || record.coInvestigators || [];
     for (const co of coList) {
-        if (co.employeeId && co.employeeId.institutionId === claimantInstitutionId) {
+        if (co.employeeId && co.employeeId === claimantInstitutionId) {
             return co.principalInvestigator === 'Yes' || co.coPrincipalInvestigator === 'Yes';
         }
     }
@@ -501,7 +501,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': facultyId }
+                { 'coAuthors.employeeId': faculty.institutionId }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -509,7 +509,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         let totalPaperPoints = 0;
 
         for (const j of journals) {
-            const ausCoAuthorsCount = (j.coAuthors || []).filter(c => c.employeeId).length;
+            const ausCoAuthorsCount = (j.coAuthors || []).filter(c => c.employeeId && c.employeeId !== '').length;
             const isMultiAUSAuthor = ausCoAuthorsCount > 0;
 
             let points = 0;
@@ -643,7 +643,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': facultyId }
+                { 'coAuthors.employeeId': faculty.institutionId }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -652,7 +652,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': facultyId }
+                { 'coAuthors.employeeId': faculty.institutionId }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -1698,6 +1698,7 @@ exports.getUnresolvedClaims = async (req, res) => {
     try {
         const { academicYearId } = req.params;
         const facultyId = req.user.userId;
+        const faculty = await Employee.findById(facultyId);
 
         const unresolved = [];
 
@@ -1708,16 +1709,21 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': facultyId }
+                { 'coAuthors.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coAuthors.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const j of journals) {
-            const ausCoAuthors = j.coAuthors.filter(c => c.employeeId);
+            const ausCoAuthors = j.coAuthors.filter(c => c.employeeId && c.employeeId !== '');
             if (ausCoAuthors.length > 0) {
+                // Look up employee details for each co-author with employeeId (now a staff code string)
+                const coAuthorEmployees = await Employee.find({ institutionId: { $in: ausCoAuthors.map(c => c.employeeId) } }).select('name institutionId');
+                const empMap = {};
+                coAuthorEmployees.forEach(e => { empMap[e.institutionId] = e; });
+
                 const claimants = [
                     { _id: j.facultyId._id, name: j.facultyId.name, institutionId: j.facultyId.institutionId },
-                    ...ausCoAuthors.map(c => ({ _id: c.employeeId._id, name: c.employeeId.name, institutionId: c.employeeId.institutionId }))
+                    ...ausCoAuthors.filter(c => empMap[c.employeeId]).map(c => ({ _id: empMap[c.employeeId]._id, name: empMap[c.employeeId].name, institutionId: empMap[c.employeeId].institutionId }))
                 ];
                 const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
 
@@ -1772,16 +1778,20 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': facultyId }
+                { 'coAuthors.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coAuthors.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const c of chapters) {
-            const ausCoAuthors = c.coAuthors.filter(co => co.employeeId);
+            const ausCoAuthors = c.coAuthors.filter(co => co.employeeId && co.employeeId !== '');
             if (ausCoAuthors.length > 0) {
+                const coAuthorEmployees = await Employee.find({ institutionId: { $in: ausCoAuthors.map(co => co.employeeId) } }).select('name institutionId');
+                const empMap = {};
+                coAuthorEmployees.forEach(e => { empMap[e.institutionId] = e; });
+
                 const claimants = [
                     { _id: c.facultyId._id, name: c.facultyId.name, institutionId: c.facultyId.institutionId },
-                    ...ausCoAuthors.map(co => ({ _id: co.employeeId._id, name: co.employeeId.name, institutionId: co.employeeId.institutionId }))
+                    ...ausCoAuthors.filter(co => empMap[co.employeeId]).map(co => ({ _id: empMap[co.employeeId]._id, name: empMap[co.employeeId].name, institutionId: empMap[co.employeeId].institutionId }))
                 ];
                 const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
 
@@ -1836,16 +1846,20 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': facultyId }
+                { 'coAuthors.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coAuthors.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const conf of conferences) {
-            const ausCoAuthors = conf.coAuthors.filter(co => co.employeeId);
+            const ausCoAuthors = conf.coAuthors.filter(co => co.employeeId && co.employeeId !== '');
             if (ausCoAuthors.length > 0) {
+                const coAuthorEmployees = await Employee.find({ institutionId: { $in: ausCoAuthors.map(co => co.employeeId) } }).select('name institutionId');
+                const empMap = {};
+                coAuthorEmployees.forEach(e => { empMap[e.institutionId] = e; });
+
                 const claimants = [
                     { _id: conf.facultyId._id, name: conf.facultyId.name, institutionId: conf.facultyId.institutionId },
-                    ...ausCoAuthors.map(co => ({ _id: co.employeeId._id, name: co.employeeId.name, institutionId: co.employeeId.institutionId }))
+                    ...ausCoAuthors.filter(co => empMap[co.employeeId]).map(co => ({ _id: empMap[co.employeeId]._id, name: empMap[co.employeeId].name, institutionId: empMap[co.employeeId].institutionId }))
                 ];
                 const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
 
