@@ -27,7 +27,7 @@ async function resolveCoAuthorsAndClaims(authorsList, applicantId) {
         if (staffCode && isAusAffiliation) {
             const employee = await Employee.findOne({ institutionId: String(staffCode).trim() });
             if (employee) {
-                authorCopy.employeeId = employee._id;
+                authorCopy.employeeId = employee.institutionId;
                 hasOtherAusAuthors = true;
             } else {
                 authorCopy.employeeId = null;
