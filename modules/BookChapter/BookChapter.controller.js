@@ -109,7 +109,6 @@ exports.getMyBookChapters = async (req, res) => {
         const bookChapters = await BookChapter.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
-            .populate('coAuthors.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         const chaptersWithVisibility = bookChapters.map(c => {
@@ -142,8 +141,7 @@ exports.getBookChapterById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year')
-            .populate('coAuthors.employeeId', 'name institutionId');
+            .populate('academicYear', 'year');
 
         if (!bookChapter) {
             return res.status(404).json({ success: false, message: 'Book Chapter not found' });

@@ -638,6 +638,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             ]
         }).populate('facultyId', 'name institutionId');
 
+        // BookChapter.coAuthors.employeeId is String (institutionId e.g. "5741")
         const chapters = await BookChapter.find({
             academicYear: academicYearId,
             status: "Approved",
@@ -647,6 +648,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             ]
         }).populate('facultyId', 'name institutionId');
 
+        // Conference.coAuthors.employeeId is String (institutionId e.g. "5741")
         const conferences = await Conference.find({
             academicYear: academicYearId,
             status: "Approved",
@@ -1702,30 +1704,40 @@ exports.getUnresolvedClaims = async (req, res) => {
 
         const unresolved = [];
 
-        // 1. Journals
+        // 1. Journals — fetch where faculty is applicant OR stored as co-author
         const journals = await Journal.find({
             academicYear: academicYearId,
             status: 'Approved',
             appraisalClaimant: null,
             $or: [
-                { facultyId },
-                { 'coAuthors.employeeId': faculty.institutionId }
+                { facultyId },                                     // faculty is applicant
+                { 'coAuthors.employeeId': faculty.institutionId }  // faculty is co-author (institutionId stored)
             ]
         }).populate('facultyId', 'name institutionId');
 
+
+
         for (const j of journals) {
-            const ausCoAuthors = j.coAuthors.filter(c => c.employeeId && c.employeeId !== '');
+            // Include AUS co-authors: those with employeeId OR affiliation = Aditya University
+            const ausCoAuthors = j.coAuthors.filter(c =>
+                (c.employeeId && c.employeeId !== '') ||
+                (c.affiliation && c.affiliation.toLowerCase().includes('aditya'))
+            );
             if (ausCoAuthors.length > 0) {
-                // Look up employee details for each co-author with employeeId (now a staff code string)
-                const coAuthorEmployees = await Employee.find({ institutionId: { $in: ausCoAuthors.map(c => c.employeeId) } }).select('name institutionId');
-                const empMap = {};
-                coAuthorEmployees.forEach(e => { empMap[e.institutionId] = e; });
+                // Build claimants directly from stored co-author data — no Employee DB lookup needed
+                const coAuthorClaimants = ausCoAuthors.map(c => ({
+                    name: c.name,
+                    institutionId: c.employeeId || null  // empId string e.g. "5741"
+                }));
 
                 const claimants = [
-                    { _id: j.facultyId._id, name: j.facultyId.name, institutionId: j.facultyId.institutionId },
-                    ...ausCoAuthors.filter(c => empMap[c.employeeId]).map(c => ({ _id: empMap[c.employeeId]._id, name: empMap[c.employeeId].name, institutionId: empMap[c.employeeId].institutionId }))
+                    { name: j.facultyId.name, institutionId: j.facultyId.institutionId },
+                    ...coAuthorClaimants
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                // Deduplicate by institutionId (or name if no institutionId)
+                const uniqueClaimants = claimants.filter((v, i, a) =>
+                    a.findIndex(t => (v.institutionId && t.institutionId === v.institutionId) || (!v.institutionId && t.name === v.name)) === i
+                );
 
                 unresolved.push({
                     _id: j._id,
@@ -1772,6 +1784,7 @@ exports.getUnresolvedClaims = async (req, res) => {
         }
 
         // 3. Book Chapters
+        // BookChapter.coAuthors.employeeId is String (institutionId)
         const chapters = await BookChapter.find({
             academicYear: academicYearId,
             status: 'Approved',
@@ -1783,17 +1796,24 @@ exports.getUnresolvedClaims = async (req, res) => {
         }).populate('facultyId', 'name institutionId');
 
         for (const c of chapters) {
-            const ausCoAuthors = c.coAuthors.filter(co => co.employeeId && co.employeeId !== '');
+            const ausCoAuthors = c.coAuthors.filter(co =>
+                (co.employeeId && co.employeeId !== '') ||
+                (co.affiliation && co.affiliation.toLowerCase().includes('aditya'))
+            );
             if (ausCoAuthors.length > 0) {
-                const coAuthorEmployees = await Employee.find({ institutionId: { $in: ausCoAuthors.map(co => co.employeeId) } }).select('name institutionId');
-                const empMap = {};
-                coAuthorEmployees.forEach(e => { empMap[e.institutionId] = e; });
+                // Build claimants directly from stored co-author data — no Employee DB lookup needed
+                const coAuthorClaimants = ausCoAuthors.map(co => ({
+                    name: co.name,
+                    institutionId: co.employeeId || null
+                }));
 
                 const claimants = [
-                    { _id: c.facultyId._id, name: c.facultyId.name, institutionId: c.facultyId.institutionId },
-                    ...ausCoAuthors.filter(co => empMap[co.employeeId]).map(co => ({ _id: empMap[co.employeeId]._id, name: empMap[co.employeeId].name, institutionId: empMap[co.employeeId].institutionId }))
+                    { name: c.facultyId.name, institutionId: c.facultyId.institutionId },
+                    ...coAuthorClaimants
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                const uniqueClaimants = claimants.filter((v, i, a) =>
+                    a.findIndex(t => (v.institutionId && t.institutionId === v.institutionId) || (!v.institutionId && t.name === v.name)) === i
+                );
 
                 unresolved.push({
                     _id: c._id,
@@ -1840,6 +1860,7 @@ exports.getUnresolvedClaims = async (req, res) => {
         }
 
         // 5. Conferences
+        // Conference.coAuthors.employeeId is String (institutionId)
         const conferences = await Conference.find({
             academicYear: academicYearId,
             status: 'Approved',
@@ -1851,17 +1872,24 @@ exports.getUnresolvedClaims = async (req, res) => {
         }).populate('facultyId', 'name institutionId');
 
         for (const conf of conferences) {
-            const ausCoAuthors = conf.coAuthors.filter(co => co.employeeId && co.employeeId !== '');
+            const ausCoAuthors = conf.coAuthors.filter(co =>
+                (co.employeeId && co.employeeId !== '') ||
+                (co.affiliation && co.affiliation.toLowerCase().includes('aditya'))
+            );
             if (ausCoAuthors.length > 0) {
-                const coAuthorEmployees = await Employee.find({ institutionId: { $in: ausCoAuthors.map(co => co.employeeId) } }).select('name institutionId');
-                const empMap = {};
-                coAuthorEmployees.forEach(e => { empMap[e.institutionId] = e; });
+                // Build claimants directly from stored co-author data — no Employee DB lookup needed
+                const coAuthorClaimants = ausCoAuthors.map(co => ({
+                    name: co.name,
+                    institutionId: co.employeeId || null
+                }));
 
                 const claimants = [
-                    { _id: conf.facultyId._id, name: conf.facultyId.name, institutionId: conf.facultyId.institutionId },
-                    ...ausCoAuthors.filter(co => empMap[co.employeeId]).map(co => ({ _id: empMap[co.employeeId]._id, name: empMap[co.employeeId].name, institutionId: empMap[co.employeeId].institutionId }))
+                    { name: conf.facultyId.name, institutionId: conf.facultyId.institutionId },
+                    ...coAuthorClaimants
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                const uniqueClaimants = claimants.filter((v, i, a) =>
+                    a.findIndex(t => (v.institutionId && t.institutionId === v.institutionId) || (!v.institutionId && t.name === v.name)) === i
+                );
 
                 unresolved.push({
                     _id: conf._id,

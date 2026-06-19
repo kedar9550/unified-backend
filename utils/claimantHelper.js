@@ -25,14 +25,12 @@ async function resolveCoAuthorsAndClaims(authorsList, applicantId) {
             (author.affiliation && author.affiliation.toLowerCase().includes('aditya'));
 
         if (staffCode && isAusAffiliation) {
-            const employee = await Employee.findOne({ institutionId: String(staffCode).trim() });
-            if (employee) {
-                authorCopy.employeeId = employee.institutionId;
-                hasOtherAusAuthors = true;
-            } else {
-                authorCopy.employeeId = null;
-            }
+            // Store empId string directly — no DB lookup needed
+            // Always mark hasOtherAusAuthors = true for AUS co-authors
+            authorCopy.employeeId = String(staffCode).trim();
+            hasOtherAusAuthors = true;
         } else if (isAusAffiliation) {
+            // AUS affiliation but no empId provided → still flag as multi-AUS
             hasOtherAusAuthors = true;
             authorCopy.employeeId = null;
         } else {

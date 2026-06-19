@@ -3,8 +3,9 @@ const mongoose = require('mongoose');
 const CoAuthorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null }
+    employeeId: { type: String, default: null }  // stores institutionId string e.g. "5741"
 }, { _id: false });
+
 
 const BookChapterSchema = new mongoose.Schema({
     facultyId: {
