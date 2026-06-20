@@ -62,7 +62,7 @@ const TextbookSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    publicationType: {
+    publicationScope: {
         type: String,
         required: true,
         default: 'National'

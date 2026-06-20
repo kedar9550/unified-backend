@@ -3,7 +3,8 @@ const mongoose = require('mongoose');
 const CoAuthorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
-    employeeId: { type: String, default: null }  // stores institutionId string e.g. "5741"
+    employeeId: { type: String, default: null },  // stores institutionId string e.g. "5741"
+    authorPosition: { type: String }
 }, { _id: false });
 
 
@@ -23,10 +24,14 @@ const BookChapterSchema = new mongoose.Schema({
     
     textBookName: { type: String, required: true },
     chapterTitle: { type: String, required: true },
+    doi: { type: String },
     isbnNumber: { type: String },
     yearOfPublication: { type: String, required: true },
-    firstAuthor: { type: String, enum: ['Yes', 'No'], required: true },
-    authorPosition: { type: String },
+
+
+    userAuthorPosition: { type: String },
+    totalAuthors: { type: String },
+    publicationScope: { type: String, enum: ['National', 'International'], required: true },
     publisher: { type: String, required: true },
     coAuthors: [CoAuthorSchema],
     month: { type: String, required: true },
