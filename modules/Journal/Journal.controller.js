@@ -95,8 +95,9 @@ exports.createJournal = async (req, res) => {
 
         // Fetch JCR Impact Factor from JournalImpactFactor collection
         const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
+        const searchName = (data.journalName || '').trim().toUpperCase();
         const jifRecord = await JournalImpactFactor.findOne({ 
-            journalName: new RegExp(`^${escapeRegex((data.journalName || '').trim())}$`, 'i') 
+            journalName: new RegExp(`^${escapeRegex(searchName)}$`) 
         });
         
         const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;

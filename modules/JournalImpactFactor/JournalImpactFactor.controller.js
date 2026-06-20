@@ -58,7 +58,7 @@ exports.addJournalImpactFactor = async (req, res, next) => {
 
         const newRecord = await JournalImpactFactor.create({
             rank: Number(rank),
-            journalName: journalName.trim(),
+            journalName: journalName.trim().toUpperCase(),
             abbreviatedJournal: (abbreviatedJournal || '').trim(),
             publisher: (publisher || '').trim(),
             jif: Number(jif)
@@ -92,7 +92,7 @@ exports.updateJournalImpactFactor = async (req, res, next) => {
             { 
                 $set: { 
                     rank: Number(rank), 
-                    journalName: journalName.trim(), 
+                    journalName: journalName.trim().toUpperCase(), 
                     abbreviatedJournal: (abbreviatedJournal || '').trim(), 
                     publisher: (publisher || '').trim(), 
                     jif: Number(jif) 

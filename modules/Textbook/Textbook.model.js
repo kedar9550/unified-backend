@@ -16,12 +16,7 @@ const AuthorSchema = new mongoose.Schema({
     },
     employeeId: {
         type: String,
-        default: null
-    },
-    employeeObjectId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Employee',
-        default: null
+        default: null    // stores institutionId string e.g. "5741" — no ObjectId ref needed
     },
     affiliationName: {
         type: String,
@@ -36,6 +31,7 @@ const AuthorSchema = new mongoose.Schema({
         default: true
     }
 }, { _id: false });
+
 
 const TextbookSchema = new mongoose.Schema({
     facultyId: {

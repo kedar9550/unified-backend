@@ -65,40 +65,34 @@ exports.createTextbook = async (req, res) => {
             parsedAuthors = data.authors;
         }
         
-        // Get the logged in user details to populate their author entry
+        // Get the logged in user details for their own author entry
         const loggedInUser = await Employee.findById(req.user.userId);
 
-        // Map and validate authors
+        // Map authors — store employeeId as String directly, no DB lookup needed
         const finalAuthors = [];
         let hasOtherAusAuthors = false;
 
         for (const author of parsedAuthors) {
-            // Is this author the logged in user?
             const isUser = Number(author.authorPosition) === Number(data.userAuthorPosition);
-            const empId = isUser ? loggedInUser.institutionId : (author.employeeId || author.empId);
-            let empObjId = null;
+            const empId = isUser ? loggedInUser.institutionId : (author.employeeId || author.empId || null);
+            const isAUS = isUser || author.affiliationType === 'Aditya University';
 
-            if (empId && (isUser || author.affiliationType === 'Aditya University')) {
-                const emp = await Employee.findOne({ institutionId: String(empId).trim() });
-                if (emp) {
-                    empObjId = emp._id;
-                    if (!isUser) {
-                        hasOtherAusAuthors = true;
-                    }
-                }
+            if (!isUser && isAUS) {
+                // AUS co-author — flag for manual claim
+                hasOtherAusAuthors = true;
             }
 
             finalAuthors.push({
                 authorPosition: author.authorPosition,
                 authorName: isUser ? loggedInUser.name : author.authorName,
-                affiliationType: isUser ? 'Aditya University' : author.affiliationType,
-                employeeId: empId,
-                employeeObjectId: isUser ? loggedInUser._id : empObjId,
-                affiliationName: isUser ? 'Aditya University' : author.affiliationName,
+                affiliationType: isUser ? 'Aditya University' : (author.affiliationType || 'Others'),
+                employeeId: isAUS && empId ? String(empId).trim() : null,  // store institutionId string directly
+                affiliationName: isUser ? 'Aditya University' : (author.affiliationName || ''),
                 isIncentiveApplicant: isUser ? (data.applyIncentive === 'Yes') : false,
                 contributorOnly: isUser ? (data.applyIncentive === 'No') : true
             });
         }
+
 
         const { getDefaultClaimant } = require('../../utils/claimantHelper');
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
@@ -161,7 +155,6 @@ exports.getMyTextbooks = async (req, res) => {
         const textbooks = await Textbook.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
-            .populate('authors.employeeObjectId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         // Add a field to indicate if the user is just a co-author for dashboard visibility
@@ -305,8 +298,7 @@ exports.getTextbookById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year')
-            .populate('authors.employeeObjectId', 'name institutionId');
+            .populate('academicYear', 'year');
             
         if (!textbook) {
             return res.status(404).json({ success: false, message: 'Textbook not found' });

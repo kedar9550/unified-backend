@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const CoInventorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null }
+    employeeId: { type: String, default: null }
 }, { _id: false });
 
 const PatentSchema = new mongoose.Schema({

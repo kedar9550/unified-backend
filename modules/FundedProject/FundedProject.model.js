@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const CoInvestigatorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
-    employeeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee', default: null },
+    employeeId: { type: String, default: null },
     principalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'No' },
     coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'Yes' }
 }, { _id: false });

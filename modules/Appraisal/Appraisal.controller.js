@@ -44,9 +44,10 @@ async function getJournalBasePoints(j, config) {
     // 1. Check if the journal exists in the journalmasters collection (top category)
     let isJournalMaster = false;
     if (j.journalName) {
+        const searchName = j.journalName.trim().toUpperCase();
         const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const match = await mongoose.connection.db.collection('journalmasters').findOne({
-            journalTitle: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
+            journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`)
         });
         if (match) {
             isJournalMaster = true;
@@ -550,9 +551,10 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             let finalCategory = "";
             let isJournalMaster = false;
             if (j.journalName) {
+                const searchName = j.journalName.trim().toUpperCase();
                 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const match = await mongoose.connection.db.collection('journalmasters').findOne({
-                    journalTitle: { $regex: new RegExp(`^${escapeRegExp(j.journalName.trim())}$`, 'i') }
+                    journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`)
                 });
                 if (match) {
                     isJournalMaster = true;
@@ -634,7 +636,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'authors.employeeObjectId': facultyId }
+                { 'authors.employeeId': faculty.institutionId }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -723,7 +725,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coInventors.employeeId': facultyId }
+                { 'coInventors.employeeId': faculty.institutionId }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -756,9 +758,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coDevelopers.employeeId': facultyId }
+                { 'coDevelopers.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coDevelopers.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         const novelItems = [];
         let totalNovelPoints = 0;
@@ -819,18 +821,18 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coInvestigators.employeeId': facultyId }
+                { 'coInvestigators.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         const consultancies = await Consultancy.find({
             academicYear: academicYearId,
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coInvestigators.employeeId': facultyId }
+                { 'coInvestigators.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         const projectItems = [];
         let totalProjectPoints = 0;
@@ -1758,18 +1760,18 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coInventors.employeeId': facultyId }
+                { 'coInventors.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coInventors.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const p of patents) {
             const ausCoInventors = p.coInventors.filter(c => c.employeeId);
             if (ausCoInventors.length > 0) {
                 const claimants = [
                     { _id: p.facultyId._id, name: p.facultyId.name, institutionId: p.facultyId.institutionId },
-                    ...ausCoInventors.map(c => ({ _id: c.employeeId._id, name: c.employeeId.name, institutionId: c.employeeId.institutionId }))
+                    ...ausCoInventors.map(c => ({ _id: c.employeeId, name: c.name, institutionId: c.employeeId }))
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
 
                 unresolved.push({
                     _id: p._id,
@@ -1834,18 +1836,18 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'authors.employeeObjectId': facultyId }
+                { 'authors.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('authors.employeeObjectId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const tb of textbooks) {
-            const ausAuthors = tb.authors.filter(a => a.employeeObjectId);
-            if (ausAuthors.length > 1) {
+            const ausAuthors = tb.authors.filter(a => a.employeeId);
+            if (ausAuthors.length > 0) {
                 const claimants = [
                     { _id: tb.facultyId._id, name: tb.facultyId.name, institutionId: tb.facultyId.institutionId },
-                    ...ausAuthors.map(a => ({ _id: a.employeeObjectId._id, name: a.employeeObjectId.name, institutionId: a.employeeObjectId.institutionId }))
+                    ...ausAuthors.map(a => ({ _id: a.employeeId, name: a.authorName || a.name, institutionId: a.employeeId }))
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
 
                 unresolved.push({
                     _id: tb._id,
@@ -1858,6 +1860,7 @@ exports.getUnresolvedClaims = async (req, res) => {
                 });
             }
         }
+
 
         // 5. Conferences
         // Conference.coAuthors.employeeId is String (institutionId)
@@ -1910,18 +1913,18 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coInvestigators.employeeId': facultyId }
+                { 'coInvestigators.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const proj of projects) {
             const ausCoInvestigators = proj.coInvestigators.filter(c => c.employeeId);
             if (ausCoInvestigators.length > 0) {
                 const claimants = [
                     { _id: proj.facultyId._id, name: proj.facultyId.name, institutionId: proj.facultyId.institutionId },
-                    ...ausCoInvestigators.map(c => ({ _id: c.employeeId._id, name: c.employeeId.name, institutionId: c.employeeId.institutionId }))
+                    ...ausCoInvestigators.map(c => ({ _id: c.employeeId, name: c.name, institutionId: c.employeeId }))
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
 
                 unresolved.push({
                     _id: proj._id,
@@ -1942,18 +1945,18 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coInvestigators.employeeId': facultyId }
+                { 'coInvestigators.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coInvestigators.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const c of consultancies) {
             const ausCoInvestigators = c.coInvestigators.filter(co => co.employeeId);
             if (ausCoInvestigators.length > 0) {
                 const claimants = [
                     { _id: c.facultyId._id, name: c.facultyId.name, institutionId: c.facultyId.institutionId },
-                    ...ausCoInvestigators.map(co => ({ _id: co.employeeId._id, name: co.employeeId.name, institutionId: co.employeeId.institutionId }))
+                    ...ausCoInvestigators.map(co => ({ _id: co.employeeId, name: co.name, institutionId: co.employeeId }))
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
 
                 unresolved.push({
                     _id: c._id,
@@ -1974,18 +1977,18 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coDevelopers.employeeId': facultyId }
+                { 'coDevelopers.employeeId': faculty.institutionId }
             ]
-        }).populate('facultyId', 'name institutionId').populate('coDevelopers.employeeId', 'name institutionId');
+        }).populate('facultyId', 'name institutionId');
 
         for (const n of novelProducts) {
             const ausCoDevelopers = n.coDevelopers.filter(cd => cd.employeeId);
             if (ausCoDevelopers.length > 0) {
                 const claimants = [
                     { _id: n.facultyId._id, name: n.facultyId.name, institutionId: n.facultyId.institutionId },
-                    ...ausCoDevelopers.map(cd => ({ _id: cd.employeeId._id, name: cd.employeeId.name, institutionId: cd.employeeId.institutionId }))
+                    ...ausCoDevelopers.map(cd => ({ _id: cd.employeeId, name: cd.name, institutionId: cd.employeeId }))
                 ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t._id.toString() === v._id.toString()) === i);
+                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
 
                 unresolved.push({
                     _id: n._id,
