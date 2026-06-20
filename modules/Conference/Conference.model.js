@@ -26,18 +26,16 @@ const ConferenceSchema = new mongoose.Schema({
 
     title: { type: String, required: true },
     conferenceName: { type: String, required: true },
-    level: { type: String, enum: ['National', 'International'], required: true },
-    venue: { type: String },
-    organizer: { type: String },
-    dateFrom: { type: Date },
-    dateTo: { type: Date },
+    scope: { type: String, enum: ['National', 'International'], required: true },
     month: { type: String },
     year: { type: String },
+    
+    // Conference details
+    doi: { type: String, trim: true },
     issnIsbn: { type: String },
     publisher: { type: String },
     indexing: { type: String },
     presentationType: { type: String, enum: ['Oral', 'Poster', 'Keynote'] },
-    firstAuthor: { type: String, enum: ['Yes', 'No'] },
     totalAuthors: { type: Number },
     userAuthorPosition: { type: Number },
     coAuthors: [CoAuthorSchema],

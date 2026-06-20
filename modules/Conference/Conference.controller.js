@@ -72,7 +72,7 @@ exports.createConference = async (req, res) => {
         const data = req.body;
 
         // 1. Mandatory Fields Validation
-        if (!data.title || !data.conferenceName || !data.level || !data.indexing || !data.applyingSeedGrant || !data.applyIncentive) {
+        if (!data.title || !data.conferenceName || !data.scope || !data.indexing || !data.applyingSeedGrant || !data.applyIncentive) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
@@ -137,7 +137,6 @@ exports.createConference = async (req, res) => {
 
         const userAuthorPos = parseInt(data.userAuthorPosition) || 1;
         const totalAuths = parseInt(data.totalAuthors) || 1;
-        const calculatedFirstAuthor = userAuthorPos === 1 ? "Yes" : "No";
 
         const conference = new Conference({
             ...data,
@@ -145,7 +144,6 @@ exports.createConference = async (req, res) => {
             facultyId: req.user.userId,
             doi: data.doi || null,
             scopusSubtype,                  // ← NEW: store confirmed subtype
-            firstAuthor: calculatedFirstAuthor,
             userAuthorPosition: userAuthorPos,
             totalAuthors: totalAuths,
             coAuthors: resolvedAuthors,
