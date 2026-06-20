@@ -973,7 +973,10 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
                     pts = (r.sessionsConducted || 1) * (resourceUtConf.resourcePerson ?? 2);
                 } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
-                    pts = (r.daysParticipated || 1) * (resourceUtConf.participated ?? 1);
+                    // Use server-auto-calculated duration (from fromDate/toDate) as authoritative day count.
+                    // daysParticipated is manually entered and may differ; duration is always correct.
+                    const participantDays = r.duration || r.daysParticipated || 1;
+                    pts = participantDays * (resourceUtConf.participated ?? 1);
                 } else if (activityRole.includes('guest lecture') || activityRole.includes('workshop') || activityRole.includes('event')) {
                     pts = resourceUtConf.guestLecture ?? 2;
                 } else {
@@ -1076,7 +1079,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                         } else if (dur.includes('4')) {
                             pts = expPointsConf.nptel4W ?? 5;
                         } else {
-                            pts = expPointsConf.nptel8W ?? 8; // fallback
+                            pts = expPointsConf.nptel4W ?? 5; // fallback to lowest tier (4W = 5pts)
                         }
                         activityName = `NPTEL Course Completion (${c.duration || '8 weeks'}) - ${c.courseName || ''}`;
                         break;
@@ -1162,8 +1165,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     } else if (name.includes('course coordinator')) {
                         pts = adminConf.courseDept ?? 5;
                     } else if (name.includes('website')) {
-                        pts = adminConf.websiteCentral ?? 10;
-                    } else if (name.includes('nss') || name.includes('professional chapter')) {
+                        pts = isCentral ? (adminConf.websiteCentral ?? 10) : 0; // Website Coordinator: Central only (no dept level per form)
+                    } else if (name.includes('nss') || name.includes('club') || name.includes('professional chapter')) {
                         pts = isCentral ? (adminConf.nssCentral ?? 10) : (adminConf.nssDept ?? 5);
                     } else if (name.includes('training')) {
                         pts = isCentral ? (adminConf.trainingCentral ?? 10) : (adminConf.trainingDept ?? 5);
