@@ -27,7 +27,8 @@ const ConsultancySchema = new mongoose.Schema({
     panNumber: { type: String },
     
     title: { type: String, required: true },
-    organization: { type: String, required: true },
+    fundingAgency: { type: String, required: true },
+    fundingAdityaUniversity: { type: String, enum: ['Yes', 'No'], required: true },
     amount: { type: String, required: true },
     duration: { type: String },
     month: { type: String },

@@ -11,7 +11,7 @@ exports.createConsultancy = async (req, res) => {
         const data = req.body;
         
         // 1. Mandatory Fields Validation
-        if (!data.title || !data.organization || !data.amount || !data.applyingSeedGrant) {
+        if (!data.title || !data.fundingAgency || !data.fundingAdityaUniversity || !data.amount || !data.applyingSeedGrant) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 

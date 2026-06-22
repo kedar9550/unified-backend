@@ -331,7 +331,7 @@ exports.getResearchRequests = async (req, res) => {
             let consultancyQuery = { ...query };
             
             if (searchRegex && !isResearchAdmin) {
-                consultancyQuery.$or = [{ title: searchRegex }, { organization: searchRegex }];
+                consultancyQuery.$or = [{ title: searchRegex }, { fundingAgency: searchRegex }];
             }
             
             const consultancies = await Consultancy.find(consultancyQuery)
@@ -345,7 +345,7 @@ exports.getResearchRequests = async (req, res) => {
                 if (!fac) continue;
 
                 if (searchRegex) {
-                    const matchesTitle = searchRegex.test(item.title) || searchRegex.test(item.organization);
+                    const matchesTitle = searchRegex.test(item.title) || searchRegex.test(item.fundingAgency);
                     const matchesName = searchRegex.test(fac.name);
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
@@ -355,7 +355,7 @@ exports.getResearchRequests = async (req, res) => {
                     _id: item._id,
                     type: 'Consultancy',
                     faculty: fac,
-                    title: `${item.title} (${item.organization})`,
+                    title: `${item.title} (${item.fundingAgency})`,
                     status: item.status,
                     createdAt: item.createdAt,
                     academicYear: item.academicYear,

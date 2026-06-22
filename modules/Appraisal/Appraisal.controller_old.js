@@ -944,7 +944,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 projectId: c._id,
                 projectType: 'Consultancy',
                 title: c.title,
-                agency: c.organization,
+                agency: c.fundingAgency,
                 amountInLakhs: Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2)),
                 status: c.projectStatus || 'Sanctioned',
                 isMultiAUSAuthor,
@@ -1882,7 +1882,7 @@ exports.getUnresolvedClaims = async (req, res) => {
                     _id: c._id,
                     type: 'Consultancy',
                     title: c.title,
-                    info: `Organization: ${c.organization} (Amount: ${c.amount})`,
+                    info: `Funding Agency: ${c.fundingAgency} (Amount: ${c.amount})`,
                     applicant: c.facultyId,
                     isApplicant: c.facultyId._id.toString() === facultyId.toString(),
                     eligibleClaimants: uniqueClaimants
