@@ -1,9 +1,13 @@
 const mongoose = require('mongoose');
 
 const CoInvestigatorSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    affiliation: { type: String, required: true },
+    role: { type: String }, // "Principal Investigator" or "Co-Investigator"
+    affiliationType: { type: String, enum: ['AUS', 'Others'] },
     employeeId: { type: String, default: null },
+    name: { type: String },
+    affiliation: { type: String, default: null },
+    department: { type: String, default: null },
+    designation: { type: String, default: null },
     principalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'No' },
     coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'Yes' }
 }, { _id: false });
@@ -29,15 +33,14 @@ const ConsultancySchema = new mongoose.Schema({
     month: { type: String },
     year: { type: String },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
+    investigatorType: { type: String, enum: ['Principal Investigator (PI)', 'Co-Principal Investigator (Co-PI)'] },
     principalInvestigator: {
         type: String,
-        enum: ['Yes', 'No'],
-        default: 'Yes'
+        enum: ['Yes', 'No']
     },
     coPrincipalInvestigator: {
         type: String,
-        enum: ['Yes', 'No'],
-        default: 'No'
+        enum: ['Yes', 'No']
     },
     projectStatus: {
         type: String,

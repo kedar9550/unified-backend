@@ -22,6 +22,7 @@ async function resolveCoAuthorsAndClaims(authorsList, applicantId) {
         // Check if there is an employeeId (staff code like 5741)
         const staffCode = author.employeeId || author.empId;
         const isAusAffiliation = author.affiliationType === 'Aditya University' || 
+            author.affiliationType === 'AUS' ||
             (author.affiliation && author.affiliation.toLowerCase().includes('aditya'));
 
         if (staffCode && isAusAffiliation) {

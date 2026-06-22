@@ -1,9 +1,13 @@
 const mongoose = require('mongoose');
 
 const CoInvestigatorSchema = new mongoose.Schema({
-    name: { type: String, required: true },
-    affiliation: { type: String, required: true },
+    role: { type: String }, // "Principal Investigator" or "Co-Investigator"
+    affiliationType: { type: String, enum: ['AUS', 'Others'] },
     employeeId: { type: String, default: null },
+    name: { type: String },
+    affiliation: { type: String, default: null },
+    department: { type: String, default: null },
+    designation: { type: String, default: null },
     principalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'No' },
     coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'], default: 'Yes' }
 }, { _id: false });
@@ -25,10 +29,12 @@ const FundedProjectSchema = new mongoose.Schema({
     title: { type: String, required: true },
     duration: { type: String, required: true },
     fundingAgency: { type: String, required: true },
+    fundingAgencyAditya: { type: String, enum: ['Yes', 'No'], default: 'No' },
     scheme: { type: String },
     otherInvestigators: { type: String },
-    principalInvestigator: { type: String, enum: ['Yes', 'No'], required: true },
-    coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'], required: true },
+    investigatorType: { type: String, enum: ['Principal Investigator (PI)', 'Co-Principal Investigator (Co-PI)'] },
+    principalInvestigator: { type: String, enum: ['Yes', 'No'] },
+    coPrincipalInvestigator: { type: String, enum: ['Yes', 'No'] },
     coInvestigators: [CoInvestigatorSchema],
     projectStatus: {
         type: String,

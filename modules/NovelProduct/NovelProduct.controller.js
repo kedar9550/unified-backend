@@ -67,6 +67,7 @@ exports.createNovelProduct = async (req, res) => {
             organizationName: data.category === 'Implemented' ? data.organizationName.trim() : undefined,
             document: `/uploads/novelProducts/${req.file.filename}`,
             remarks: data.remarks ? data.remarks.trim() : undefined,
+            investigatorType: data.investigatorType,
             principalInvestigator: data.principalInvestigator || 'Yes',
             coDevelopers: resolvedAuthors,
             applyIncentive: data.applyIncentive || 'No',

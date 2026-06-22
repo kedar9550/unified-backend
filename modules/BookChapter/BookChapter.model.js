@@ -31,7 +31,7 @@ const BookChapterSchema = new mongoose.Schema({
 
     userAuthorPosition: { type: String },
     totalAuthors: { type: String },
-    publicationScope: { type: String, enum: ['National', 'International'], required: true },
+    publicationScope: { type: String, enum: ['National', 'International'], default: 'National' },
     publisher: { type: String, required: true },
     coAuthors: [CoAuthorSchema],
     month: { type: String, required: true },
