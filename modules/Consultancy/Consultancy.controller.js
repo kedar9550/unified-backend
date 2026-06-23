@@ -76,6 +76,7 @@ exports.createConsultancy = async (req, res) => {
             facultyId: req.user.userId,
             coInvestigators: resolvedAuthors,
             appraisalClaimants,
+            incentiveClaimant: applicantInstId,
             status: 'Pending at HOD'
         });
 

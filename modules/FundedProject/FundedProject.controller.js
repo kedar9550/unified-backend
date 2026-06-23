@@ -102,6 +102,7 @@ exports.createProject = async (req, res) => {
             coInvestigators: resolvedAuthors,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
             appraisalClaimants,
+            incentiveClaimant: applicantInstId,
             status: 'Pending at HOD'
         });
 

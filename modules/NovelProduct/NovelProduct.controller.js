@@ -77,6 +77,7 @@ exports.createNovelProduct = async (req, res) => {
             coDevelopers: resolvedAuthors,
             applyIncentive: data.applyIncentive || 'No',
             appraisalClaimants,
+            incentiveClaimant: applicantInstId,
             status: 'Pending at HOD'
         });
 
