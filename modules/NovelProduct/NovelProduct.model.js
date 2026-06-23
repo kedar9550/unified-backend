@@ -40,7 +40,11 @@ const NovelProductSchema = new mongoose.Schema({
         enum: ['Developed', 'Implemented'],
         required: true
     },
-    organizationName: {
+    developedOrganization: {
+        type: String,
+        trim: true
+    },
+    implementedOrganization: {
         type: String,
         trim: true
     },
