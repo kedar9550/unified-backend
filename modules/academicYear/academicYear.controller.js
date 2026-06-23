@@ -61,7 +61,7 @@ const createAcademicYear = async (req, res) => {
 
                 yearDoc.programs.push({
                     programId: programIdVal,
-                    isActive: false,
+                    isActive: yearDoc.isGlobalActive || false,
                     activeSemesterTypeId: oddType._id
                 });
                 await yearDoc.save();
@@ -69,6 +69,7 @@ const createAcademicYear = async (req, res) => {
                 // Year doesn't exist yet — create with just this program
                 yearDoc = await AcademicYear.create({
                     year: yearStr,
+                    isGlobalActive: false,
                     programs: [{
                         programId: programIdVal,
                         isActive: false,
@@ -95,6 +96,7 @@ const createAcademicYear = async (req, res) => {
 
         const yearDoc = await AcademicYear.create({
             year: yearStr,
+            isGlobalActive: false,
             programs: allPrograms.map(p => ({
                 programId: p._id,
                 isActive: false,
@@ -146,21 +148,24 @@ const getActiveAcademicYear = async (req, res) => {
         const populated = await populateYear(activeYear);
 
         // Find the specific program entry for the response
-        const progEntry = populated.programs.find(p => {
-            const pId = p.programId?._id?.toString() || p.programId?.toString();
-            const queried = programId || program;
-            if (mongoose.Types.ObjectId.isValid(queried))
-                return pId === queried.toString();
-            return p.programId?.name?.toLowerCase() === queried?.toLowerCase() ||
-                p.programId?.code?.toLowerCase() === queried?.toLowerCase();
-        });
+        let progEntry = null;
+        if (programId || program) {
+            progEntry = populated.programs.find(p => {
+                const pId = p.programId?._id?.toString() || p.programId?.toString();
+                const queried = programId || program;
+                if (mongoose.Types.ObjectId.isValid(queried))
+                    return pId === queried.toString();
+                return p.programId?.name?.toLowerCase() === queried?.toLowerCase() ||
+                    p.programId?.code?.toLowerCase() === queried?.toLowerCase();
+            });
+        }
 
         res.json({
             success: true,
             data: {
                 _id: populated._id,
                 year: populated.year,
-                isActive: progEntry?.isActive ?? false,
+                isActive: true,
                 activeSemesterTypeId: progEntry?.activeSemesterTypeId ?? null,
                 programId: progEntry?.programId ?? null
             }
@@ -304,29 +309,54 @@ const deleteAcademicYear = async (req, res) => {
    Returns the full year doc (caller can read .year string from it).
 ───────────────────────────────────────────────────────────── */
 const resolveActiveAcademicYear = async (programIdentifier) => {
-    if (!programIdentifier) return null;
+    // Find the globally active academic year
+    return await AcademicYear.findOne({ isGlobalActive: true });
+};
 
-    let programId;
-    if (mongoose.Types.ObjectId.isValid(programIdentifier)) {
-        programId = programIdentifier;
-    } else {
-        const escapedIdentifier = escapeRegex(programIdentifier);
-        const prog = await Program.findOne({
-            $or: [
-                { name: new RegExp(`^${escapedIdentifier}$`, 'i') },
-                { code: new RegExp(`^${escapedIdentifier}$`, 'i') }
-            ]
-        });
-        if (!prog) return null;
-        programId = prog._id;
-    }
+/* ─────────────────────────────────────────────────────────────
+   ACTIVATE ACADEMIC YEAR GLOBALLY
+   PUT /api/academic-years/:id/activate
+───────────────────────────────────────────────────────────── */
+const activateAcademicYear = async (req, res) => {
+    try {
+        const { id } = req.params;
 
-    // Find any year doc that has this program marked active
-    return await AcademicYear.findOne({
-        programs: {
-            $elemMatch: { programId, isActive: true }
+        // 1. Deactivate all years and set their programs' isActive to false
+        await AcademicYear.updateMany(
+            {},
+            { 
+                $set: { 
+                    isGlobalActive: false, 
+                    "programs.$[].isActive": false 
+                } 
+            }
+        );
+
+        // 2. Activate the target year and set its programs' isActive to true
+        const updatedYear = await AcademicYear.findByIdAndUpdate(
+            id,
+            { 
+                $set: { 
+                    isGlobalActive: true, 
+                    "programs.$[].isActive": true 
+                } 
+            },
+            { new: true }
+        );
+
+        if (!updatedYear) {
+            return res.status(404).json({ message: 'Academic year not found' });
         }
-    });
+
+        const populated = await populateYear(updatedYear);
+
+        res.json({
+            message: `Academic year ${updatedYear.year} is now active globally`,
+            academicYear: populated
+        });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 };
 
 module.exports = {
@@ -337,6 +367,7 @@ module.exports = {
     toggleSemesterType,
     removeProgramFromYear,
     deleteAcademicYear,
-    resolveActiveAcademicYear   // exported — used by ProctorMapping controller
+    resolveActiveAcademicYear,   // exported — used by ProctorMapping controller
+    activateAcademicYear
 };
 

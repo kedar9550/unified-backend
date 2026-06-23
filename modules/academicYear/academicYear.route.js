@@ -8,7 +8,8 @@ const {
     toggleAcademicYear,
     toggleSemesterType,
     removeProgramFromYear,
-    deleteAcademicYear
+    deleteAcademicYear,
+    activateAcademicYear
 } = require('./academicYear.controller');
 
 // ── READ ──────────────────────────────────────────────────────────────
@@ -23,6 +24,9 @@ router.get('/active', protect, getActiveAcademicYear);
 router.post('/', protect, authorize('UNIPRIME'), createAcademicYear);
 
 // ── UPDATE ────────────────────────────────────────────────────────────
+// Globally activate an academic year
+router.put('/:id/activate', protect, authorize('UNIPRIME'), activateAcademicYear);
+
 // Toggle isActive for one program inside a year
 // Body: { isActive: bool, programId }
 router.put('/:id/toggle-status', protect, authorize('UNIPRIME'), toggleAcademicYear);
