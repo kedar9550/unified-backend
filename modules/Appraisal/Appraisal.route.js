@@ -7,6 +7,7 @@ const fs = require("fs");
 const {
     getAppraisalConfig,
     saveAppraisalConfig,
+    getActiveAppraisalYear,
     initiateOrGetAppraisal,
     getUnresolvedClaims,
     resolveClaim,
@@ -55,6 +56,7 @@ const upload = multer({
 // --- API Endpoints ---
 
 // Dynamic configuration management
+router.get("/active-year", protect, getActiveAppraisalYear);
 router.get("/config/:academicYearId", protect, getAppraisalConfig);
 router.post("/config", protect, authorize("ADMIN", "UNIPRIME"), saveAppraisalConfig);
 
