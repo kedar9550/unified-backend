@@ -5,7 +5,7 @@
 
 const parseCSV = (buffer) => {
     let text = buffer.toString('utf-8');
-    
+
     // Strip UTF-8 BOM if present
     if (text.startsWith('\ufeff')) {
         text = text.substring(1);
@@ -38,6 +38,12 @@ const parseCSV = (buffer) => {
 
         if (values.length !== headers.length) {
             throw new Error(`Row ${i + 1} has ${values.length} columns, but header expects ${headers.length}. Please check for extra commas.`);
+        }
+
+        // Check if the entire row is empty (just commas)
+        const isRowEmpty = values.every(v => v.trim() === "");
+        if (isRowEmpty) {
+            continue;
         }
 
         const row = {};
