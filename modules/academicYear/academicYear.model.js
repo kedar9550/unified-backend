@@ -38,6 +38,10 @@ const AcademicYearSchema = new mongoose.Schema({
     programs: {
         type: [ProgramEntrySchema],
         default: []
+    },
+    isGlobalActive: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

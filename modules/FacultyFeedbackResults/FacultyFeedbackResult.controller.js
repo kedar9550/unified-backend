@@ -12,13 +12,13 @@ const normalizeSubjectType = (val) => {
     if (!val) return undefined;
     const trimmed = String(val).trim().toUpperCase();
     if (trimmed === "T" || trimmed === "THEORY") {
-        return "Theory";
+        return "THEORY";
     } else if (trimmed === "P" || trimmed === "PRACTICAL") {
-        return "Practical";
+        return "PRACTICAL";
     } else if (trimmed === "I" || trimmed === "INTEGRATED") {
-        return "Integrated";
+        return "INTEGRATED";
     }
-    return val;
+    return trimmed;
 };
 
 /**
@@ -67,7 +67,7 @@ const uploadCSV = async (req, res) => {
         const branchCache = {};
         const semTypeCache = {};
 
-        const processedKeys = new Set();
+        const processedKeys = new Map();
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -100,7 +100,7 @@ const uploadCSV = async (req, res) => {
                 if (!subjectcode) throw new Error("Subject Code is missing");
                 
                 const normalizedSubjType = normalizeSubjectType(subjecttype);
-                if (!normalizedSubjType || !["Theory", "Practical", "Integrated"].includes(normalizedSubjType)) {
+                if (!normalizedSubjType || !["THEORY", "PRACTICAL", "INTEGRATED", "Theory", "Practical", "Integrated"].includes(normalizedSubjType)) {
                     throw new Error(`Invalid subject type '${subjecttype}' (must be T, P, or I)`);
                 }
 
@@ -196,24 +196,37 @@ const uploadCSV = async (req, res) => {
                 }
 
                 // Duplicate Check
-                const trimmedSubjectCode = subjectcode.trim();
-                const trimmedSection = (section || "").trim();
-                const duplicateKey = `${ayId}_${trimmedSubjectCode}_${trimmedSection}_${phs}`;
+                const trimmedSubjectCode = subjectcode.trim().toUpperCase();
+                const trimmedSection = (section || "").trim().toUpperCase();
+                const duplicateKey = `${ayId}_${semesterNumber}_${yearNumber}_${trimmedSubjectCode}_${trimmedSection}_${phs}`;
 
                 if (processedKeys.has(duplicateKey)) {
-                    throw new Error(`Duplicate entry for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in this CSV`);
+                    const existingFacultyInCsv = processedKeys.get(duplicateKey);
+                    if (existingFacultyInCsv === facultyid.trim()) {
+                        throw new Error(`Duplicate entry for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}' for this Faculty in this CSV`);
+                    } else {
+                        throw new Error(`Duplicate entry in CSV: Another faculty (ID: ${existingFacultyInCsv}) is also assigned to Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}'`);
+                    }
                 }
                 
-                const existing = await FacultyFeedResult.findOne({
+                const query = {
                     academicYearId: ayId,
                     subjectCode: trimmedSubjectCode,
                     section: trimmedSection,
                     phase: phs
-                });
+                };
+                if (semesterNumber) query.semesterNumber = semesterNumber;
+                if (yearNumber) query.yearNumber = yearNumber;
+
+                const existing = await FacultyFeedResult.findOne(query);
                 if (existing) {
-                    throw new Error(`Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in this Academic Year`);
+                    if (existing.facultyId === facultyid.trim()) {
+                        throw new Error(`Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}' for this Faculty`);
+                    } else {
+                        throw new Error(`Another faculty member (ID: ${existing.facultyId}) is already assigned to Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}'`);
+                    }
                 }
-                processedKeys.add(duplicateKey);
+                processedKeys.set(duplicateKey, facultyid.trim());
 
                 results.push({
                     facultyId: facultyid.trim(),
@@ -295,13 +308,14 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
  */
 const getActiveStateForProgram = async (programId) => {
     const ay = await AcademicYear.findOne({
-        "programs.programId": programId,
-        "programs.isActive": true
+        isGlobalActive: true
     }).populate("programs.activeSemesterTypeId");
     
     if (!ay) return null;
     
     const progEntry = ay.programs.find(p => p.programId.toString() === programId.toString());
+    if (!progEntry) return null;
+
     return {
         year: ay.year,
         activeSemesterTypeId: progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId,
@@ -328,7 +342,7 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
     const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
     
     // 3. If the program is marked as Active in this year, check the semester
-    if (progEntry && progEntry.isActive) {
+    if (progEntry && recordYearDoc.isGlobalActive) {
         const activeSemId = progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId;
         
         if (activeSemId && semesterTypeId) {
@@ -348,8 +362,7 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
 
     // 4. If the program is NOT active in this year, find what the current active year IS
     const currentActiveYearDoc = await AcademicYear.findOne({
-        "programs.programId": programId,
-        "programs.isActive": true
+        isGlobalActive: true
     });
 
     return { 
@@ -393,14 +406,14 @@ const deleteSemesterData = async (req, res) => {
         // If we are deleting by Semester/Year, we must ensure it's the ACTIVE one for the programs involved
         const matchingYears = await AcademicYear.find({
             year: academicYear || (await AcademicYear.findById(filter.academicYearId))?.year,
-            "programs.isActive": true
+            isGlobalActive: true
         });
 
         const activeProgramIds = [];
         matchingYears.forEach(ay => {
             ay.programs.forEach(p => {
                 const pSemId = p.activeSemesterTypeId?._id || p.activeSemesterTypeId;
-                if (p.isActive && (!filter.semesterTypeId || (pSemId && pSemId.toString() === filter.semesterTypeId.toString()))) {
+                if (!filter.semesterTypeId || (pSemId && pSemId.toString() === filter.semesterTypeId.toString())) {
                     activeProgramIds.push(p.programId.toString());
                 }
             });
@@ -510,6 +523,12 @@ const updateResult = async (req, res) => {
         if (updates.subjectType !== undefined) {
             updates.subjectType = normalizeSubjectType(updates.subjectType);
         }
+        if (updates.subjectCode !== undefined) {
+            updates.subjectCode = updates.subjectCode.trim().toUpperCase();
+        }
+        if (updates.section !== undefined) {
+            updates.section = updates.section.trim().toUpperCase();
+        }
 
         const updatedRecord = await FacultyFeedResult.findByIdAndUpdate(
             id,
@@ -607,18 +626,42 @@ const createResult = async (req, res) => {
 
         const normalizedSubjType = normalizeSubjectType(subjectType);
 
+        // Duplicate Check
+        const trimmedSubjectCode = (subjectCode || "").trim().toUpperCase();
+        const trimmedSection = (section || "").trim().toUpperCase();
+        const phs = phase ? Number(phase) : undefined;
+        
+        const query = {
+            academicYearId,
+            subjectCode: trimmedSubjectCode,
+            section: trimmedSection,
+            phase: phs
+        };
+        if (semesterNumber) query.semesterNumber = semesterNumber;
+        if (yearNumber) query.yearNumber = yearNumber;
+
+        const existing = await FacultyFeedResult.findOne(query);
+        if (existing) {
+            const semOrYear = semesterNumber || yearNumber || 'unknown';
+            if (existing.facultyId === facultyId.trim()) {
+                return res.status(400).json({ message: `Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semOrYear}' for this Faculty` });
+            } else {
+                return res.status(400).json({ message: `Another faculty member (ID: ${existing.facultyId}) is already assigned to Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semOrYear}'` });
+            }
+        }
+
         const record = await FacultyFeedResult.create({
             facultyId,
             facultyName,
             subjectName,
-            subjectCode,
+            subjectCode: trimmedSubjectCode,
             subjectType: normalizedSubjType,
             branch, // legacy string
             programId,
             branchId,
             semesterNumber: semesterNumber ? Number(semesterNumber) : undefined,
             yearNumber: yearNumber ? Number(yearNumber) : undefined,
-            section,
+            section: trimmedSection,
             phase: phase ? Number(phase) : undefined,
             academicYearId,
             semesterTypeId,

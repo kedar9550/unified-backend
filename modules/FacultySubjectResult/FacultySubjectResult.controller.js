@@ -304,13 +304,14 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
  */
 const getActiveStateForProgram = async (programId) => {
     const ay = await AcademicYear.findOne({
-        "programs.programId": programId,
-        "programs.isActive": true
+        isGlobalActive: true
     }).populate("programs.activeSemesterTypeId");
     
     if (!ay) return null;
     
     const progEntry = ay.programs.find(p => p.programId.toString() === programId.toString());
+    if (!progEntry) return null;
+
     return {
         year: ay.year,
         activeSemesterTypeId: progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId,
@@ -337,7 +338,7 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
     const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
     
     // 3. If the program is marked as Active in this year, check the semester
-    if (progEntry && progEntry.isActive) {
+    if (progEntry && recordYearDoc.isGlobalActive) {
         const activeSemId = progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId;
         
         if (activeSemId && semesterTypeId) {
@@ -357,8 +358,7 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
 
     // 4. If the program is NOT active in this year, find what the current active year IS
     const currentActiveYearDoc = await AcademicYear.findOne({
-        "programs.programId": programId,
-        "programs.isActive": true
+        isGlobalActive: true
     });
 
     return { 
@@ -403,14 +403,14 @@ const deleteSemesterData = async (req, res) => {
         // If we are deleting by Semester/Year, we must ensure it's the ACTIVE one for the programs involved
         const matchingYears = await AcademicYear.find({
             year: academicYear || (await AcademicYear.findById(filter.academicYearId))?.year,
-            "programs.isActive": true
+            isGlobalActive: true
         });
 
         const activeProgramIds = [];
         matchingYears.forEach(ay => {
             ay.programs.forEach(p => {
                 const pSemId = p.activeSemesterTypeId?._id || p.activeSemesterTypeId;
-                if (p.isActive && (!filter.semesterTypeId || (pSemId && pSemId.toString() === filter.semesterTypeId.toString()))) {
+                if (!filter.semesterTypeId || (pSemId && pSemId.toString() === filter.semesterTypeId.toString())) {
                     activeProgramIds.push(p.programId.toString());
                 }
             });

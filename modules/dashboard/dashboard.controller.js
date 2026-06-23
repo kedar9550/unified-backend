@@ -50,7 +50,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
         ]);
 
         // Filter for active years in JS
-        const activeYearObjs = allYearObjs.filter(ay => ay.programs && ay.programs.some(p => p.isActive));
+        const activeYearObjs = allYearObjs.filter(ay => ay.isGlobalActive);
 
         // Format years from 2025-2026 to 2025-26
         const formatYear = (y) => {
@@ -252,7 +252,7 @@ exports.getFeedbackDashboardData = async (req, res, next) => {
 
         const avgRatingValue = avgRatingData.length > 0 ? (avgRatingData[0].avg / 20).toFixed(1) : "0.0";
         const lowRatingsCount = lowRatingsData.length > 0 ? lowRatingsData[0].count : 0;
-        const activeYearObjs = allYearObjs.filter(ay => ay.programs && ay.programs.some(p => p.isActive));
+        const activeYearObjs = allYearObjs.filter(ay => ay.isGlobalActive);
         
         const activeYearStr = activeYearObjs.length > 0 
             ? [...new Set(activeYearObjs.map(ay => formatYear(ay.year)))].join(' & ') 
@@ -356,7 +356,7 @@ exports.getExamDashboardData = async (req, res, next) => {
             avgPassRate = Number(avgPassRateData[0].avg).toFixed(1);
         }
         
-        const activeYearObjs = allYearObjs.filter(ay => ay.programs && ay.programs.some(p => p.isActive));
+        const activeYearObjs = allYearObjs.filter(ay => ay.isGlobalActive);
         const activeYearStr = activeYearObjs.length > 0 
             ? [...new Set(activeYearObjs.map(ay => formatYear(ay.year)))].join(' & ') 
             : 'N/A';
@@ -948,7 +948,7 @@ exports.getFacultyDashboardData = async (req, res, next) => {
         if (req.query.academicYear) {
             ayQuery = { year: req.query.academicYear };
         } else {
-            ayQuery = { "programs.isActive": true };
+            ayQuery = { isGlobalActive: true };
         }
         let ayDoc = await AcademicYear.findOne(ayQuery);
         if (!ayDoc) {

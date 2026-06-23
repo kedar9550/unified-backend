@@ -8,7 +8,7 @@ const FacultyFeedResultSchema = new mongoose.Schema({
     subjectCode: String,
     subjectType: {
         type: String,
-        enum: ["Theory", "Practical", "Integrated"],
+        enum: ["Theory", "Practical", "Integrated", "THEORY", "PRACTICAL", "INTEGRATED"],
     },
     branch: String,
     section: String,
