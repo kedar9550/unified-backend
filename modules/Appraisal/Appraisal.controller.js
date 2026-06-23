@@ -228,7 +228,20 @@ const DEFAULT_CONFIG = {
     }
 };
 
-// 1. Get Appraisal Point Config (UNIPRIME or Default fallback)
+// 1. Get Active Appraisal Year (from active config)
+exports.getActiveAppraisalYear = async (req, res) => {
+    try {
+        const config = await AppraisalConfig.findOne({ isActive: true }).populate("academicYearId");
+        if (!config) {
+            return res.status(404).json({ success: false, message: "No active appraisal year configuration found." });
+        }
+        res.json({ success: true, data: config.academicYearId });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// 2. Get Appraisal Point Config (UNIPRIME or Default fallback)
 exports.getAppraisalConfig = async (req, res) => {
     try {
         const { academicYearId } = req.params;
