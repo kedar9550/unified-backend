@@ -61,16 +61,21 @@ exports.createConsultancy = async (req, res) => {
             parsedCoInvestigators = data.coInvestigators;
         }
 
-        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
-        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInvestigators, req.user.userId);
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const { resolveCoAuthorsAndClaims } = require('../../utils/claimantHelper');
+        const { resolvedAuthors } = await resolveCoAuthorsAndClaims(parsedCoInvestigators, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantInstId = applicant ? applicant.institutionId : null;
+
+        const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
+        const appraisalClaimants = [...new Set(claimantsList)];
 
         const consultancy = new Consultancy({
             ...data,
             title: trimmedTitle,
             facultyId: req.user.userId,
             coInvestigators: resolvedAuthors,
-            appraisalClaimant,
+            appraisalClaimants,
             status: 'Pending at HOD'
         });
 
@@ -181,8 +186,8 @@ exports.rndAction = async (req, res) => {
             consultancy.approvedAmount = approvedAmount;
         }
 
-        if (status === 'Approved' && (consultancy.applyIncentive === 'Yes' || consultancy.applyIncentive === 'yes') && consultancy.appraisalClaimant) {
-            consultancy.incentiveClaimant = consultancy.appraisalClaimant;
+        if (status === 'Approved' && (consultancy.applyIncentive === 'Yes' || consultancy.applyIncentive === 'yes') && consultancy.appraisalClaimants && consultancy.appraisalClaimants.length > 0) {
+            consultancy.incentiveClaimant = consultancy.appraisalClaimants[0];
         }
 
         await consultancy.save();

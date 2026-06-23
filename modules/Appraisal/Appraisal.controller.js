@@ -773,22 +773,19 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             let claimStatus = "unclaimed";
             let claimedBy = null;
 
-            const claimantId = n.appraisalClaimant;
-            const isEligible = claimantId ? isClaimantEligible(n, claimantId) : false;
-
-            if (n.appraisalClaimant) {
-                if (n.appraisalClaimant === faculty.institutionId) {
-                    claimStatus = "claimed_by_me";
-                    if (isEligible) {
-                        const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
-                        pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
-                    }
-                } else {
-                    claimStatus = "claimed_by_other";
-                    const claimFaculty = await Employee.findOne({ institutionId: n.appraisalClaimant }).select("name institutionId");
-                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
-                    pts = 0;
+            const claimants = n.appraisalClaimants || [];
+            
+            if (claimants.includes(faculty.institutionId)) {
+                claimStatus = "claimed_by_me";
+                const isEligible = isClaimantEligible(n, faculty.institutionId);
+                if (isEligible) {
+                    const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
+                    pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
                 }
+            } else if (claimants.length > 0) {
+                claimStatus = "claimed_by_other";
+                claimedBy = "Other Internal Faculty";
+                pts = 0;
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
@@ -845,27 +842,24 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             let claimStatus = "unclaimed";
             let claimedBy = null;
 
-            const claimantId = p.appraisalClaimant;
-            const isEligible = claimantId ? isClaimantEligible(p, claimantId) : false;
+            const claimants = p.appraisalClaimants || [];
 
-            if (p.appraisalClaimant) {
-                if (p.appraisalClaimant === faculty.institutionId) {
-                    claimStatus = "claimed_by_me";
-                    if (p.applyingSeedGrant !== "Yes" && isEligible) {
-                        const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
-                        if (statusKey === 'sanctioned') {
-                            const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
-                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-                        } else {
-                            pts = config.research.projectProposalPoints.shortlisted || 5;
-                        }
+            if (claimants.includes(faculty.institutionId)) {
+                claimStatus = "claimed_by_me";
+                const isEligible = isClaimantEligible(p, faculty.institutionId);
+                if (p.applyingSeedGrant !== "Yes" && isEligible) {
+                    const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
+                    if (statusKey === 'sanctioned') {
+                        const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
+                        pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+                    } else {
+                        pts = config.research.projectProposalPoints.shortlisted || 5;
                     }
-                } else {
-                    claimStatus = "claimed_by_other";
-                    const claimFaculty = await Employee.findOne({ institutionId: p.appraisalClaimant }).select("name institutionId");
-                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
-                    pts = 0;
                 }
+            } else if (claimants.length > 0) {
+                claimStatus = "claimed_by_other";
+                claimedBy = "Other Internal Faculty";
+                pts = 0;
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
@@ -907,27 +901,24 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             let claimStatus = "unclaimed";
             let claimedBy = null;
 
-            const claimantId = c.appraisalClaimant;
-            const isEligible = claimantId ? isClaimantEligible(c, claimantId) : false;
+            const claimants = c.appraisalClaimants || [];
 
-            if (c.appraisalClaimant) {
-                if (c.appraisalClaimant === faculty.institutionId) {
-                    claimStatus = "claimed_by_me";
-                    if (c.applyingSeedGrant !== "Yes" && isEligible) {
-                        const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
-                        if (statusKey === 'sanctioned') {
-                            const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
-                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-                        } else {
-                            pts = config.research.projectProposalPoints.shortlisted || 5;
-                        }
+            if (claimants.includes(faculty.institutionId)) {
+                claimStatus = "claimed_by_me";
+                const isEligible = isClaimantEligible(c, faculty.institutionId);
+                if (c.applyingSeedGrant !== "Yes" && isEligible) {
+                    const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
+                    if (statusKey === 'sanctioned') {
+                        const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
+                        pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
+                    } else {
+                        pts = config.research.projectProposalPoints.shortlisted || 5;
                     }
-                } else {
-                    claimStatus = "claimed_by_other";
-                    const claimFaculty = await Employee.findOne({ institutionId: c.appraisalClaimant }).select("name institutionId");
-                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
-                    pts = 0;
                 }
+            } else if (claimants.length > 0) {
+                claimStatus = "claimed_by_other";
+                claimedBy = "Other Internal Faculty";
+                pts = 0;
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";

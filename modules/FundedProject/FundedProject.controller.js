@@ -86,9 +86,14 @@ exports.createProject = async (req, res) => {
             parsedCoInvestigators = data.coInvestigators;
         }
 
-        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
-        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInvestigators, req.user.userId);
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const { resolveCoAuthorsAndClaims } = require('../../utils/claimantHelper');
+        const { resolvedAuthors } = await resolveCoAuthorsAndClaims(parsedCoInvestigators, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantInstId = applicant ? applicant.institutionId : null;
+
+        const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
+        const appraisalClaimants = [...new Set(claimantsList)];
 
         const project = new FundedProject({
             ...data,
@@ -96,7 +101,7 @@ exports.createProject = async (req, res) => {
             facultyId: req.user.userId,
             coInvestigators: resolvedAuthors,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
-            appraisalClaimant,
+            appraisalClaimants,
             status: 'Pending at HOD'
         });
 
@@ -252,8 +257,8 @@ exports.rndAction = async (req, res) => {
             project.approvedAmount = approvedAmount;
         }
 
-        if (status === 'Approved' && (project.applyIncentive === 'Yes' || project.applyIncentive === 'yes') && project.appraisalClaimant) {
-            project.incentiveClaimant = project.appraisalClaimant;
+        if (status === 'Approved' && (project.applyIncentive === 'Yes' || project.applyIncentive === 'yes') && project.appraisalClaimants && project.appraisalClaimants.length > 0) {
+            project.incentiveClaimant = project.appraisalClaimants[0];
         }
 
         await project.save();
