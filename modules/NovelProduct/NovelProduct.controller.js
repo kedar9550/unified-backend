@@ -54,9 +54,14 @@ exports.createNovelProduct = async (req, res) => {
             parsedCoDevelopers = data.coDevelopers;
         }
 
-        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
-        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoDevelopers, req.user.userId);
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const { resolveCoAuthorsAndClaims } = require('../../utils/claimantHelper');
+        const { resolvedAuthors } = await resolveCoAuthorsAndClaims(parsedCoDevelopers, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantInstId = applicant ? applicant.institutionId : null;
+
+        const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
+        const appraisalClaimants = [...new Set(claimantsList)];
 
         const product = new NovelProduct({
             facultyId: req.user.userId,
@@ -71,7 +76,7 @@ exports.createNovelProduct = async (req, res) => {
             principalInvestigator: data.principalInvestigator || 'Yes',
             coDevelopers: resolvedAuthors,
             applyIncentive: data.applyIncentive || 'No',
-            appraisalClaimant,
+            appraisalClaimants,
             status: 'Pending at HOD'
         });
 
@@ -217,8 +222,8 @@ exports.rndAction = async (req, res) => {
         product.status = status;
         product.rndComment = comment;
 
-        if (status === 'Approved' && (product.applyIncentive === 'Yes' || product.applyIncentive === 'yes') && product.appraisalClaimant) {
-            product.incentiveClaimant = product.appraisalClaimant;
+        if (status === 'Approved' && (product.applyIncentive === 'Yes' || product.applyIncentive === 'yes') && product.appraisalClaimants && product.appraisalClaimants.length > 0) {
+            product.incentiveClaimant = product.appraisalClaimants[0];
         }
 
         await product.save();

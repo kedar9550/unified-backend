@@ -54,10 +54,7 @@ const ConsultancySchema = new mongoose.Schema({
         enum: ['Yes', 'No'],
         default: 'No'
     },
-    appraisalClaimant: {
-        type: String,
-        default: null
-    },
+    appraisalClaimants: [{ type: String }],
     incentiveClaimant: {
         type: String,
         default: null
