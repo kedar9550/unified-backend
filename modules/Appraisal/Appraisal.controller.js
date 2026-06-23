@@ -829,6 +829,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const fundedProjects = await FundedProject.find({
             academicYear: academicYearId,
             status: "Approved",
+            fundingAgencyAditya: "No",
             $or: [
                 { facultyId },
                 { 'coInvestigators.employeeId': faculty.institutionId }
@@ -838,6 +839,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const consultancies = await Consultancy.find({
             academicYear: academicYearId,
             status: "Approved",
+            fundingAdityaUniversity: "No",
             $or: [
                 { facultyId },
                 { 'coInvestigators.employeeId': faculty.institutionId }
@@ -1913,101 +1915,7 @@ exports.getUnresolvedClaims = async (req, res) => {
             }
         }
 
-        // 6. Funded Projects
-        const projects = await FundedProject.find({
-            academicYear: academicYearId,
-            status: 'Approved',
-            appraisalClaimant: null,
-            $or: [
-                { facultyId },
-                { 'coInvestigators.employeeId': faculty.institutionId }
-            ]
-        }).populate('facultyId', 'name institutionId');
-
-        for (const proj of projects) {
-            const ausCoInvestigators = proj.coInvestigators.filter(c => c.employeeId);
-            if (ausCoInvestigators.length > 0) {
-                const claimants = [
-                    { _id: proj.facultyId._id, name: proj.facultyId.name, institutionId: proj.facultyId.institutionId },
-                    ...ausCoInvestigators.map(c => ({ _id: c.employeeId, name: c.name, institutionId: c.employeeId }))
-                ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
-
-                unresolved.push({
-                    _id: proj._id,
-                    type: 'FundedProject',
-                    title: proj.title,
-                    info: `Agency: ${proj.fundingAgency} (Amount: ${proj.sanctionedAmount})`,
-                    applicant: proj.facultyId,
-                    isApplicant: proj.facultyId._id.toString() === facultyId.toString(),
-                    eligibleClaimants: uniqueClaimants
-                });
-            }
-        }
-
-        // 7. Consultancy
-        const consultancies = await Consultancy.find({
-            academicYear: academicYearId,
-            status: 'Approved',
-            appraisalClaimant: null,
-            $or: [
-                { facultyId },
-                { 'coInvestigators.employeeId': faculty.institutionId }
-            ]
-        }).populate('facultyId', 'name institutionId');
-
-        for (const c of consultancies) {
-            const ausCoInvestigators = c.coInvestigators.filter(co => co.employeeId);
-            if (ausCoInvestigators.length > 0) {
-                const claimants = [
-                    { _id: c.facultyId._id, name: c.facultyId.name, institutionId: c.facultyId.institutionId },
-                    ...ausCoInvestigators.map(co => ({ _id: co.employeeId, name: co.name, institutionId: co.employeeId }))
-                ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
-
-                unresolved.push({
-                    _id: c._id,
-                    type: 'Consultancy',
-                    title: c.title,
-                    info: `Funding Agency: ${c.fundingAgency} (Amount: ${c.amount})`,
-                    applicant: c.facultyId,
-                    isApplicant: c.facultyId._id.toString() === facultyId.toString(),
-                    eligibleClaimants: uniqueClaimants
-                });
-            }
-        }
-
-        // 8. Novel Product
-        const novelProducts = await NovelProduct.find({
-            academicYear: academicYearId,
-            status: 'Approved',
-            appraisalClaimant: null,
-            $or: [
-                { facultyId },
-                { 'coDevelopers.employeeId': faculty.institutionId }
-            ]
-        }).populate('facultyId', 'name institutionId');
-
-        for (const n of novelProducts) {
-            const ausCoDevelopers = n.coDevelopers.filter(cd => cd.employeeId);
-            if (ausCoDevelopers.length > 0) {
-                const claimants = [
-                    { _id: n.facultyId._id, name: n.facultyId.name, institutionId: n.facultyId.institutionId },
-                    ...ausCoDevelopers.map(cd => ({ _id: cd.employeeId, name: cd.name, institutionId: cd.employeeId }))
-                ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
-
-                unresolved.push({
-                    _id: n._id,
-                    type: 'NovelProduct',
-                    title: n.productName,
-                    info: `Category: ${n.category} (Org: ${n.organizationName || 'N/A'})`,
-                    applicant: n.facultyId,
-                    isApplicant: n.facultyId._id.toString() === facultyId.toString(),
-                    eligibleClaimants: uniqueClaimants
-                });
-            }
-        }
+        // 6, 7, 8: Funded Projects, Consultancy, and Novel Product are automatically resolved as all AUS investigators receive points.
 
         res.json({ success: true, count: unresolved.length, data: unresolved });
     } catch (err) {
