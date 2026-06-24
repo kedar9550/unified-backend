@@ -4,7 +4,8 @@ const ReferenceJournalSchema = new mongoose.Schema({
     title: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        uppercase: true
     },
     impactFactor: {
         type: String,
