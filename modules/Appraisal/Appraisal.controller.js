@@ -322,6 +322,14 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         const isProfileComplete = missingProfileFields.length === 0;
 
+        const AcademicYear = require('../academicYear/academicYear.model');
+        const acYearDoc = await AcademicYear.findById(academicYearId);
+        const acYearString = acYearDoc ? acYearDoc.year : "2025-2026";
+        const startYear = Number(acYearString.split('-')[0]) || 2025;
+        const citationYear = startYear;
+        const previousHIndexYear = startYear - 1;
+        const currentHIndexYear = startYear;
+
         // Check if there is an active saved Appraisal
         let appraisal = await Appraisal.findOne({ facultyId, academicYearId });
 
@@ -345,7 +353,10 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 administrationDetail: adminRoles,
                 faculty: faculty,
                 isProfileComplete,
-                missingProfileFields
+                missingProfileFields,
+                citationYear,
+                previousHIndexYear,
+                currentHIndexYear
             });
         }
 
@@ -967,8 +978,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // Calculate total research claimed score (citation & h-index are null initially or fetched if previously saved)
         const savedCitations = appraisal ? appraisal.research.scopusCitations : null;
-        const savedHIndex2024 = appraisal ? appraisal.research.hIndex2024 : null;
-        const savedHIndex2025 = appraisal ? appraisal.research.hIndex2025 : null;
+        const savedHIndexPrevYear = appraisal ? appraisal.research.hIndexPrevYear : null;
+        const savedHIndexCurrentYear = appraisal ? appraisal.research.hIndexCurrentYear : null;
         const savedCitationStatus = appraisal ? (appraisal.research.scopusCitationStatus || "Pending") : "Pending";
         const savedHIndexStatus = appraisal ? (appraisal.research.scopusHIndexStatus || "Pending") : "Pending";
         const savedCitationRemarks = appraisal ? (appraisal.research.scopusCitationRemarks || "") : "";
@@ -1262,8 +1273,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 novelProducts: { items: novelItems, totalClaimed: totalNovelPoints },
                 projectsConsultancies: { items: projectItems, totalClaimed: totalProjectPoints },
                 scopusCitations: savedCitations,
-                hIndex2024: savedHIndex2024,
-                hIndex2025: savedHIndex2025,
+                hIndexPrevYear: savedHIndexPrevYear,
+                hIndexCurrentYear: savedHIndexCurrentYear,
                 scopusCitationStatus: savedCitationStatus,
                 scopusHIndexStatus: savedHIndexStatus,
                 scopusCitationRemarks: savedCitationRemarks,
@@ -1637,8 +1648,8 @@ exports.evaluateRNDAppraisal = async (req, res) => {
         const { id } = req.params;
         const {
             scopusCitations,
-            hIndex2024,
-            hIndex2025,
+            hIndexPrevYear,
+            hIndexCurrentYear,
             scopusCitationScore,
             scopusHIndexScore,
             scopusCitationStatus,
@@ -1655,8 +1666,8 @@ exports.evaluateRNDAppraisal = async (req, res) => {
         }
 
         if (scopusCitations !== undefined) appraisal.research.scopusCitations = scopusCitations === null ? null : Number(scopusCitations);
-        if (hIndex2024 !== undefined) appraisal.research.hIndex2024 = hIndex2024 === null ? null : Number(hIndex2024);
-        if (hIndex2025 !== undefined) appraisal.research.hIndex2025 = hIndex2025 === null ? null : Number(hIndex2025);
+        if (hIndexPrevYear !== undefined) appraisal.research.hIndexPrevYear = hIndexPrevYear === null ? null : Number(hIndexPrevYear);
+        if (hIndexCurrentYear !== undefined) appraisal.research.hIndexCurrentYear = hIndexCurrentYear === null ? null : Number(hIndexCurrentYear);
         if (scopusCitationScore !== undefined) appraisal.research.scopusCitationScore = Number(scopusCitationScore) || 0;
         if (scopusHIndexScore !== undefined) appraisal.research.scopusHIndexScore = Number(scopusHIndexScore) || 0;
 
@@ -2197,34 +2208,41 @@ exports.getScopusData = async (req, res) => {
         const hRateMid       = config?.research?.hIndexRateMid  ?? 2;
         const hRateHigh      = config?.research?.hIndexRateHigh ?? 4;
 
+        const AcademicYear = require('../academicYear/academicYear.model');
+        const acYearDoc = await AcademicYear.findById(academicYearId);
+        const acYearString = acYearDoc ? acYearDoc.year : "2025-2026";
+        const startYear = Number(acYearString.split('-')[0]) || 2025;
+        const previousYear = startYear - 1;
+        const currentYear = startYear;
+
         // ── Fetch from Scopus ──────────────────────────────────
-        // 1. Papers published in 2025 → sum their citedby-count
-        const papers2025     = await scopusFetchAllPapers(scopusId, "2025");
-        const citations2025  = papers2025.reduce(
+        // 1. Papers published in currentYear → sum their citedby-count
+        const papersCurrentYear     = await scopusFetchAllPapers(scopusId, String(currentYear));
+        const citationsCurrentYear  = papersCurrentYear.reduce(
             (sum, e) => sum + parseInt(e["citedby-count"] || "0"), 0
         );
 
-        // 2. Cumulative papers up to end of 2024 → h-index 2024
-        const papersUpto2024 = await scopusFetchAllPapers(scopusId, "1900-2024");
-        const hIndex2024     = computeHIndex(papersUpto2024);
+        // 2. Cumulative papers up to end of previousYear → h-index previousYear
+        const papersUptoPrevYear = await scopusFetchAllPapers(scopusId, "1900-" + previousYear);
+        const hIndexPrevYear     = computeHIndex(papersUptoPrevYear);
 
-        // 3. Cumulative papers up to end of 2025 → h-index 2025
-        const papersUpto2025 = await scopusFetchAllPapers(scopusId, "1900-2025");
-        const hIndex2025     = computeHIndex(papersUpto2025);
+        // 3. Cumulative papers up to end of currentYear → h-index currentYear
+        const papersUptoCurrentYear = await scopusFetchAllPapers(scopusId, "1900-" + currentYear);
+        const hIndexCurrentYear     = computeHIndex(papersUptoCurrentYear);
 
         // ── Score Calculation ──────────────────────────────────
-        const citationScore  = Math.round(citations2025 * citationRate * 10) / 10;
-        const hIndexRaise    = Math.max(0, hIndex2025 - hIndex2024);
-        const hIndexPoints   = computeHIndexPoints(hIndex2024, hIndex2025);
+        const citationScore  = Math.round(citationsCurrentYear * citationRate * 10) / 10;
+        const hIndexRaise    = Math.max(0, hIndexCurrentYear - hIndexPrevYear);
+        const hIndexPoints   = computeHIndexPoints(hIndexPrevYear, hIndexCurrentYear);
 
         // ── Save to Appraisal document ─────────────────────────
         const appraisal = await Appraisal.findOne({ facultyId, academicYearId });
         if (appraisal) {
             const isEvaluator = ["ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT HOD", "HOD"].includes(req.user.role);
             if (appraisal.status === "Draft" || appraisal.status === "Rejected by HOD" || isEvaluator) {
-                appraisal.research.scopusCitations      = citations2025;
-                appraisal.research.hIndex2024           = hIndex2024;
-                appraisal.research.hIndex2025           = hIndex2025;
+                appraisal.research.scopusCitations      = citationsCurrentYear;
+                appraisal.research.hIndexPrevYear       = hIndexPrevYear;
+                appraisal.research.hIndexCurrentYear    = hIndexCurrentYear;
                 appraisal.research.scopusCitationScore  = citationScore;
                 appraisal.research.scopusHIndexScore     = hIndexPoints;
 
@@ -2252,10 +2270,10 @@ exports.getScopusData = async (req, res) => {
             success: true,
             data: {
                 scopusId,
-                papersIn2025:       papers2025.length,
-                citations2025,
-                hIndex2024,
-                hIndex2025,
+                papersInCurrentYear: papersCurrentYear.length,
+                citationsCurrentYear,
+                hIndexPrevYear,
+                hIndexCurrentYear,
                 hIndexRaise,
                 scores: {
                     citationScore,   // 2.7
