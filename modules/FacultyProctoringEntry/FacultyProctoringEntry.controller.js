@@ -5,6 +5,7 @@ const AcademicYear = require("../academicYear/academicYear.model");
 const Program = require("../academics/program.model");
 const Branch = require("../academics/branch.model");
 const { parseCSV, validateHeaders } = require("../../utils/csvParser");
+const escapeRegex = require("../../utils/escapeRegex");
 
 // Helper to get row values tolerantly (ignoring spaces, underscores, case, slashes)
 const getRowValue = (row, aliases) => {
@@ -80,10 +81,18 @@ exports.uploadExcel = async (req, res) => {
 
                 if (!empId) throw new Error("Emp Id is missing");
                 
-                const faculty = await Employee.findOne({ 
-                    institutionId: { $regex: new RegExp("^" + String(empId).trim() + "$", "i") } 
+                const searchId = String(empId).trim();
+                const cleanId = searchId.replace(/\s+/g, "");
+                const faculty = await Employee.findOne({
+                    $or: [
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(searchId) + "$", "i") } },
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(cleanId) + "$", "i") } }
+                    ]
                 });
-                if (!faculty) throw new Error(`Faculty with Emp Id '${empId}' not found in the system`);
+                if (!faculty) {
+                    const charCodes = [...String(empId)].map(c => c.charCodeAt(0)).join(",");
+                    throw new Error(`Faculty with Emp Id '${empId}' (length: ${String(empId).length}, charCodes: [${charCodes}]) not found in the system`);
+                }
 
                 if (!programme) throw new Error("Programme is missing");
                 if (!branch) throw new Error("Branch is missing");
@@ -168,7 +177,7 @@ exports.uploadExcel = async (req, res) => {
 
                 results.push({
                     facultyId: faculty._id,
-                    empId: String(empId).trim(),
+                    empId: faculty.institutionId,
                     facultyName: faculty.name,
                     academicYear: ayId,
                     programme: String(programme).trim(),

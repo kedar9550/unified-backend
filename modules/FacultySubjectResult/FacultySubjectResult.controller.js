@@ -91,8 +91,20 @@ const uploadUnifiedResults = async (req, res) => {
                 // 1. Validate mandatory fields
                 if (!facultyid) throw new Error("Faculty ID is missing");
                 
-                const faculty = await Employee.findOne({ institutionId: facultyid.trim() });
-                if (!faculty) throw new Error(`Faculty with ID '${facultyid}' not found in system`);
+                const searchId = facultyid.trim();
+                const cleanId = searchId.replace(/\s+/g, "");
+                const faculty = await Employee.findOne({
+                    $or: [
+                        { institutionId: searchId },
+                        { institutionId: cleanId },
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(searchId) + "$", "i") } },
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(cleanId) + "$", "i") } }
+                    ]
+                });
+                if (!faculty) {
+                    const charCodes = [...facultyid].map(c => c.charCodeAt(0)).join(",");
+                    throw new Error(`Faculty with ID '${facultyid}' (length: ${facultyid.length}, charCodes: [${charCodes}]) not found in system`);
+                }
 
                 if (!academicyear) throw new Error("Academic Year is missing");
                 if (!programName) throw new Error("Program is missing");
@@ -219,7 +231,7 @@ const uploadUnifiedResults = async (req, res) => {
                 const passPercentage = app > 0 ? ((pas / app) * 100).toFixed(2) : 0;
 
                 results.push({
-                    facultyId: facultyid.trim(),
+                    facultyId: faculty.institutionId,
                     facultyName: faculty.name, // Taken from DB Employee collection
                     programId: programDoc._id,
                     branchId: branchDoc._id,

@@ -91,8 +91,20 @@ const uploadCSV = async (req, res) => {
             try {
                 if (!facultyid) throw new Error("Faculty ID is missing");
                 
-                const faculty = await Employee.findOne({ institutionId: facultyid.trim() });
-                if (!faculty) throw new Error(`Faculty with ID '${facultyid}' not found in system`);
+                const searchId = facultyid.trim();
+                const cleanId = searchId.replace(/\s+/g, "");
+                const faculty = await Employee.findOne({
+                    $or: [
+                        { institutionId: searchId },
+                        { institutionId: cleanId },
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(searchId) + "$", "i") } },
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(cleanId) + "$", "i") } }
+                    ]
+                });
+                if (!faculty) {
+                    const charCodes = [...facultyid].map(c => c.charCodeAt(0)).join(",");
+                    throw new Error(`Faculty with ID '${facultyid}' (length: ${facultyid.length}, charCodes: [${charCodes}]) not found in system`);
+                }
 
                 if (!academicyear) throw new Error("Academic Year is missing");
                 if (!programName) throw new Error("Program is missing");
@@ -220,16 +232,16 @@ const uploadCSV = async (req, res) => {
 
                 const existing = await FacultyFeedResult.findOne(query);
                 if (existing) {
-                    if (existing.facultyId === facultyid.trim()) {
+                    if (existing.facultyId === faculty.institutionId) {
                         throw new Error(`Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}' for this Faculty`);
                     } else {
                         throw new Error(`Another faculty member (ID: ${existing.facultyId}) is already assigned to Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}'`);
                     }
                 }
-                processedKeys.set(duplicateKey, facultyid.trim());
+                processedKeys.set(duplicateKey, faculty.institutionId);
 
                 results.push({
-                    facultyId: facultyid.trim(),
+                    facultyId: faculty.institutionId,
                     facultyName: faculty.name,
                     programId: programIdFromBranch,
                     branchId: branchDoc._id,
