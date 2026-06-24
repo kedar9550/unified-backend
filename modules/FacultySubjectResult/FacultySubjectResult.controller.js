@@ -66,7 +66,7 @@ const uploadUnifiedResults = async (req, res) => {
         const branchCache = {};
         const semTypeCache = {};
 
-        const processedKeys = new Set();
+        const processedKeys = new Map();
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -153,13 +153,9 @@ const uploadUnifiedResults = async (req, res) => {
                     ayCache[academicyear] = ayId;
                 }
 
-                // --- DUPLICATE CHECK REMOVED ---
-                const trimmedCourseCode = coursecode.trim();
-                const trimmedSection = section.trim();
-                // -----------------------
-
                 // 4. Resolve Branch
-                let branchDoc = branchCache[branchName];
+                const branchCacheKey = `${programDoc._id}_${branchName}`;
+                let branchDoc = branchCache[branchCacheKey];
                 if (!branchDoc) {
                     const escapedBranchName = escapeRegex(branchName);
                     branchDoc = await Branch.findOne({ 
@@ -170,8 +166,12 @@ const uploadUnifiedResults = async (req, res) => {
                         programId: programDoc._id 
                     });
                     if (!branchDoc) throw new Error(`Branch '${branchName}' not found for program '${programName}'`);
-                    branchCache[branchName] = branchDoc;
+                    branchCache[branchCacheKey] = branchDoc;
                 }
+
+                // Course Code and Section normalization
+                const trimmedCourseCode = coursecode.trim().toUpperCase();
+                const trimmedSection = (section || "").trim().toUpperCase();
 
                 // 5. Validate Course Type
                 const courseTypeInput = (coursetype || "").trim().toUpperCase();
@@ -229,6 +229,36 @@ const uploadUnifiedResults = async (req, res) => {
 
                 // 7. Calculate Pass Percentage
                 const passPercentage = app > 0 ? ((pas / app) * 100).toFixed(2) : 0;
+
+                // Duplicate Check
+                const duplicateKey = `${ayId}_${semesterNumber}_${yearNumber}_${trimmedCourseCode}_${trimmedSection}`;
+
+                if (processedKeys.has(duplicateKey)) {
+                    const existingFacultyInCsv = processedKeys.get(duplicateKey);
+                    if (existingFacultyInCsv === faculty.institutionId) {
+                        throw new Error(`Duplicate entry for Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}' for this Faculty in this CSV`);
+                    } else {
+                        throw new Error(`Duplicate entry in CSV: Another faculty (ID: ${existingFacultyInCsv}) is also assigned to Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}'`);
+                    }
+                }
+                
+                const query = {
+                    academicYearId: ayId,
+                    courseCode: trimmedCourseCode,
+                    section: trimmedSection
+                };
+                if (semesterNumber) query.semesterNumber = semesterNumber;
+                if (yearNumber) query.yearNumber = yearNumber;
+
+                const existing = await FacultySubjectResult.findOne(query);
+                if (existing) {
+                    if (existing.facultyId === faculty.institutionId) {
+                        throw new Error(`Record already exists for Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}' for this Faculty`);
+                    } else {
+                        throw new Error(`Another faculty member (ID: ${existing.facultyId}) is already assigned to Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}'`);
+                    }
+                }
+                processedKeys.set(duplicateKey, faculty.institutionId);
 
                 results.push({
                     facultyId: faculty.institutionId,
