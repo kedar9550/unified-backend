@@ -11,6 +11,9 @@ const parseCSV = (buffer) => {
         text = text.substring(1);
     }
 
+    // Strip Unicode replacement characters (caused by encoding mismatches)
+    text = text.replace(/\uFFFD/g, '');
+
     // Normalize line endings
     const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
 
