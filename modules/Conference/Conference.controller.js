@@ -138,6 +138,10 @@ exports.createConference = async (req, res) => {
         const userAuthorPos = parseInt(data.userAuthorPosition) || 1;
         const totalAuths = parseInt(data.totalAuthors) || 1;
 
+        
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantEmpId = applicant ? applicant.institutionId : null;
+        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
         const conference = new Conference({
             ...data,
             title: trimmedTitle,
@@ -151,7 +155,8 @@ exports.createConference = async (req, res) => {
             proceedings,
             appraisalClaimant,
             status: 'Pending at HOD'
-        });
+        ,
+            incentiveClaimant: computedIncentiveClaimant});
 
         await conference.save();
         res.status(201).json({ success: true, data: conference });
