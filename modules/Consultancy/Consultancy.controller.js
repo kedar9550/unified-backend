@@ -70,14 +70,14 @@ exports.createConsultancy = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
-        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantInstId : null;
         const consultancy = new Consultancy({
             ...data,
+            applyIncentive: 'No',
             title: trimmedTitle,
             facultyId: req.user.userId,
             coInvestigators: resolvedAuthors,
             appraisalClaimants,
-            incentiveClaimant: computedIncentiveClaimant,
+            incentiveClaimant: null,
             status: 'Pending at HOD'
         });
 
@@ -184,13 +184,6 @@ exports.rndAction = async (req, res) => {
 
         consultancy.status = status;
         consultancy.rndComment = comment;
-        if (approvedAmount !== undefined) {
-            consultancy.approvedAmount = approvedAmount;
-        }
-
-        if (status === 'Approved' && (consultancy.applyIncentive === 'Yes' || consultancy.applyIncentive === 'yes') && consultancy.appraisalClaimants && consultancy.appraisalClaimants.length > 0) {
-            consultancy.incentiveClaimant = consultancy.appraisalClaimants[0];
-        }
 
         await consultancy.save();
         res.json({ success: true, data: consultancy });

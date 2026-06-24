@@ -95,15 +95,15 @@ exports.createProject = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
-        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantInstId : null;
         const project = new FundedProject({
             ...data,
+            applyIncentive: 'No',
             title: trimmedTitle,
             facultyId: req.user.userId,
             coInvestigators: resolvedAuthors,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
             appraisalClaimants,
-            incentiveClaimant: computedIncentiveClaimant,
+            incentiveClaimant: null,
             status: 'Pending at HOD'
         });
 
@@ -255,13 +255,6 @@ exports.rndAction = async (req, res) => {
 
         project.status = status;
         project.rndComment = comment;
-        if (approvedAmount !== undefined) {
-            project.approvedAmount = approvedAmount;
-        }
-
-        if (status === 'Approved' && (project.applyIncentive === 'Yes' || project.applyIncentive === 'yes') && project.appraisalClaimants && project.appraisalClaimants.length > 0) {
-            project.incentiveClaimant = project.appraisalClaimants[0];
-        }
 
         await project.save();
         res.json({ success: true, data: project });

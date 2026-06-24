@@ -63,7 +63,6 @@ exports.createNovelProduct = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
-        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantInstId : null;
         const product = new NovelProduct({
             facultyId: req.user.userId,
             academicYear: data.academicYear,
@@ -77,9 +76,9 @@ exports.createNovelProduct = async (req, res) => {
             investigatorType: data.investigatorType,
             principalInvestigator: data.principalInvestigator || 'Yes',
             coDevelopers: resolvedAuthors,
-            applyIncentive: data.applyIncentive || 'No',
+            applyIncentive: 'No',
             appraisalClaimants,
-            incentiveClaimant: computedIncentiveClaimant,
+            incentiveClaimant: null,
             status: 'Pending at HOD'
         });
 
@@ -224,10 +223,6 @@ exports.rndAction = async (req, res) => {
 
         product.status = status;
         product.rndComment = comment;
-
-        if (status === 'Approved' && (product.applyIncentive === 'Yes' || product.applyIncentive === 'yes') && product.appraisalClaimants && product.appraisalClaimants.length > 0) {
-            product.incentiveClaimant = product.appraisalClaimants[0];
-        }
 
         await product.save();
         res.json({ success: true, data: product });
