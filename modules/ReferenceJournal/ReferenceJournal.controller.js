@@ -68,7 +68,7 @@ exports.addReferenceJournal = async (req, res, next) => {
         }
 
         const newJournal = await ReferenceJournal.create({
-            title,
+            title: title.trim().toUpperCase(),
             impactFactor: impactFactor || 'NA',
             type,
             publisher: publisher || '',
@@ -96,7 +96,7 @@ exports.updateReferenceJournal = async (req, res, next) => {
 
         const updatedJournal = await ReferenceJournal.findByIdAndUpdate(
             id,
-            { $set: { title, impactFactor, type, publisher, link } },
+            { $set: { title: title.trim().toUpperCase(), impactFactor, type, publisher, link } },
             { new: true, runValidators: true }
         );
 
@@ -206,7 +206,7 @@ exports.bulkUploadReferenceJournals = async (req, res, next) => {
             }
 
             results.push({
-                title,
+                title: title.trim().toUpperCase(),
                 impactFactor,
                 type,
                 publisher,

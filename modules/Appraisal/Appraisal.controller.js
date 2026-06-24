@@ -695,10 +695,10 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         for (const c of chapters) {
             let pts = 0;
-            if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId) {
+            const isbn = c.isbnNumber || null;
+            if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId && isbn) {
                 pts = config.research.bookConferencePoints.isbnBookChapter || 5;
             }
-            const isbn = c.isbnNumber || null;
             bookChapterItems.push({
                 itemId: c._id,
                 itemType: 'BookChapter',
@@ -829,7 +829,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const fundedProjects = await FundedProject.find({
             academicYear: academicYearId,
             status: "Approved",
-            fundingAgencyAditya: "No",
             $or: [
                 { facultyId },
                 { 'coInvestigators.employeeId': faculty.institutionId }
@@ -839,7 +838,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const consultancies = await Consultancy.find({
             academicYear: academicYearId,
             status: "Approved",
-            fundingAdityaUniversity: "No",
             $or: [
                 { facultyId },
                 { 'coInvestigators.employeeId': faculty.institutionId }
@@ -862,7 +860,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (claimants.includes(faculty.institutionId)) {
                 claimStatus = "claimed_by_me";
                 const isEligible = isClaimantEligible(p, faculty.institutionId);
-                if (p.applyingSeedGrant !== "Yes" && isEligible) {
+                if (p.applyingSeedGrant !== "Yes" && p.fundingAgencyAditya !== "Yes" && isEligible) {
                     const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
                     if (statusKey === 'sanctioned') {
                         const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
@@ -878,7 +876,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
-                    if (p.applyingSeedGrant !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
+                    if (p.applyingSeedGrant !== "Yes" && p.fundingAgencyAditya !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
                         const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
                         if (statusKey === 'sanctioned') {
                             const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
@@ -921,7 +919,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (claimants.includes(faculty.institutionId)) {
                 claimStatus = "claimed_by_me";
                 const isEligible = isClaimantEligible(c, faculty.institutionId);
-                if (c.applyingSeedGrant !== "Yes" && isEligible) {
+                if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isEligible) {
                     const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
                     if (statusKey === 'sanctioned') {
                         const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
@@ -937,7 +935,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
-                    if (c.applyingSeedGrant !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
+                    if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
                         const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
                         if (statusKey === 'sanctioned') {
                             const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));

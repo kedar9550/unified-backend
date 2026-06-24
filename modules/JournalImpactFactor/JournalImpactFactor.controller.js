@@ -1,3 +1,5 @@
+const fs = require('fs');
+const readline = require('readline');
 const JournalImpactFactor = require('./JournalImpactFactor.model');
 const escapeRegex = require('../../utils/escapeRegex');
 
@@ -131,6 +133,133 @@ exports.deleteJournalImpactFactor = async (req, res, next) => {
         });
     } catch (error) {
         console.error('Delete journal impact factor error:', error);
+        next(error);
+    }
+};
+
+exports.bulkUploadJournalImpactFactors = async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No CSV file uploaded.' });
+        }
+
+        const results = [];
+        const errors = [];
+
+        const fileStream = fs.createReadStream(req.file.path);
+        const rl = readline.createInterface({
+            input: fileStream,
+            crlfDelay: Infinity
+        });
+
+        let isFirstRow = true;
+
+        for await (let line of rl) {
+            if (isFirstRow && line.startsWith('\ufeff')) {
+                line = line.replace(/^\ufeff/, '');
+            }
+
+            const trimmedLine = line.trim();
+            if (!trimmedLine) continue;
+
+            let parts = [];
+            if (trimmedLine.includes('\t')) {
+                parts = trimmedLine.split('\t');
+            } else if (trimmedLine.includes(';')) {
+                parts = trimmedLine.split(';');
+            } else {
+                parts = trimmedLine.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            }
+
+            parts = parts.map(p => p.replace(/^["']|["']$/g, '').trim());
+
+            const rankStr = parts[0] || '';
+            const journalName = parts[1] || '';
+            const abbreviatedJournal = parts[2] || '';
+            const publisher = parts[3] || '';
+            const jifStr = parts[4] || '';
+
+            // Detect and skip headers row
+            if (isFirstRow) {
+                isFirstRow = false;
+                const lowerName = journalName.toLowerCase();
+                if (
+                    lowerName.includes('title') || 
+                    lowerName.includes('journal') || 
+                    lowerName === 'name' || 
+                    rankStr.toLowerCase().includes('rank')
+                ) {
+                    continue;
+                }
+            }
+
+            const rank = Number(rankStr);
+            const jif = Number(jifStr);
+
+            if (!journalName) {
+                errors.push({ line: trimmedLine, error: 'Missing journal name' });
+                continue;
+            }
+
+            if (isNaN(rank)) {
+                errors.push({ line: trimmedLine, error: 'Invalid or missing rank' });
+                continue;
+            }
+
+            if (isNaN(jif)) {
+                errors.push({ line: trimmedLine, error: 'Invalid or missing JIF value' });
+                continue;
+            }
+
+            results.push({
+                rank,
+                journalName: journalName.trim().toUpperCase(),
+                abbreviatedJournal: abbreviatedJournal.trim(),
+                publisher: publisher.trim(),
+                jif
+            });
+        }
+
+        if (fs.existsSync(req.file.path)) {
+            fs.unlinkSync(req.file.path);
+        }
+
+        if (results.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No valid journal impact factor rows found in CSV.',
+                errorCount: errors.length,
+                errors
+            });
+        }
+
+        let insertedCount = 0;
+        let skippedDuplicates = 0;
+
+        try {
+            const bulkOps = results.map(item => ({
+                updateOne: {
+                    filter: { journalName: item.journalName },
+                    update: { $set: item },
+                    upsert: true
+                }
+            }));
+            const bulkResult = await JournalImpactFactor.bulkWrite(bulkOps, { ordered: false });
+            insertedCount = bulkResult.upsertedCount + bulkResult.modifiedCount;
+        } catch (bulkError) {
+            console.error('Bulk write JIF error:', bulkError);
+            return res.status(500).json({ success: false, message: 'Bulk upload failed.', error: bulkError.message });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully processed CSV file.`,
+            insertedCount: results.length,
+            errorCount: errors.length,
+            errors
+        });
+    } catch (error) {
+        console.error('Bulk upload JIF error:', error);
         next(error);
     }
 };
