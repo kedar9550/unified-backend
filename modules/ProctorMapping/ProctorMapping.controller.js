@@ -96,9 +96,20 @@ const uploadCSV = async (req, res) => {
                 continue;
             }
 
+            const searchId = pId;
+            const cleanId = searchId.replace(/\s+/g, "");
+
             const [student, employee] = await Promise.all([
                 Student.findOne({ rollNo: sId, "system.isActive": true }),
-                Employee.findOne({ institutionId: pId, isActive: true })
+                Employee.findOne({
+                    $or: [
+                        { institutionId: searchId },
+                        { institutionId: cleanId },
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(searchId) + "$", "i") } },
+                        { institutionId: { $regex: new RegExp("^" + escapeRegex(cleanId) + "$", "i") } }
+                    ],
+                    isActive: true
+                })
             ]);
 
             if (!student) {
@@ -106,7 +117,8 @@ const uploadCSV = async (req, res) => {
                 continue;
             }
             if (!employee) {
-                errors.push(`Row ${i + 2}: Proctor '${pId}' not found.`);
+                const charCodes = [...pId].map(c => c.charCodeAt(0)).join(",");
+                errors.push(`Row ${i + 2}: Proctor '${pId}' (length: ${pId.length}, charCodes: [${charCodes}]) not found.`);
                 continue;
             }
 
