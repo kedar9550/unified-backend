@@ -68,6 +68,10 @@ exports.createBookChapter = async (req, res) => {
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
 
+        
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantEmpId = applicant ? applicant.institutionId : null;
+        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
         const bookChapter = new BookChapter({
             ...data,
             chapterTitle: trimmedChapterTitle,
@@ -75,7 +79,8 @@ exports.createBookChapter = async (req, res) => {
             coAuthors: resolvedAuthors,
             appraisalClaimant,
             status: 'Pending at HOD'
-        });
+        ,
+            incentiveClaimant: computedIncentiveClaimant});
 
         if (req.files) {
             if (req.files.coverPage) bookChapter.coverPage = `/uploads/book-chapters/${req.files.coverPage[0].filename}`;

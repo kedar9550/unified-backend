@@ -95,6 +95,7 @@ exports.createProject = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
+        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantInstId : null;
         const project = new FundedProject({
             ...data,
             title: trimmedTitle,
@@ -102,7 +103,7 @@ exports.createProject = async (req, res) => {
             coInvestigators: resolvedAuthors,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
             appraisalClaimants,
-            incentiveClaimant: applicantInstId,
+            incentiveClaimant: computedIncentiveClaimant,
             status: 'Pending at HOD'
         });
 

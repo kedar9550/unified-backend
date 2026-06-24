@@ -102,6 +102,10 @@ exports.createJournal = async (req, res) => {
         
         const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;
 
+        
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantEmpId = applicant ? applicant.institutionId : null;
+        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
         const journal = new Journal({
             ...data,
             facultyId: req.user.userId,
@@ -110,7 +114,8 @@ exports.createJournal = async (req, res) => {
             appraisalClaimant,
             jcrImpactFactor,
             status: 'Pending at HOD'
-        });
+        ,
+            incentiveClaimant: computedIncentiveClaimant});
 
         if (req.files) {
             if (req.files.publishedPaper) journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;

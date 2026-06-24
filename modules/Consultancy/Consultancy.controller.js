@@ -70,13 +70,14 @@ exports.createConsultancy = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
+        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantInstId : null;
         const consultancy = new Consultancy({
             ...data,
             title: trimmedTitle,
             facultyId: req.user.userId,
             coInvestigators: resolvedAuthors,
             appraisalClaimants,
-            incentiveClaimant: applicantInstId,
+            incentiveClaimant: computedIncentiveClaimant,
             status: 'Pending at HOD'
         });
 

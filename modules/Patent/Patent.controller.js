@@ -68,6 +68,10 @@ exports.createPatent = async (req, res) => {
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInventors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
 
+        
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantEmpId = applicant ? applicant.institutionId : null;
+        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
         const patent = new Patent({
             ...data,
             title: trimmedTitle,
@@ -76,7 +80,8 @@ exports.createPatent = async (req, res) => {
             patentStatus: data.status, // Map 'status' from frontend to 'patentStatus' in model
             appraisalClaimant,
             status: 'Pending at HOD'
-        });
+        ,
+            incentiveClaimant: computedIncentiveClaimant});
 
         if (req.files) {
             if (req.files.eFilingReceipt) patent.eFilingReceipt = `/uploads/patents/${req.files.eFilingReceipt[0].filename}`;

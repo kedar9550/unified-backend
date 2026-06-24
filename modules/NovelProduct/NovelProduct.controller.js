@@ -63,6 +63,7 @@ exports.createNovelProduct = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
+        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantInstId : null;
         const product = new NovelProduct({
             facultyId: req.user.userId,
             academicYear: data.academicYear,
@@ -78,7 +79,7 @@ exports.createNovelProduct = async (req, res) => {
             coDevelopers: resolvedAuthors,
             applyIncentive: data.applyIncentive || 'No',
             appraisalClaimants,
-            incentiveClaimant: applicantInstId,
+            incentiveClaimant: computedIncentiveClaimant,
             status: 'Pending at HOD'
         });
 
