@@ -542,6 +542,35 @@ const updateResult = async (req, res) => {
             updates.section = updates.section.trim().toUpperCase();
         }
 
+        if (updates.subjectCode !== undefined || updates.section !== undefined || updates.phase !== undefined || updates.semesterNumber !== undefined || updates.yearNumber !== undefined) {
+            const existingRecord = await FacultyFeedResult.findById(id);
+            if (!existingRecord) return res.status(404).json({ message: "Record not found" });
+
+            const code = updates.subjectCode !== undefined ? updates.subjectCode.trim().toUpperCase() : existingRecord.subjectCode;
+            const sec = updates.section !== undefined ? updates.section.trim().toUpperCase() : existingRecord.section;
+            const phs = updates.phase !== undefined ? Number(updates.phase) : existingRecord.phase;
+            const ayId = updates.academicYearId !== undefined ? updates.academicYearId : existingRecord.academicYearId;
+
+            const query = {
+                _id: { $ne: id },
+                academicYearId: ayId,
+                subjectCode: code,
+                section: sec,
+                phase: phs
+            };
+
+            const semNum = updates.semesterNumber !== undefined ? updates.semesterNumber : existingRecord.semesterNumber;
+            if (semNum) query.semesterNumber = semNum;
+
+            const yrNum = updates.yearNumber !== undefined ? updates.yearNumber : existingRecord.yearNumber;
+            if (yrNum) query.yearNumber = yrNum;
+
+            const duplicate = await FacultyFeedResult.findOne(query);
+            if (duplicate) {
+                return res.status(400).json({ message: `Another feedback record already exists for Subject '${code}' Section '${sec}' Phase ${phs} in this period.` });
+            }
+        }
+
         const updatedRecord = await FacultyFeedResult.findByIdAndUpdate(
             id,
             { $set: updates },

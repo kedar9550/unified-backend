@@ -1,12 +1,14 @@
 const Discrepancy = require("./discrepancy.model");
 const path = require("path");
+const fs = require("fs");
 
 // Section → responsible role mapping
 const SECTION_ROLE_MAP = {
-    TEACHING:   "EXAMSECTION",
+    TEACHING: "EXAMSECTION",
     PROCTORING: "EXAMSECTION",
-    FEEDBACK:   "FEEDBACK COORDINATOR",
-    OTHER:      "ADMIN",
+    FEEDBACK: "FEEDBACK COORDINATOR",
+    CO_ATTAINMENT: "EXAMSECTION",
+    OTHER: "ADMIN",
 };
 
 /**
@@ -17,16 +19,16 @@ const raiseDiscrepancy = async (req, res) => {
     try {
         const { academicYearId, semesterTypeId, semester, section, note, facultyInstitutionId, facultyName, proctoringType, studentDepartmentId } = req.body;
 
-        if (!academicYearId || !semesterTypeId || !section || !note) {
-            return res.status(400).json({ message: "academicYearId, semesterTypeId, section, and note are required." });
+        if (!academicYearId || !section || !note) {
+            return res.status(400).json({ message: "academicYearId, section, and note are required." });
         }
 
         let assignedRole = SECTION_ROLE_MAP[section] || "ADMIN";
 
         const disc = await Discrepancy.create({
-            raisedBy:             req.user.userId,
+            raisedBy: req.user.userId,
             facultyInstitutionId: facultyInstitutionId || "",
-            facultyName:          facultyName || "",
+            facultyName: facultyName || "",
             academicYearId,
             semesterTypeId,
             semester,
@@ -56,15 +58,15 @@ const getDiscrepancies = async (req, res) => {
             const rname = r.role?.toUpperCase();
             return rname === "STAFF" ? "FACULTY" : rname;
         });
-        
+
         // Determine which role to use for filtering
         let activeRole = role?.toUpperCase();
         if (activeRole === "STAFF") activeRole = "FACULTY";
 
         if (!activeRole || !userRoles.includes(activeRole)) {
             // Fallback: Pick first role that isn't FACULTY/STUDENT
-            activeRole = userRoles.find(r => !["FACULTY", "STUDENT"].includes(r)) || 
-                         (userRoles.includes("FACULTY") ? "FACULTY" : null);
+            activeRole = userRoles.find(r => !["FACULTY", "STUDENT"].includes(r)) ||
+                (userRoles.includes("FACULTY") ? "FACULTY" : null);
         }
 
         let query = {};
@@ -77,7 +79,7 @@ const getDiscrepancies = async (req, res) => {
             }
 
             if (activeRole === "EXAMSECTION") {
-                rolesToQuery.push("TEACHING", "PROCTORING");
+                rolesToQuery.push("TEACHING", "PROCTORING", "CO_ATTAINMENT");
             }
 
             // If user has HOD role, filter by department for HOD-assigned ones
@@ -136,7 +138,7 @@ const resolveDiscrepancy = async (req, res) => {
 
         // Check this user's role matches assignedRole
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
-        const isAdmin   = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME") || userRoles.includes("FEEDBACK COORDINATOR");
+        const isAdmin = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME") || userRoles.includes("FEEDBACK COORDINATOR");
         const hasAccess = isAdmin || userRoles.includes(disc.assignedRole?.toUpperCase());
 
         if (!hasAccess) {
@@ -148,9 +150,9 @@ const resolveDiscrepancy = async (req, res) => {
             if (!rejectionNote || !rejectionNote.trim()) {
                 return res.status(400).json({ message: "Rejection note is required." });
             }
-            disc.status        = "REJECTED";
+            disc.status = "REJECTED";
             disc.rejectionNote = rejectionNote.trim();
-            disc.resolvedBy    = req.user.userId;
+            disc.resolvedBy = req.user.userId;
             await disc.save();
             return res.json({ message: "Discrepancy rejected.", discrepancy: disc });
         }
@@ -160,14 +162,24 @@ const resolveDiscrepancy = async (req, res) => {
             return res.status(400).json({ message: "Proof document is required to resolve a discrepancy." });
         }
 
+        // Limit proof document to 500kb for EXAMSECTION role
+        if (disc.assignedRole === "EXAMSECTION" && req.file.size > 500 * 1024) {
+            try {
+                fs.unlinkSync(req.file.path);
+            } catch (err) {
+                console.error("Failed to delete oversized file:", err);
+            }
+            return res.status(400).json({ message: "Proof document must be under 500kb." });
+        }
+
         // Allow updating academic year / semester if admin corrected the data
         if (academicYearId) disc.academicYearId = academicYearId;
         if (semesterTypeId) disc.semesterTypeId = semesterTypeId;
 
-        disc.resolvedBy     = req.user.userId;
+        disc.resolvedBy = req.user.userId;
         disc.resolutionNote = resolutionNote || "";
-        disc.proofDocument  = req.file.filename;
-        disc.status         = "RESOLVED";
+        disc.proofDocument = req.file.filename;
+        disc.status = "RESOLVED";
 
         await disc.save();
 
@@ -209,10 +221,10 @@ const deleteDiscrepancy = async (req, res) => {
     }
 };
 
-module.exports = { 
-    raiseDiscrepancy, 
-    getDiscrepancies, 
-    getDiscrepancyById, 
+module.exports = {
+    raiseDiscrepancy,
+    getDiscrepancies,
+    getDiscrepancyById,
     resolveDiscrepancy,
     deleteDiscrepancy
 };

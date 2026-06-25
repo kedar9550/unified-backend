@@ -258,16 +258,213 @@ exports.deleteSemesterData = async (req, res) => {
  */
 exports.getAllEntries = async (req, res) => {
     try {
-        const { academicYearId } = req.query;
+        const { academicYearId, facultyId } = req.query;
         const query = {};
         if (academicYearId) query.academicYear = academicYearId;
+        
+        if (facultyId) {
+            const employee = await Employee.findOne({
+                $or: [
+                    { institutionId: facultyId },
+                    { _id: mongoose.Types.ObjectId.isValid(facultyId) ? facultyId : null }
+                ]
+            });
+            if (employee) {
+                query.facultyId = employee._id;
+            } else {
+                query.empId = facultyId;
+            }
+        }
         
         const entries = await FacultyProctoringEntry.find(query)
             .populate("academicYear", "year")
             .populate("facultyId", "name institutionId")
+            .populate("programId", "name code programPattern")
+            .populate("branchId", "name code")
             .sort({ createdAt: -1 });
 
         res.json({ success: true, data: entries });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * @desc    Create a single manual proctoring entry
+ * @route   POST /api/faculty-proctoring
+ * @access  Private (Admin, Exam Cell, Faculty)
+ */
+exports.createEntry = async (req, res) => {
+    try {
+        const {
+            academicYear, programId, branchId, semesterNumber, yearNumber, section,
+            totalStudents, eligibleStudents, passedStudents, facultyId, empId, facultyName
+        } = req.body;
+
+        let fId = facultyId;
+        let eId = empId;
+        let fName = facultyName;
+
+        if (!fId) {
+            const faculty = await Employee.findById(req.user.userId);
+            if (!faculty) return res.status(404).json({ message: "Faculty not found" });
+            fId = faculty._id;
+            eId = faculty.institutionId;
+            fName = faculty.name;
+        } else {
+            const faculty = await Employee.findOne({
+                $or: [
+                    { _id: mongoose.Types.ObjectId.isValid(fId) ? fId : null },
+                    { institutionId: eId || fId }
+                ]
+            });
+            if (faculty) {
+                fId = faculty._id;
+                eId = faculty.institutionId;
+                fName = faculty.name;
+            }
+        }
+
+        const programDoc = await Program.findById(programId);
+        if (!programDoc) return res.status(400).json({ message: "Program not found" });
+
+        const branchDoc = await Branch.findById(branchId);
+        if (!branchDoc) return res.status(400).json({ message: "Branch not found" });
+
+        const secVal = String(section).trim().toUpperCase();
+
+        // Duplicate Check
+        const duplicateQuery = {
+            academicYear,
+            programId,
+            branchId,
+            section: secVal
+        };
+        if (programDoc.programPattern === "YEAR") {
+            duplicateQuery.yearNumber = Number(yearNumber);
+        } else {
+            duplicateQuery.semesterNumber = Number(semesterNumber);
+        }
+
+        const existing = await FacultyProctoringEntry.findOne(duplicateQuery);
+        if (existing) {
+            return res.status(400).json({ message: `Record already exists for Program/Branch Section '${section}' in this semester/year.` });
+        }
+
+        const total = Number(totalStudents) || 0;
+        const eligible = Number(eligibleStudents) || 0;
+        const passed = Number(passedStudents) || 0;
+
+        if (passed > eligible) return res.status(400).json({ message: "Passed students cannot exceed eligible students" });
+        if (eligible > total) return res.status(400).json({ message: "Eligible students cannot exceed allotted students" });
+
+        const passPercentage = eligible > 0 ? Number(((passed / eligible) * 100).toFixed(2)) : 0;
+
+        const entry = await FacultyProctoringEntry.create({
+            facultyId: fId,
+            empId: eId,
+            facultyName: fName,
+            academicYear,
+            programme: programDoc.name,
+            programId,
+            branch: branchDoc.name,
+            branchId,
+            semesterNumber: programDoc.programPattern === "YEAR" ? null : (Number(semesterNumber) || null),
+            yearNumber: programDoc.programPattern === "YEAR" ? (Number(yearNumber) || null) : null,
+            section: secVal,
+            totalStudents: total,
+            eligibleStudents: eligible,
+            passedStudents: passed,
+            passPercentage
+        });
+
+        res.status(201).json({ success: true, message: "Proctoring entry created successfully", data: entry });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * @desc    Update a single manual proctoring entry
+ * @route   PUT /api/faculty-proctoring/:id
+ * @access  Private (Admin, Exam Cell, Faculty)
+ */
+exports.updateEntry = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+
+        if (updates.section !== undefined) {
+            updates.section = String(updates.section).trim().toUpperCase();
+        }
+
+        if (updates.eligibleStudents !== undefined || updates.passedStudents !== undefined || updates.totalStudents !== undefined || updates.section !== undefined || updates.semesterNumber !== undefined || updates.yearNumber !== undefined || updates.programId !== undefined || updates.branchId !== undefined) {
+            const existing = await FacultyProctoringEntry.findById(id);
+            if (!existing) return res.status(404).json({ message: "Record not found" });
+
+            const total = updates.totalStudents !== undefined ? Number(updates.totalStudents) : existing.totalStudents;
+            const eligible = updates.eligibleStudents !== undefined ? Number(updates.eligibleStudents) : existing.eligibleStudents;
+            const passed = updates.passedStudents !== undefined ? Number(updates.passedStudents) : existing.passedStudents;
+
+            if (passed > eligible) return res.status(400).json({ message: "Passed students cannot exceed eligible students" });
+            if (eligible > total) return res.status(400).json({ message: "Eligible students cannot exceed allotted students" });
+
+            updates.passPercentage = eligible > 0 ? Number(((passed / eligible) * 100).toFixed(2)) : 0;
+
+            // Duplicate Check
+            const sec = updates.section !== undefined ? updates.section : existing.section;
+            const prog = updates.programId !== undefined ? updates.programId : existing.programId;
+            const br = updates.branchId !== undefined ? updates.branchId : existing.branchId;
+            const ay = updates.academicYear !== undefined ? updates.academicYear : existing.academicYear;
+
+            const query = {
+                _id: { $ne: id },
+                academicYear: ay,
+                programId: prog,
+                branchId: br,
+                section: sec
+            };
+
+            const programDoc = await Program.findById(prog);
+            const isYearProg = programDoc ? programDoc.programPattern === "YEAR" : (existing.yearNumber !== null && existing.yearNumber !== undefined);
+
+            if (isYearProg) {
+                query.yearNumber = updates.yearNumber !== undefined ? Number(updates.yearNumber) : existing.yearNumber;
+            } else {
+                query.semesterNumber = updates.semesterNumber !== undefined ? Number(updates.semesterNumber) : existing.semesterNumber;
+            }
+
+            const duplicate = await FacultyProctoringEntry.findOne(query);
+            if (duplicate) {
+                return res.status(400).json({ message: `Another proctoring record already exists for Section '${sec}' in this semester/year.` });
+            }
+        }
+
+        const updated = await FacultyProctoringEntry.findByIdAndUpdate(
+            id,
+            { $set: updates },
+            { new: true, runValidators: true }
+        );
+
+        if (!updated) return res.status(404).json({ message: "Record not found" });
+
+        res.json({ success: true, message: "Record updated successfully", data: updated });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * @desc    Delete a single manual proctoring entry
+ * @route   DELETE /api/faculty-proctoring/:id
+ * @access  Private (Admin, Exam Cell, Faculty)
+ */
+exports.deleteEntry = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deleted = await FacultyProctoringEntry.findByIdAndDelete(id);
+        if (!deleted) return res.status(404).json({ message: "Record not found" });
+        res.json({ success: true, message: "Record deleted successfully" });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }

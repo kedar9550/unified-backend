@@ -30,4 +30,9 @@ router.get("/all", protect, authorize("ADMIN", "UNIPRIME"), facultyProctoringCon
 // Faculty: View own proctoring data
 router.get("/my-entries", protect, facultyProctoringController.getMyEntries);
 
+// Single Entry CRUD
+router.post("/", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY"), facultyProctoringController.createEntry);
+router.put("/:id", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY"), facultyProctoringController.updateEntry);
+router.delete("/:id", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY"), facultyProctoringController.deleteEntry);
+
 module.exports = router;
