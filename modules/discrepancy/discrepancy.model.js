@@ -19,12 +19,11 @@ const DiscrepancySchema = new mongoose.Schema({
     semesterTypeId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "SemesterType",
-        required: true,
     },
     semester: { type: String },
     section: {
         type: String,
-        enum: ["TEACHING", "PROCTORING", "FEEDBACK", "OTHER"],
+        enum: ["TEACHING", "PROCTORING", "FEEDBACK", "CO_ATTAINMENT", "OTHER"],
         required: true,
     },
     note: { type: String, required: true, trim: true },

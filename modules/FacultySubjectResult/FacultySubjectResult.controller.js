@@ -555,6 +555,13 @@ const updateResult = async (req, res) => {
         const { id } = req.params;
         const updates = req.body;
 
+        if (updates.subjectName !== undefined && updates.courseName === undefined) {
+            updates.courseName = updates.subjectName;
+        }
+        if (updates.subjectCode !== undefined && updates.courseCode === undefined) {
+            updates.courseCode = updates.subjectCode;
+        }
+
         if (updates.courseType !== undefined) {
             const courseTypeInput = (updates.courseType || "").trim().toUpperCase();
             if (courseTypeInput === "T" || courseTypeInput === "THEORY") {
@@ -577,6 +584,34 @@ const updateResult = async (req, res) => {
             const pas = updates.passed !== undefined ? Number(updates.passed) : existing.passed;
 
             updates.passPercentage = app > 0 ? ((pas / app) * 100).toFixed(2) : 0;
+        }
+
+        // Duplicate Check
+        if (updates.courseCode !== undefined || updates.section !== undefined || updates.semesterNumber !== undefined || updates.yearNumber !== undefined || updates.academicYearId !== undefined) {
+            const existingRecord = await FacultySubjectResult.findById(id);
+            if (!existingRecord) return res.status(404).json({ message: "Record not found" });
+
+            const code = (updates.courseCode !== undefined ? updates.courseCode : existingRecord.courseCode || "").trim().toUpperCase();
+            const sec = (updates.section !== undefined ? updates.section : existingRecord.section || "").trim().toUpperCase();
+            const ayId = updates.academicYearId !== undefined ? updates.academicYearId : existingRecord.academicYearId;
+
+            const query = {
+                _id: { $ne: id },
+                academicYearId: ayId,
+                courseCode: code,
+                section: sec
+            };
+
+            const semNum = updates.semesterNumber !== undefined ? updates.semesterNumber : existingRecord.semesterNumber;
+            if (semNum) query.semesterNumber = semNum;
+
+            const yrNum = updates.yearNumber !== undefined ? updates.yearNumber : existingRecord.yearNumber;
+            if (yrNum) query.yearNumber = yrNum;
+
+            const duplicate = await FacultySubjectResult.findOne(query);
+            if (duplicate) {
+                return res.status(400).json({ message: `Another record already exists for Course '${code}' Section '${sec}' in this semester/year.` });
+            }
         }
 
         const updatedRecord = await FacultySubjectResult.findByIdAndUpdate(
@@ -629,16 +664,55 @@ const deleteResult = async (req, res) => {
 const createResult = async (req, res) => {
     try {
         const {
-            facultyId, facultyName, courseName, courseCode, courseType, branch,
+            facultyId, facultyName, courseName, subjectName, courseCode, subjectCode, courseType, branch,
             academicYearId, semesterTypeId, semester, section,
             noOfCos, noOfCosAttained, appeared, passed
         } = req.body;
 
-        if (!facultyId || !courseName || !academicYearId || !semesterTypeId) {
-            return res.status(400).json({ message: "facultyId, courseName, academicYearId, and semesterTypeId are required." });
+        const cName = courseName || subjectName;
+        const cCode = courseCode || subjectCode;
+
+        if (!facultyId || !cName || !academicYearId) {
+            return res.status(400).json({ message: "facultyId, courseName (or subjectName), and academicYearId are required." });
         }
 
-        const courseTypeInput = (courseType || "").trim().toUpperCase();
+        let resolvedBranchId = undefined;
+        let resolvedProgramId = undefined;
+        if (branch) {
+            const branchDoc = await Branch.findOne({
+                $or: [
+                    { name: { $regex: new RegExp("^" + escapeRegex(branch.trim()) + "$", "i") } },
+                    { code: branch.trim().toUpperCase() }
+                ]
+            });
+            if (branchDoc) {
+                resolvedBranchId = branchDoc._id;
+                resolvedProgramId = branchDoc.programId;
+            } else {
+                return res.status(400).json({ message: `Branch '${branch}' was not found in the system.` });
+            }
+        } else {
+            return res.status(400).json({ message: "branch is required." });
+        }
+
+        let semesterNumber = req.body.semesterNumber;
+        let yearNumber = req.body.yearNumber;
+        
+        if (resolvedProgramId) {
+            const programDoc = await Program.findById(resolvedProgramId);
+            if (programDoc) {
+                const inputSemester = String(semester || req.body.semesterNumber || "").trim();
+                if (programDoc.programPattern === "YEAR") {
+                    yearNumber = inputSemester || yearNumber;
+                    semesterNumber = undefined;
+                } else {
+                    semesterNumber = inputSemester || semesterNumber;
+                    yearNumber = undefined;
+                }
+            }
+        }
+
+        const courseTypeInput = (courseType || "THEORY").trim().toUpperCase();
         let finalCourseType;
         if (courseTypeInput === "T" || courseTypeInput === "THEORY") {
             finalCourseType = "THEORY";
@@ -650,6 +724,23 @@ const createResult = async (req, res) => {
             return res.status(400).json({ message: `Invalid Course Type '${courseType}'. Allowed values: T (Theory), P (Practical), I (Integrated)` });
         }
 
+        // Duplicate Check
+        const codeClean = cCode.trim().toUpperCase();
+        const sectionClean = (section || "").trim().toUpperCase();
+
+        const duplicateQuery = {
+            academicYearId,
+            courseCode: codeClean,
+            section: sectionClean
+        };
+        if (semesterNumber) duplicateQuery.semesterNumber = String(semesterNumber);
+        if (yearNumber) duplicateQuery.yearNumber = String(yearNumber);
+
+        const existing = await FacultySubjectResult.findOne(duplicateQuery);
+        if (existing) {
+            return res.status(400).json({ message: `Record already exists for Course '${cCode}' Section '${section}' in this semester/year.` });
+        }
+
         const app = Number(appeared) || 0;
         const pas = Number(passed) || 0;
         const passPercentage = app > 0 ? ((pas / app) * 100).toFixed(2) : 0;
@@ -657,16 +748,19 @@ const createResult = async (req, res) => {
         const record = await FacultySubjectResult.create({
             facultyId,
             facultyName,
-            courseName,
-            courseCode,
+            courseName: cName,
+            courseCode: cCode,
             courseType: finalCourseType,
             branch,
-            section,
-            semester: Number(semester) || undefined,
+            section: sectionClean,
+            semesterNumber,
+            yearNumber,
             noOfCos: Number(noOfCos) || 0,
             noOfCosAttained: Number(noOfCosAttained) || 0,
             academicYearId,
-            semesterTypeId,
+            semesterTypeId: semesterTypeId || undefined,
+            programId: resolvedProgramId,
+            branchId: resolvedBranchId,
             appeared: app,
             passed: pas,
             passPercentage,
