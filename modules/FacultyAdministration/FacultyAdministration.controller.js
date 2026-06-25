@@ -4,6 +4,23 @@ const AcademicYear = require("../academicYear/academicYear.model");
 const { getHODDepartments } = require("../../utils/hodHelper");
 const { syncAppraisalOnAdministrationRejection } = require("../../utils/appraisalSyncHelper");
 
+const VALID_ADMIN_ROLES = [
+    "Deans / Assoc Deans / CoE",
+    "HoD / Dy. CoE / Coordinator (Univ. Office)",
+    "Dy. HoD / Dept. Exam Cell Incharge",
+    "Time Table / Project Coordinator / Curriculum Coordinator",
+    "Placement / Internship / Alumni Coordinator",
+    "Coursera / LinkedIn Coordinator / ALA",
+    "EDC / IIC / IQAC Coordinator",
+    "Course Coordinator",
+    "Website Coordinator",
+    "NSS / Any Clubs / Professional Chapters Coordinator",
+    "Any Training Program Coordinator (Smart Interviews / GPP / Etc.)",
+    "DRC / Research Coordinator",
+    "Anti-Ragging Committee Coordinator",
+    "Any other remarkable event / activity coordinator"
+];
+
 // @desc    Submit or update administrative roles
 // @route   POST /api/faculty-administration
 // @access  Private (Faculty)
@@ -18,6 +35,16 @@ exports.createOrUpdateEntry = async (req, res) => {
 
         if (!roles || !Array.isArray(roles)) {
             return res.status(400).json({ success: false, message: "Roles data is required." });
+        }
+
+        // Validate role entries
+        for (const r of roles) {
+            if (!VALID_ADMIN_ROLES.includes(r.roleName)) {
+                return res.status(400).json({ success: false, message: `Invalid administrative role name: "${r.roleName}".` });
+            }
+            if (r.roleName === "Any other remarkable event / activity coordinator" && r.isResponsible && (!r.details || !r.details.trim())) {
+                return res.status(400).json({ success: false, message: "Please specify details for the other remarkable event/activity." });
+            }
         }
 
         // Format roles to set defaults
@@ -197,6 +224,22 @@ exports.hodActionRole = async (req, res) => {
         const entry = await FacultyAdministration.findById(id);
         if (!entry) {
             return res.status(404).json({ success: false, message: "Administration roles entry not found." });
+        }
+
+        // Validate that this HOD has authority over this faculty member's department declarations
+        const deptIds = await getHODDepartments(req.user);
+        const targetFaculty = await Employee.findById(entry.facultyId);
+        if (!targetFaculty) {
+            return res.status(404).json({ success: false, message: "Faculty member associated with this entry not found." });
+        }
+
+        const hasAccess = deptIds.some(deptId => 
+            (targetFaculty.department && targetFaculty.department.toString() === deptId.toString()) ||
+            (targetFaculty.coreDepartment && targetFaculty.coreDepartment.toString() === deptId.toString())
+        );
+
+        if (!hasAccess) {
+            return res.status(403).json({ success: false, message: "Unauthorized: HOD is not authorized to act on declarations for this faculty member." });
         }
 
         // Find and update the role in roles array
