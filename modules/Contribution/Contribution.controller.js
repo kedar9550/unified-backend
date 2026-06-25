@@ -1,7 +1,8 @@
 const Contribution = require('./Contribution.model');
 const ResourceUtilization = require('../ResourceUtilization/ResourceUtilization.model');
 const Employee = require('../employee/employee.model');
-const { isFutureDate } = require('../../utils/validationHelper');
+const AcademicYear = require('../academicYear/academicYear.model');
+const { isFutureDate, isDateWithinAcademicYear, isValidURL } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
 const { syncAppraisalOnContributionRejection } = require('../../utils/appraisalSyncHelper');
 
@@ -23,7 +24,7 @@ const normalizeDurationToWeeks = (duration) => {
 };
 
 // Validate fields based on Category
-const validateCategoryFields = (category, data) => {
+const validateCategoryFields = (category, data, academicYearStr) => {
     const cat = parseInt(category);
     switch (cat) {
         case 1:
@@ -36,6 +37,9 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.fromDate)) {
                 return "From Date cannot be in the future.";
             }
+            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            }
             break;
         case 2:
             if (!data.journalName || !data.fromDate || !data.toDate) {
@@ -46,6 +50,9 @@ const validateCategoryFields = (category, data) => {
             }
             if (isFutureDate(data.fromDate)) {
                 return "From Date cannot be in the future.";
+            }
+            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
             }
             break;
         case 3:
@@ -58,6 +65,9 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.fromDate)) {
                 return "From Date cannot be in the future.";
             }
+            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            }
             break;
         case 4:
         case 5:
@@ -67,10 +77,16 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.awardDate)) {
                 return "Award Date cannot be in the future.";
             }
+            if (!isDateWithinAcademicYear(data.awardDate, academicYearStr)) {
+                return `Award Date must fall within the selected Academic Year (${academicYearStr}).`;
+            }
             break;
         case 6:
             if (!data.courseName || !data.url) {
                 return "Course Name and URL are mandatory.";
+            }
+            if (!isValidURL(data.url)) {
+                return "Invalid URL format. Please provide a valid HTTP or HTTPS URL.";
             }
             break;
         case 7:
@@ -83,6 +99,9 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
                 return "Dates cannot be in the future.";
             }
+            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            }
             break;
         case 8:
             if (!data.eventName || !data.eventDate) {
@@ -91,6 +110,9 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.eventDate)) {
                 return "Event Date cannot be in the future.";
             }
+            if (!isDateWithinAcademicYear(data.eventDate, academicYearStr)) {
+                return `Event Date must fall within the selected Academic Year (${academicYearStr}).`;
+            }
             break;
         case 9:
             if (!data.articleTitle || !data.publicationName || !data.publicationDate) {
@@ -98,6 +120,9 @@ const validateCategoryFields = (category, data) => {
             }
             if (isFutureDate(data.publicationDate)) {
                 return "Publication Date cannot be in the future.";
+            }
+            if (!isDateWithinAcademicYear(data.publicationDate, academicYearStr)) {
+                return `Publication Date must fall within the selected Academic Year (${academicYearStr}).`;
             }
             break;
         case 10:
@@ -109,6 +134,9 @@ const validateCategoryFields = (category, data) => {
             }
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
                 return "Dates cannot be in the future.";
+            }
+            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
             }
             break;
         case 11:
@@ -129,6 +157,9 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
                 return "Dates cannot be in the future.";
             }
+            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            }
             if (data.courseHours === undefined || data.courseHours === null || data.courseHours === "") {
                 return "Course Duration (Hours) is mandatory.";
             }
@@ -146,12 +177,15 @@ const validateCategoryFields = (category, data) => {
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
                 return "Dates cannot be in the future.";
             }
+            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            }
             break;
         default:
             return "Invalid Category selected.";
     }
     return null;
-};
+};;
 
 // Helper to get the unique name/description field by Category for duplicate checks
 const getContributionNameField = (category, data) => {
@@ -198,8 +232,14 @@ exports.createContribution = async (req, res) => {
             });
         }
 
+        const ayRecord = await AcademicYear.findById(data.academicYear);
+        if (!ayRecord) {
+            return res.status(400).json({ success: false, message: "Invalid Academic Year selected." });
+        }
+        const academicYearStr = ayRecord.year;
+
         // Field validations per category
-        const validationError = validateCategoryFields(data.category, data);
+        const validationError = validateCategoryFields(data.category, data, academicYearStr);
         if (validationError) {
             return res.status(400).json({ success: false, message: validationError });
         }
@@ -363,9 +403,16 @@ exports.updateContribution = async (req, res) => {
         // Track whether this was a rejected record before we change anything
         const wasRejected = record.status === 'Rejected';
 
+        const academicYearId = data.academicYear || record.academicYear;
+        const ayRecord = await AcademicYear.findById(academicYearId);
+        if (!ayRecord) {
+            return res.status(400).json({ success: false, message: "Invalid Academic Year." });
+        }
+        const academicYearStr = ayRecord.year;
+
         // Validate fields for selected category
         const categoryVal = data.category || record.category;
-        const validationError = validateCategoryFields(categoryVal, { ...record.toObject(), ...data });
+        const validationError = validateCategoryFields(categoryVal, { ...record.toObject(), ...data }, academicYearStr);
         if (validationError) {
             return res.status(400).json({ success: false, message: validationError });
         }

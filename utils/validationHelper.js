@@ -44,3 +44,46 @@ exports.isFutureDate = (dateInput) => {
 
     return d > today;
 };
+
+/**
+ * Checks if a given date string or Date object lies within the bounds of a YYYY-YYYY academic year.
+ * Spans from June 1st of the start year to June 30th of the end year.
+ * @param {string|Date} dateInput - The input date.
+ * @param {string} academicYearStr - The academic year string (e.g. "2025-2026").
+ * @returns {boolean} - True if date is within bounds, false otherwise.
+ */
+exports.isDateWithinAcademicYear = (dateInput, academicYearStr) => {
+    if (!dateInput || !academicYearStr) return true; // bypass if missing
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return true;
+
+    const parts = academicYearStr.split('-');
+    if (parts.length !== 2) return true;
+
+    const startYear = parseInt(parts[0]);
+    const endYear = parseInt(parts[1]);
+    if (isNaN(startYear) || isNaN(endYear)) return true;
+
+    // June 1st of startYear to June 30th of endYear
+    const startDate = new Date(`${startYear}-06-01T00:00:00`);
+    const endDate = new Date(`${endYear}-06-30T23:59:59`);
+
+    return d >= startDate && d <= endDate;
+};
+
+/**
+ * Validates format of a URL (must be valid HTTP or HTTPS protocol).
+ * @param {string} url - The URL string.
+ * @returns {boolean} - True if format is valid, false otherwise.
+ */
+exports.isValidURL = (url) => {
+    if (!url) return false;
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch (_) {
+        return false;
+    }
+};
+
+

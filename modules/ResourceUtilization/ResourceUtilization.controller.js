@@ -1,7 +1,8 @@
 const ResourceUtilization = require('./ResourceUtilization.model');
 const Contribution = require('../Contribution/Contribution.model');
 const Employee = require('../employee/employee.model');
-const { isFutureDate } = require('../../utils/validationHelper');
+const AcademicYear = require('../academicYear/academicYear.model');
+const { isFutureDate, isDateWithinAcademicYear } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
 const { syncAppraisalOnResourceUtilizationRejection } = require('../../utils/appraisalSyncHelper');
 
@@ -39,11 +40,23 @@ exports.createResourceUtilization = async (req, res) => {
         }
 
         // Validate role-specific mandatory fields
-        if (data.activityType && data.activityType.includes("Resource Person") && !data.sessionsConducted) {
-            return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
+        if (data.activityType && data.activityType.includes("Resource Person")) {
+            if (!data.sessionsConducted) {
+                return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
+            }
+            const sessions = parseInt(data.sessionsConducted);
+            if (isNaN(sessions) || sessions <= 0) {
+                return res.status(400).json({ success: false, message: "Number of Sessions Conducted must be a positive integer greater than 0." });
+            }
         }
-        if (data.activityType && data.activityType.includes("Participant") && !data.daysParticipated) {
-            return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
+        if (data.activityType && data.activityType.includes("Participant")) {
+            if (!data.daysParticipated) {
+                return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
+            }
+            const days = parseInt(data.daysParticipated);
+            if (isNaN(days) || days <= 0) {
+                return res.status(400).json({ success: false, message: "Number of Days Participated must be a positive integer greater than 0." });
+            }
         }
 
         // FDP Participant specific validation
@@ -181,6 +194,19 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
         }
 
+        const ayRecord = await AcademicYear.findById(data.academicYear);
+        if (!ayRecord) {
+            return res.status(400).json({ success: false, message: "Invalid Academic Year selected." });
+        }
+        const academicYearStr = ayRecord.year;
+
+        if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+            return res.status(400).json({
+                success: false,
+                message: `Activity dates must fall within the selected Academic Year (${academicYearStr}).`
+            });
+        }
+
         // Auto-calculate duration in days
         const start = new Date(data.fromDate);
         const end = new Date(data.toDate);
@@ -290,15 +316,41 @@ exports.updateResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
         }
 
+        const academicYearId = data.academicYear || record.academicYear;
+        const ayRecord = await AcademicYear.findById(academicYearId);
+        if (!ayRecord) {
+            return res.status(400).json({ success: false, message: "Invalid Academic Year." });
+        }
+        const academicYearStr = ayRecord.year;
+
+        if (from && !isDateWithinAcademicYear(from, academicYearStr)) {
+            return res.status(400).json({ success: false, message: `From Date must fall within the selected Academic Year (${academicYearStr}).` });
+        }
+        if (to && !isDateWithinAcademicYear(to, academicYearStr)) {
+            return res.status(400).json({ success: false, message: `To Date must fall within the selected Academic Year (${academicYearStr}).` });
+        }
+
         // Validate role-specific mandatory fields
         const days = data.daysParticipated !== undefined ? data.daysParticipated : record.daysParticipated;
         const sessions = data.sessionsConducted !== undefined ? data.sessionsConducted : record.sessionsConducted;
 
-        if (type && type.includes("Resource Person") && !sessions) {
-            return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
+        if (type && type.includes("Resource Person")) {
+            if (!sessions) {
+                return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
+            }
+            const sVal = parseInt(sessions);
+            if (isNaN(sVal) || sVal <= 0) {
+                return res.status(400).json({ success: false, message: "Number of Sessions Conducted must be a positive integer greater than 0." });
+            }
         }
-        if (type && type.includes("Participant") && !days) {
-            return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
+        if (type && type.includes("Participant")) {
+            if (!days) {
+                return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
+            }
+            const dVal = parseInt(days);
+            if (isNaN(dVal) || dVal <= 0) {
+                return res.status(400).json({ success: false, message: "Number of Days Participated must be a positive integer greater than 0." });
+            }
         }
 
         // FDP Participant specific validation
