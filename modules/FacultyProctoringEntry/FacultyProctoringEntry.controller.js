@@ -335,6 +335,7 @@ exports.createEntry = async (req, res) => {
 
         // Duplicate Check
         const duplicateQuery = {
+            facultyId: fId,
             academicYear,
             programId,
             branchId,
@@ -419,6 +420,7 @@ exports.updateEntry = async (req, res) => {
 
             const query = {
                 _id: { $ne: id },
+                facultyId: existing.facultyId,
                 academicYear: ay,
                 programId: prog,
                 branchId: br,
