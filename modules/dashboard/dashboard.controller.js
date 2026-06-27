@@ -37,7 +37,8 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             usersCount,
             rolesCount,
             schoolsCount,
-            allYearObjs
+            allYearObjs,
+            discrepanciesCount
         ] = await Promise.all([
             AcademicYear.countDocuments(),
             Department.countDocuments(),
@@ -46,7 +47,8 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             Employee.countDocuments(),
             Role.countDocuments(),
             School.countDocuments(),
-            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean()
+            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean(),
+            Discrepancy.countDocuments({ status: 'PENDING', section: 'PROCTORING' })
         ]);
 
         // Filter for active years in JS
@@ -172,6 +174,7 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
                 schoolsCount,
                 usersCount,
                 rolesCount,
+                discrepanciesCount,
                 departmentsList: mappedDepartments,
                 programsList: mappedPrograms,
                 branchesList: mappedBranches,
@@ -335,7 +338,6 @@ exports.getExamDashboardData = async (req, res, next) => {
                 status: 'PENDING',
                 $or: [
                     { section: 'TEACHING' },
-                    { section: 'PROCTORING', proctoringType: 'PASS_COUNT' },
                     { section: 'OTHER' }
                 ]
             }).sort({ createdAt: -1 }).limit(5).lean(),
@@ -369,7 +371,6 @@ exports.getExamDashboardData = async (req, res, next) => {
             status: 'PENDING',
             $or: [
                 { section: 'TEACHING' },
-                { section: 'PROCTORING', proctoringType: 'PASS_COUNT' },
                 { section: 'OTHER' }
             ]
         });

@@ -5,7 +5,7 @@ const fs = require("fs");
 // Section → responsible role mapping
 const SECTION_ROLE_MAP = {
     TEACHING: "EXAMSECTION",
-    PROCTORING: "EXAMSECTION",
+    PROCTORING: "UNIPRIME",
     FEEDBACK: "FEEDBACK COORDINATOR",
     CO_ATTAINMENT: "EXAMSECTION",
     OTHER: "ADMIN",
@@ -72,18 +72,32 @@ const getDiscrepancies = async (req, res) => {
         let query = {};
 
         if (activeRole && !["FACULTY", "STUDENT"].includes(activeRole)) {
-            // User is acting as a resolver (HOD, ADMIN, EXAMSECTION, etc.)
-            const rolesToQuery = [activeRole];
-            if (activeRole === "FEEDBACK COORDINATOR") {
-                rolesToQuery.push("FEEDBACK");
-            }
+            if (activeRole === "HOD") {
+                // HOD resolves proctoring assigned count discrepancies
+                query.$or = [
+                    { assignedRole: "HOD" },
+                    { 
+                        section: "PROCTORING", 
+                        proctoringType: "ASSIGNED_COUNT", 
+                        assignedRole: { $in: ["UNIPRIME", "EXAMSECTION"] } 
+                    }
+                ];
+            } else {
+                const rolesToQuery = [activeRole];
+                if (activeRole === "FEEDBACK COORDINATOR") {
+                    rolesToQuery.push("FEEDBACK");
+                }
 
-            if (activeRole === "EXAMSECTION") {
-                rolesToQuery.push("TEACHING", "PROCTORING", "CO_ATTAINMENT");
-            }
+                if (activeRole === "EXAMSECTION") {
+                    rolesToQuery.push("TEACHING", "CO_ATTAINMENT");
+                }
 
-            // If user has HOD role, filter by department for HOD-assigned ones
-            query.assignedRole = { $in: rolesToQuery };
+                if (activeRole === "UNIPRIME") {
+                    rolesToQuery.push("PROCTORING");
+                }
+
+                query.assignedRole = { $in: rolesToQuery };
+            }
         } else if (activeRole === "FACULTY") {
             // User is acting as faculty, see only raised discrepancies
             query.raisedBy = req.user.userId;
@@ -139,7 +153,10 @@ const resolveDiscrepancy = async (req, res) => {
         // Check this user's role matches assignedRole
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
         const isAdmin = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME") || userRoles.includes("FEEDBACK COORDINATOR");
-        const hasAccess = isAdmin || userRoles.includes(disc.assignedRole?.toUpperCase());
+        const isHOD = userRoles.includes("HOD");
+        const hasAccess = isAdmin || 
+            userRoles.includes(disc.assignedRole?.toUpperCase()) ||
+            (isHOD && disc.section === "PROCTORING" && disc.proctoringType === "ASSIGNED_COUNT");
 
         if (!hasAccess) {
             return res.status(403).json({ message: "You are not authorized to update this discrepancy." });
@@ -162,8 +179,8 @@ const resolveDiscrepancy = async (req, res) => {
             return res.status(400).json({ message: "Proof document is required to resolve a discrepancy." });
         }
 
-        // Limit proof document to 500kb for EXAMSECTION role
-        if (disc.assignedRole === "EXAMSECTION" && req.file.size > 500 * 1024) {
+        // Limit proof document to 500kb for EXAMSECTION or UNIPRIME role
+        if ((disc.assignedRole === "EXAMSECTION" || disc.assignedRole === "UNIPRIME") && req.file.size > 500 * 1024) {
             try {
                 fs.unlinkSync(req.file.path);
             } catch (err) {
