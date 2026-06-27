@@ -976,17 +976,45 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             totalProjectPoints += pts;
         }
 
-        // Calculate total research claimed score (citation & h-index are null initially or fetched if previously saved)
-        const savedCitations = appraisal ? appraisal.research.scopusCitations : null;
-        const savedHIndexPrevYear = appraisal ? appraisal.research.hIndexPrevYear : null;
-        const savedHIndexCurrentYear = appraisal ? appraisal.research.hIndexCurrentYear : null;
+        // Retrieve from AuthorCitations if exists
+        const AuthorCitations = require('../AuthorCitations/AuthorCitations.model');
+        const authorCitationsDoc = await AuthorCitations.findOne({ empid: faculty.institutionId });
+
+        let latestCitations = null;
+        let latestHIndexPrevYear = null;
+        let latestHIndexCurrentYear = null;
+
+        if (authorCitationsDoc) {
+            latestCitations = (authorCitationsDoc.citations && authorCitationsDoc.citations.get)
+                ? authorCitationsDoc.citations.get(String(citationYear))
+                : authorCitationsDoc.citations?.[String(citationYear)];
+            if (latestCitations === undefined) latestCitations = null;
+
+            latestHIndexPrevYear = (authorCitationsDoc.hIndex && authorCitationsDoc.hIndex.get)
+                ? authorCitationsDoc.hIndex.get(String(previousHIndexYear))
+                : authorCitationsDoc.hIndex?.[String(previousHIndexYear)];
+            if (latestHIndexPrevYear === undefined) latestHIndexPrevYear = null;
+
+            latestHIndexCurrentYear = (authorCitationsDoc.hIndex && authorCitationsDoc.hIndex.get)
+                ? authorCitationsDoc.hIndex.get(String(currentHIndexYear))
+                : authorCitationsDoc.hIndex?.[String(currentHIndexYear)];
+            if (latestHIndexCurrentYear === undefined) latestHIndexCurrentYear = null;
+        }
+
+        const savedCitations = latestCitations !== null ? latestCitations : (appraisal ? appraisal.research.scopusCitations : null);
+        const savedHIndexPrevYear = latestHIndexPrevYear !== null ? latestHIndexPrevYear : (appraisal ? appraisal.research.hIndexPrevYear : null);
+        const savedHIndexCurrentYear = latestHIndexCurrentYear !== null ? latestHIndexCurrentYear : (appraisal ? appraisal.research.hIndexCurrentYear : null);
         const savedCitationStatus = appraisal ? (appraisal.research.scopusCitationStatus || "Pending") : "Pending";
         const savedHIndexStatus = appraisal ? (appraisal.research.scopusHIndexStatus || "Pending") : "Pending";
         const savedCitationRemarks = appraisal ? (appraisal.research.scopusCitationRemarks || "") : "";
         const savedHIndexRemarks = appraisal ? (appraisal.research.scopusHIndexRemarks || "") : "";
 
-        const savedCitationPoints = appraisal ? appraisal.research.scopusCitationScore : 0;
-        const savedHIndexPoints = appraisal ? appraisal.research.scopusHIndexScore : 0;
+        const citationRateVal = config?.research?.citationRate ?? 0.2;
+        const citationPointsVal = savedCitations !== null ? Math.round(savedCitations * citationRateVal * 10) / 10 : 0;
+        const hIndexPointsVal = computeHIndexPoints(savedHIndexPrevYear || 0, savedHIndexCurrentYear || 0);
+
+        const savedCitationPoints = savedCitations !== null ? citationPointsVal : (appraisal ? appraisal.research.scopusCitationScore : 0);
+        const savedHIndexPoints = (savedHIndexPrevYear !== null && savedHIndexCurrentYear !== null) ? hIndexPointsVal : (appraisal ? appraisal.research.scopusHIndexScore : 0);
 
         const appraisalStatus = appraisal ? appraisal.status : "Draft";
         const isDraftOrRejected = appraisalStatus === "Draft" || appraisalStatus === "Rejected by HOD";
@@ -1554,6 +1582,23 @@ exports.evaluateHODAppraisal = async (req, res) => {
             const facultyId = appraisal.facultyId;
             const academicYearId = appraisal.academicYearId;
 
+            // Auto-approve Scopus citations and h-index
+            appraisal.research.scopusCitationStatus = "Approved";
+            appraisal.research.scopusHIndexStatus = "Approved";
+
+            // Recalculate research score
+            const baseResearch = (appraisal.research.papers?.totalClaimed || 0) +
+                (appraisal.research.phdGuiding?.totalClaimed || 0) +
+                (appraisal.research.booksChapters?.totalClaimed || 0) +
+                (appraisal.research.patents?.totalClaimed || 0) +
+                (appraisal.research.novelProducts?.totalClaimed || 0) +
+                (appraisal.research.projectsConsultancies?.totalClaimed || 0);
+
+            const citationScoreFinal = appraisal.research.scopusCitationScore || 0;
+            const hIndexPointsFinal = appraisal.research.scopusHIndexScore || 0;
+
+            appraisal.research.totalClaimed = Number((baseResearch + citationScoreFinal + hIndexPointsFinal).toFixed(2));
+
             // Check if any ACTIVE (not removed from appraisal) entries are still Rejected.
             // Records the faculty removed from the appraisal (removedFromAppraisal: true)
             // must NOT block approval — they are no longer part of this submission.
@@ -1620,10 +1665,10 @@ exports.evaluateHODAppraisal = async (req, res) => {
             evaluationDate: new Date()
         };
 
-        appraisal.status = "Pending Research Admin";
+        appraisal.status = "Completed";
         await appraisal.save();
 
-        res.json({ success: true, message: "Appraisal evaluated by HOD and forwarded to R&D.", data: appraisal });
+        res.json({ success: true, message: "Appraisal evaluated by HOD and finalized.", data: appraisal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -1635,6 +1680,76 @@ exports.getPendingRNDAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find({
             status: { $in: ["Pending Research Admin", "Completed"] }
         }).populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college").populate("academicYearId", "year");
+
+        const AuthorCitations = require('../AuthorCitations/AuthorCitations.model');
+        const AppraisalConfig = require('./AppraisalConfig.model');
+
+        for (let appraisal of appraisals) {
+            if (appraisal.status === "Pending Research Admin") {
+                const empid = appraisal.personalInfoSnapshot?.institutionId || appraisal.facultyId?.institutionId;
+                if (empid) {
+                    const authorCitationsDoc = await AuthorCitations.findOne({ empid });
+                    if (authorCitationsDoc) {
+                        const acYearString = appraisal.academicYearId ? appraisal.academicYearId.year : "2025-2026";
+                        const startYear = Number(acYearString.split('-')[0]) || 2025;
+                        const previousYear = startYear - 1;
+                        const currentYear = startYear;
+
+                        const citationsCurrentYear = (authorCitationsDoc.citations && authorCitationsDoc.citations.get)
+                            ? (authorCitationsDoc.citations.get(String(currentYear)) ?? null)
+                            : (authorCitationsDoc.citations?.[String(currentYear)] ?? null);
+
+                        const hIndexPrevYear = (authorCitationsDoc.hIndex && authorCitationsDoc.hIndex.get)
+                            ? (authorCitationsDoc.hIndex.get(String(previousYear)) ?? null)
+                            : (authorCitationsDoc.hIndex?.[String(previousYear)] ?? null);
+
+                        const hIndexCurrentYear = (authorCitationsDoc.hIndex && authorCitationsDoc.hIndex.get)
+                            ? (authorCitationsDoc.hIndex.get(String(currentYear)) ?? null)
+                            : (authorCitationsDoc.hIndex?.[String(currentYear)] ?? null);
+
+                        let modified = false;
+
+                        if (citationsCurrentYear !== null && appraisal.research.scopusCitations !== citationsCurrentYear) {
+                            appraisal.research.scopusCitations = citationsCurrentYear;
+                            const config = await AppraisalConfig.findOne({ academicYearId: appraisal.academicYearId });
+                            const citationRate = config?.research?.citationRate ?? 0.2;
+                            appraisal.research.scopusCitationScore = Math.round(citationsCurrentYear * citationRate * 10) / 10;
+                            modified = true;
+                        }
+                        if (hIndexPrevYear !== null && appraisal.research.hIndexPrevYear !== hIndexPrevYear) {
+                            appraisal.research.hIndexPrevYear = hIndexPrevYear;
+                            modified = true;
+                        }
+                        if (hIndexCurrentYear !== null && appraisal.research.hIndexCurrentYear !== hIndexCurrentYear) {
+                            appraisal.research.hIndexCurrentYear = hIndexCurrentYear;
+                            modified = true;
+                        }
+                        if (modified && appraisal.research.hIndexPrevYear !== null && appraisal.research.hIndexCurrentYear !== null) {
+                            appraisal.research.scopusHIndexScore = computeHIndexPoints(appraisal.research.hIndexPrevYear, appraisal.research.hIndexCurrentYear);
+                        }
+
+                        if (modified) {
+                            const paperPts   = appraisal.research.papers?.totalClaimed          || 0;
+                            const phdPts     = appraisal.research.phdGuiding?.totalClaimed      || 0;
+                            const bookPts    = appraisal.research.booksChapters?.totalClaimed   || 0;
+                            const patentPts  = appraisal.research.patents?.totalClaimed         || 0;
+                            const novelPts   = appraisal.research.novelProducts?.totalClaimed   || 0;
+                            const projPts    = appraisal.research.projectsConsultancies?.totalClaimed || 0;
+
+                            const citationScoreFinal = appraisal.research.scopusCitationScore || 0;
+                            const hIndexPointsFinal = appraisal.research.scopusHIndexScore || 0;
+
+                            appraisal.research.totalClaimed = Number((
+                                paperPts + phdPts + bookPts + patentPts + novelPts + projPts +
+                                citationScoreFinal + hIndexPointsFinal
+                            ).toFixed(2));
+
+                            await appraisal.save();
+                        }
+                    }
+                }
+            }
+        }
 
         res.json({ success: true, data: appraisals });
     } catch (err) {
@@ -1699,6 +1814,33 @@ exports.evaluateRNDAppraisal = async (req, res) => {
             appraisal.status = "Pending Research Admin";
         } else {
             appraisal.status = "Completed";
+        }
+
+        // Write back to AuthorCitations for consistency
+        const empid = appraisal.personalInfoSnapshot?.institutionId;
+        if (empid && scopusCitations !== undefined) {
+            const AuthorCitations = require('../AuthorCitations/AuthorCitations.model');
+            const AcademicYear = require('../academicYear/academicYear.model');
+            const acYearDoc = await AcademicYear.findById(appraisal.academicYearId);
+            if (acYearDoc) {
+                const [startYearStr] = acYearDoc.year.split('-');
+                const startYear = parseInt(startYearStr, 10);
+                
+                let doc = await AuthorCitations.findOne({ empid });
+                if (!doc) {
+                    doc = new AuthorCitations({ empid, citations: {}, hIndex: {} });
+                }
+                
+                doc.citations.set(String(startYear), Number(scopusCitations));
+                if (hIndexPrevYear !== undefined && hIndexPrevYear !== null) {
+                    doc.hIndex.set(String(startYear - 1), Number(hIndexPrevYear));
+                }
+                if (hIndexCurrentYear !== undefined && hIndexCurrentYear !== null) {
+                    doc.hIndex.set(String(startYear), Number(hIndexCurrentYear));
+                }
+                
+                await doc.save();
+            }
         }
 
         await appraisal.save();
@@ -2193,13 +2335,8 @@ exports.getScopusData = async (req, res) => {
             return res.status(404).json({ success: false, message: "Faculty not found." });
         }
 
-        const scopusId = faculty.scopusId;
-        if (!scopusId) {
-            return res.status(400).json({
-                success: false,
-                message: "Scopus ID not found in your profile. Please update your profile first."
-            });
-        }
+        const empid = faculty.institutionId;
+        const scopusId = faculty.scopusId || "";
 
         // Get appraisal config for citation/hindex rates
         const config = await AppraisalConfig.findOne({ academicYearId });
@@ -2215,20 +2352,27 @@ exports.getScopusData = async (req, res) => {
         const previousYear = startYear - 1;
         const currentYear = startYear;
 
-        // ── Fetch from Scopus ──────────────────────────────────
-        // 1. Papers published in currentYear → sum their citedby-count
-        const papersCurrentYear     = await scopusFetchAllPapers(scopusId, String(currentYear));
-        const citationsCurrentYear  = papersCurrentYear.reduce(
-            (sum, e) => sum + parseInt(e["citedby-count"] || "0"), 0
-        );
+        // Fetch from our new AuthorCitations model instead of Scopus API
+        const AuthorCitations = require('../AuthorCitations/AuthorCitations.model');
+        const authorCitationsDoc = await AuthorCitations.findOne({ empid });
 
-        // 2. Cumulative papers up to end of previousYear → h-index previousYear
-        const papersUptoPrevYear = await scopusFetchAllPapers(scopusId, "1900-" + previousYear);
-        const hIndexPrevYear     = computeHIndex(papersUptoPrevYear);
+        let citationsCurrentYear = 0;
+        let hIndexPrevYear = 0;
+        let hIndexCurrentYear = 0;
 
-        // 3. Cumulative papers up to end of currentYear → h-index currentYear
-        const papersUptoCurrentYear = await scopusFetchAllPapers(scopusId, "1900-" + currentYear);
-        const hIndexCurrentYear     = computeHIndex(papersUptoCurrentYear);
+        if (authorCitationsDoc) {
+            citationsCurrentYear = (authorCitationsDoc.citations && authorCitationsDoc.citations.get)
+                ? (authorCitationsDoc.citations.get(String(currentYear)) || 0)
+                : (authorCitationsDoc.citations?.[String(currentYear)] || 0);
+
+            hIndexPrevYear = (authorCitationsDoc.hIndex && authorCitationsDoc.hIndex.get)
+                ? (authorCitationsDoc.hIndex.get(String(previousYear)) || 0)
+                : (authorCitationsDoc.hIndex?.[String(previousYear)] || 0);
+
+            hIndexCurrentYear = (authorCitationsDoc.hIndex && authorCitationsDoc.hIndex.get)
+                ? (authorCitationsDoc.hIndex.get(String(currentYear)) || 0)
+                : (authorCitationsDoc.hIndex?.[String(currentYear)] || 0);
+        }
 
         // ── Score Calculation ──────────────────────────────────
         const citationScore  = Math.round(citationsCurrentYear * citationRate * 10) / 10;
@@ -2270,14 +2414,13 @@ exports.getScopusData = async (req, res) => {
             success: true,
             data: {
                 scopusId,
-                papersInCurrentYear: papersCurrentYear.length,
                 citationsCurrentYear,
                 hIndexPrevYear,
                 hIndexCurrentYear,
                 hIndexRaise,
                 scores: {
-                    citationScore,   // 2.7
-                    hIndexPoints,    // 2.8
+                    citationScore,
+                    hIndexPoints,
                     total: Math.round((citationScore + hIndexPoints) * 10) / 10
                 },
                 ratesUsed: {
@@ -2291,16 +2434,6 @@ exports.getScopusData = async (req, res) => {
 
     } catch (err) {
         console.error("Scopus Data Fetch Error:", err);
-
-        // Friendly error for Scopus API failures
-        if (err.message?.includes("Scopus API error")) {
-            return res.status(502).json({
-                success: false,
-                message: "Could not reach Scopus API. Please try again later.",
-                detail: err.message
-            });
-        }
-
         res.status(500).json({ success: false, message: err.message });
     }
 };
