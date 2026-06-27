@@ -1,0 +1,7 @@
+﻿Faculty Employee ID,Faculty Name,Academic Year,College,PAN Number,DOI,"Publication Scope
+(National/International)","Journal Quartile
+Q1/Q2/Q3/Q4","Journal Type
+SCI/SCIE/ESCI/WoS/SCOPUS",Paper Title,Journal Name,Volume,Issue,Published Month,Published Year,H Index,JCR Impact Factor,Total Authors,Faculty  Author Position,"Aditya Co-author positions ( if existing )
+Emp Id only",,,,,,,
+,,,,,,,,,,,,,,,,,,,1,2,3,4,5,6,7,8
+5741,k,2025-2026,AUS,ABC5689652,10.52698752,National,Q1,SCI,Sample title,sample JN,25,10,MAY,2025,5,20,4,2,5660,,5694,,,,,
