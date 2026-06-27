@@ -76,10 +76,10 @@ const getDiscrepancies = async (req, res) => {
                 // HOD resolves proctoring assigned count discrepancies
                 query.$or = [
                     { assignedRole: "HOD" },
-                    { 
-                        section: "PROCTORING", 
-                        proctoringType: "ASSIGNED_COUNT", 
-                        assignedRole: { $in: ["UNIPRIME", "EXAMSECTION"] } 
+                    {
+                        section: "PROCTORING",
+                        proctoringType: "ASSIGNED_COUNT",
+                        assignedRole: { $in: ["UNIPRIME", "EXAMSECTION"] }
                     }
                 ];
             } else {
@@ -154,7 +154,7 @@ const resolveDiscrepancy = async (req, res) => {
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
         const isAdmin = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME") || userRoles.includes("FEEDBACK COORDINATOR");
         const isHOD = userRoles.includes("HOD");
-        const hasAccess = isAdmin || 
+        const hasAccess = isAdmin ||
             userRoles.includes(disc.assignedRole?.toUpperCase()) ||
             (isHOD && disc.section === "PROCTORING" && disc.proctoringType === "ASSIGNED_COUNT");
 
