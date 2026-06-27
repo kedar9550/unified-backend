@@ -1,0 +1,10 @@
+﻿Faculty Employee ID,Faculty Name,Academic Year,PAN Number,"Type
+(Project/Consultancy)",Project/Consultancy Title,"Funding Agency
+(Aditya YES /NO)","Organization
+(Funding Agency)",Amount,Duration,Year,Month,"Project Status
+(Shortlisted/Sanctioned)",Principal Investigator/Co-Principal Investigator,"Aditya Co-Principal Investigators ( if existing )
+Emp Id only",,,,,,,,,,,,,,,
+,,,,,,,,,,,,,,1,,2,,3,,4,,5,,6,,7,,8,
+,,,,,,,,,,,,,,EMP ID,PI/co-PI,EMP ID,PI/co-PI,EMP ID,PI/co-PI,EMP ID,PI/co-PI,EMP ID,PI/co-PI,EMP ID,PI/co-PI,EMP ID,PI/co-PI,EMP ID,PI/co-PI
+5741,k,2025-2026,25698745639,Project,Sample Project Name,No,"Bits,Pilani",100000,5,2025,May,Shortlisted,Co-Principal Investigator,5660,PI,5694,co-PI,,,,,,,,,,,,
+5741,k,2025-2026,25698745639,Consultancy,Sample Project Name,No,"Bits,Pilani",100000,5,2025,May,Sanctioned,Co-Principal Investigator,5660,PI,5694,co-PI,,,,,,,,,,,,
