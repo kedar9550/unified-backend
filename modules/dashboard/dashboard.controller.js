@@ -1078,7 +1078,7 @@ exports.getFacultyDashboardData = async (req, res, next) => {
         chapters.forEach(item => {
             recentActivities.push({
                 type: 'Book Chapter',
-                title: item.title,
+                title: item.chapterTitle,
                 status: item.status,
                 createdAt: item.createdAt
             });
@@ -1105,7 +1105,7 @@ exports.getFacultyDashboardData = async (req, res, next) => {
 
         // Recent research submissions list formatted for a table
         const formattedResearchList = allResearchItems.map(item => ({
-            title: item.paperTitle || item.title || "Untitled",
+            title: item.paperTitle || item.title || item.chapterTitle || item.productName || (item.studentName ? `PhD Guiding - ${item.studentName}` : null) || "Untitled",
             type: item.type,
             year: item.academicYear?.year || "N/A",
             status: item.status,

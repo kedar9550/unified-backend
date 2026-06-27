@@ -33,6 +33,11 @@ exports.createOrUpdateEntry = async (req, res) => {
             return res.status(400).json({ success: false, message: "Academic Year is required." });
         }
 
+        const ayRecord = await AcademicYear.findById(academicYear);
+        if (!ayRecord) {
+            return res.status(400).json({ success: false, message: "Invalid Academic Year selected." });
+        }
+
         if (!roles || !Array.isArray(roles)) {
             return res.status(400).json({ success: false, message: "Roles data is required." });
         }
