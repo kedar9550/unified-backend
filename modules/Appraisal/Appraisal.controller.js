@@ -1010,8 +1010,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const savedHIndexRemarks = appraisal ? (appraisal.research.scopusHIndexRemarks || "") : "";
 
         const citationRateVal = config?.research?.citationRate ?? 0.2;
+        const hRateLow = config?.research?.hIndexRateLow ?? 1;
+        const hRateMid = config?.research?.hIndexRateMid ?? 2;
+        const hRateHigh = config?.research?.hIndexRateHigh ?? 4;
         const citationPointsVal = savedCitations !== null ? Math.round(savedCitations * citationRateVal * 10) / 10 : 0;
-        const hIndexPointsVal = computeHIndexPoints(savedHIndexPrevYear || 0, savedHIndexCurrentYear || 0);
+        const hIndexPointsVal = computeHIndexPoints(savedHIndexPrevYear || 0, savedHIndexCurrentYear || 0, hRateLow, hRateMid, hRateHigh);
 
         const savedCitationPoints = savedCitations !== null ? citationPointsVal : (appraisal ? appraisal.research.scopusCitationScore : 0);
         const savedHIndexPoints = (savedHIndexPrevYear !== null && savedHIndexCurrentYear !== null) ? hIndexPointsVal : (appraisal ? appraisal.research.scopusHIndexScore : 0);
@@ -1711,9 +1714,6 @@ exports.getPendingRNDAppraisals = async (req, res) => {
 
                         if (citationsCurrentYear !== null && appraisal.research.scopusCitations !== citationsCurrentYear) {
                             appraisal.research.scopusCitations = citationsCurrentYear;
-                            const config = await AppraisalConfig.findOne({ academicYearId: appraisal.academicYearId });
-                            const citationRate = config?.research?.citationRate ?? 0.2;
-                            appraisal.research.scopusCitationScore = Math.round(citationsCurrentYear * citationRate * 10) / 10;
                             modified = true;
                         }
                         if (hIndexPrevYear !== null && appraisal.research.hIndexPrevYear !== hIndexPrevYear) {
@@ -1724,8 +1724,19 @@ exports.getPendingRNDAppraisals = async (req, res) => {
                             appraisal.research.hIndexCurrentYear = hIndexCurrentYear;
                             modified = true;
                         }
-                        if (modified && appraisal.research.hIndexPrevYear !== null && appraisal.research.hIndexCurrentYear !== null) {
-                            appraisal.research.scopusHIndexScore = computeHIndexPoints(appraisal.research.hIndexPrevYear, appraisal.research.hIndexCurrentYear);
+                        
+                        if (modified) {
+                            const config = await AppraisalConfig.findOne({ academicYearId: appraisal.academicYearId });
+                            if (appraisal.research.scopusCitations !== null) {
+                                const citationRate = config?.research?.citationRate ?? 0.2;
+                                appraisal.research.scopusCitationScore = Math.round(appraisal.research.scopusCitations * citationRate * 10) / 10;
+                            }
+                            if (appraisal.research.hIndexPrevYear !== null && appraisal.research.hIndexCurrentYear !== null) {
+                                const hRateLow = config?.research?.hIndexRateLow ?? 1;
+                                const hRateMid = config?.research?.hIndexRateMid ?? 2;
+                                const hRateHigh = config?.research?.hIndexRateHigh ?? 4;
+                                appraisal.research.scopusHIndexScore = computeHIndexPoints(appraisal.research.hIndexPrevYear, appraisal.research.hIndexCurrentYear, hRateLow, hRateMid, hRateHigh);
+                            }
                         }
 
                         if (modified) {
@@ -2306,14 +2317,18 @@ function computeHIndex(entries) {
  *   5 < h ≤ 10 → 2 pts per step
  *   h > 10 → 4 pts per step
  */
-function computeHIndexPoints(hPrev, hNew) {
-    let pts = 0;
-    for (let h = hPrev + 1; h <= hNew; h++) {
-        if (h <= 5)       pts += 1;
-        else if (h <= 10) pts += 2;
-        else              pts += 4;
+function computeHIndexPoints(hPrev, hNew, hRateLow = 1, hRateMid = 2, hRateHigh = 4) {
+    if (hNew <= hPrev) return 0;
+    const raise = hNew - hPrev;
+    let rate = 0;
+    if (hNew < 5) {
+        rate = hRateLow;
+    } else if (hNew >= 5 && hNew <= 10) {
+        rate = hRateMid;
+    } else {
+        rate = hRateHigh;
     }
-    return pts;
+    return raise * rate;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2377,7 +2392,7 @@ exports.getScopusData = async (req, res) => {
         // ── Score Calculation ──────────────────────────────────
         const citationScore  = Math.round(citationsCurrentYear * citationRate * 10) / 10;
         const hIndexRaise    = Math.max(0, hIndexCurrentYear - hIndexPrevYear);
-        const hIndexPoints   = computeHIndexPoints(hIndexPrevYear, hIndexCurrentYear);
+        const hIndexPoints   = computeHIndexPoints(hIndexPrevYear, hIndexCurrentYear, hRateLow, hRateMid, hRateHigh);
 
         // ── Save to Appraisal document ─────────────────────────
         const appraisal = await Appraisal.findOne({ facultyId, academicYearId });
