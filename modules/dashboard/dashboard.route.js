@@ -8,6 +8,6 @@ router.get('/feedback', protect, authorize('FEEDBACK COORDINATOR', 'UNIPRIME', '
 router.get('/exam', protect, authorize('EXAMSECTION', 'UNIPRIME', 'ADMIN'), dashboardController.getExamDashboardData);
 router.get('/hod', protect, authorize('HOD'), dashboardController.getHODDashboardData);
 router.get('/research-dean', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), dashboardController.getResearchDeanDashboardData);
-router.get('/faculty', protect, authorize('FACULTY'), dashboardController.getFacultyDashboardData);
+router.get('/faculty', protect, authorize('FACULTY', 'STAFF'), dashboardController.getFacultyDashboardData);
 
 module.exports = router;
