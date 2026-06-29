@@ -356,6 +356,14 @@ exports.uploadStudentCSV = async (req, res) => {
 
     console.log(`Validated ${csvRows.length} rows for processing.`);
 
+    if (csvRows.length === 0) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid document template or empty file. No valid student Roll Numbers found."
+      });
+    }
+
 
         // Fetch all departments for quick lookup
         const departments = await Department.find({});
@@ -479,6 +487,13 @@ exports.bulkUpdateStudentCSV = async (req, res) => {
       }
     });
 
+    if (csvRows.length === 0) {
+      if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid document template or empty file. No valid student Roll Numbers found."
+      });
+    }
 
         for (const row of csvRows) {
           try {
