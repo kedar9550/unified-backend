@@ -162,8 +162,7 @@ exports.removeEmployeeFromRole = async (req, res, next) => {
         const role = await Role.findById(id);
         const user = await Employee.findById(userId);
         if (role && user) {
-            const identityRoleName = getIdentityBasedRoleName(user.userType, user.designation);
-            if (role.defaultRole || role.name === identityRoleName) {
+            if (role.defaultRole) {
                 return res.status(400).json({
                     success: false,
                     message: 'Cannot remove a default identity-based role'
@@ -227,37 +226,23 @@ exports.syncEmployeeRoles = async (req, res, next) => {
         const user = await Employee.findById(userId);
         if (!user) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-        // Get the expected identity-based default role
-        const identityRoleName = getIdentityBasedRoleName(user.userType, user.designation);
-        let idRole = await Role.findOne({ name: identityRoleName, app });
-        if (!idRole) {
-            idRole = await Role.create({ name: identityRoleName, app, defaultRole: true, description: `System Role` });
-        }
-
-        // Ensure the identity-based default role is present in finalRoleIds
-        let finalRoleIds = [...roleIds];
-        if (!finalRoleIds.includes(idRole._id.toString())) {
-            finalRoleIds.push(idRole._id.toString());
-        }
-
         // 2. Identify default roles and HOD in the final selection
-        const selectedRoles = await Role.find({ _id: { $in: finalRoleIds } });
+        const selectedRoles = await Role.find({ _id: { $in: roleIds } });
         const selectedDefaultRoles = selectedRoles.filter(r => r.defaultRole);
         const hodRole = selectedRoles.find(r => r.name === 'HOD');
 
-        // 3. Enforcement: Exactly one default role (which must be the identity one)
-        const otherDefaultRoles = selectedDefaultRoles.filter(r => r._id.toString() !== idRole._id.toString());
-        if (otherDefaultRoles.length > 0) {
+        // 3. Enforcement: Exactly one default role
+        if (selectedDefaultRoles.length !== 1) {
             return res.status(400).json({
                 success: false,
-                message: `Employee's default identity role is ${identityRoleName}. Other default roles (${otherDefaultRoles.map(r => r.name).join(', ')}) cannot be assigned.`
+                message: `An employee must have exactly one default identity role (e.g., STUDENT, FACULTY, STAFF, TECHNICIAN). You provided ${selectedDefaultRoles.length}.`
             });
         }
 
         // 4. Update mappings
         await EmployeeAppRole.deleteMany({ userId, app });
 
-        const mappings = finalRoleIds.map(roleId => {
+        const mappings = roleIds.map(roleId => {
             const mapping = {
                 userId,
                 role: roleId,
@@ -269,6 +254,21 @@ exports.syncEmployeeRoles = async (req, res, next) => {
             }
             return mapping;
         });
+        
+        // Ensure no other user remains HOD for these departments
+        if (hodRole && hodDepartments && hodDepartments.length > 0) {
+            await EmployeeAppRole.updateMany(
+                { role: hodRole._id, userId: { $ne: userId } },
+                { $pullAll: { departments: hodDepartments } }
+            );
+            
+            // Clean up: if any user now has an empty departments array for HOD role, remove that role mapping entirely
+            await EmployeeAppRole.deleteMany({
+                role: hodRole._id,
+                userId: { $ne: userId },
+                departments: { $size: 0 }
+            });
+        }
         
         await EmployeeAppRole.insertMany(mappings);
 
