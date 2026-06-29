@@ -1,17 +1,17 @@
 const Employee = require('../employee/employee.model');
 const Student = require('../StudentData/Studentdata.model');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 
-// Mask Email Utility
-const maskEmail = (email) => {
-    if (!email) return "";
-    const [user, domain] = email.split("@");
-    if (user.length <= 2) return `${user[0]}***@${domain}`;
-    return `${user.substring(0, 2)}***${user.substring(user.length - 2)}@${domain}`;
+// Mask Mobile Utility
+const maskMobile = (mobile) => {
+    if (!mobile) return "";
+    const str = String(mobile);
+    if (str.length <= 4) return str;
+    return `******${str.substring(str.length - 4)}`;
 };
 
-// @desc    Check if Employee/Student exists and return masked email
+// @desc    Check if Employee/Student exists and return masked mobile
 // @route   POST /api/auth/check-employee
 // @access  Public
 exports.checkEmployee = async (req, res, next) => {
@@ -25,29 +25,29 @@ exports.checkEmployee = async (req, res, next) => {
         // Check Employee
         let user = await Employee.findOne({ institutionId: employeeCode });
         let userType = "Employee";
-        let email = "";
+        let mobile = "";
 
         if (!user) {
             // Check Student
             user = await Student.findOne({ rollNo: employeeCode.toUpperCase() });
             userType = "Student";
-            if (user) email = user.contactInfo?.emailId;
+            if (user) mobile = user.contactInfo?.mobileNumber;
         } else {
-            email = user.email;
+            mobile = user.phone;
         }
 
         if (!user) {
             return res.status(404).json({ success: false, message: "ID not found" });
         }
 
-        if (!email) {
-            return res.status(400).json({ success: false, message: "No email associated with this ID. Please contact admin." });
+        if (!mobile) {
+            return res.status(400).json({ success: false, message: "No mobile number associated with this ID. Please contact admin." });
         }
 
         res.status(200).json({
             success: true,
-            message: `ID valid. OTP will be sent to ${maskEmail(email)}`,
-            email: email, // Optionally send the full email if frontend needs it for the next step
+            message: "ID valid. OTP will be sent to " + maskMobile(mobile),
+            mobile: mobile,
             userType
         });
     } catch (error) {
@@ -55,28 +55,43 @@ exports.checkEmployee = async (req, res, next) => {
     }
 };
 
-// @desc    Send OTP to email
+// @desc    Send OTP to mobile
 // @route   POST /api/auth/send-otp
 // @access  Public
 exports.sendOtp = async (req, res, next) => {
     try {
-        const { employeeCode, email } = req.body;
+        const { employeeCode, mobile, email } = req.body;
 
-        if (!employeeCode || !email) {
-            return res.status(400).json({ success: false, message: "ID and Email are required" });
+        // Accept mobile or fallback to email (if frontend still sends 'email' key)
+        const contactValue = mobile || email;
+
+        if (!employeeCode || !contactValue) {
+            return res.status(400).json({ success: false, message: "ID and Mobile Number are required" });
         }
 
         // Find user
-        let user = await Employee.findOne({ institutionId: employeeCode, email });
+        let user = await Employee.findOne({ institutionId: employeeCode, phone: contactValue });
         let userType = "Employee";
 
         if (!user) {
-            user = await Student.findOne({ rollNo: employeeCode.toUpperCase(), "contactInfo.emailId": email });
+            user = await Student.findOne({ rollNo: employeeCode.toUpperCase(), "contactInfo.mobileNumber": contactValue });
             userType = "Student";
         }
 
+        // Fallback for old frontend behavior
         if (!user) {
-            return res.status(404).json({ success: false, message: "User not found or email mismatch" });
+            user = await Employee.findOne({ institutionId: employeeCode, email: contactValue });
+            if (!user) {
+                user = await Student.findOne({ rollNo: employeeCode.toUpperCase(), "contactInfo.emailId": contactValue });
+                userType = "Student";
+            }
+            if (user) {
+                return res.status(400).json({ success: false, message: "Please provide the registered mobile number, not email." });
+            }
+        }
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: "User not found or mobile mismatch" });
         }
 
         // Generate 6 digit OTP
@@ -93,36 +108,21 @@ exports.sendOtp = async (req, res, next) => {
         }
         await user.save();
 
-        // Send Email
-        const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true,
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS
-            }
-        });
+        // Send Mobile SMS
+        const name = user.name || (userType === "Student" ? user.studentName : "User");
+        const smsApiUrl = "https://pgapi.vispl.in/fe/api/v1/multiSend?username=aditrpg1.trans&password=Ad1tya@1234&unicode=false&from=ADIUNV&to=" + contactValue + "&text=Dear+" + encodeURIComponent(name) + ",%0AThank+you+for+reaching+out+to+us.+%0ATo+verify+your+request+and+proceed+with+further+actions,+please+use+the+following+One-Time+Password+(OTP):" + otp + "+@ADITYA+UNIVERSITY";
 
-        const mailOptions = {
-            from: process.env.EMAIL_USER,
-            to: email,
-            subject: 'Your Password Reset OTP',
-            text: `Your OTP for password reset is: ${otp}. It is valid for 10 minutes.`
-        };
-
-        // In development, we might not have real credentials, so we log it
-        if (process.env.NODE_ENV === 'development' && (!process.env.EMAIL_USER || !process.env.EMAIL_PASS)) {
-            console.log(`[AUTH] EMAIL SIMULATION - To: ${email}, OTP: ${otp}`);
-        } else {
-            try {
-                console.log(`[AUTH] Attempting to send email to ${email}...`);
-                await transporter.sendMail(mailOptions);
-                console.log(`[AUTH] Email sent successfully to ${email}`);
-            } catch (mailError) {
-                console.error(`[AUTH] Error sending email: ${mailError.message}`);
-                return res.status(500).json({ success: false, message: "Error sending OTP email. Please check server logs." });
+        try {
+            console.log("[AUTH] Attempting to send SMS to " + contactValue + "...");
+            const response = await axios.get(smsApiUrl);
+            if (response.status === 200) {
+                console.log("[AUTH] SMS sent successfully to " + contactValue);
+            } else {
+                return res.status(400).json({ success: false, message: "Failed to send OTP SMS." });
             }
+        } catch (smsError) {
+            console.error("[AUTH] Error sending SMS: " + smsError.message);
+            return res.status(500).json({ success: false, message: "Error sending OTP SMS. Please check server logs." });
         }
 
         res.status(200).json({ success: true, message: "OTP sent successfully" });
