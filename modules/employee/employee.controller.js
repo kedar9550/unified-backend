@@ -22,7 +22,7 @@ const isProd = process.env.NODE_ENV === 'production';
  */
 const registerUser = async (req, res) => {
     try {
-        const { fullname, id, department, designation, email, phone, password } = req.body;
+        const { fullname, id, department, designation, email, phone, password, userType } = req.body;
 
         if (!fullname || !id || !department || !designation || !email || !phone || !password) {
             return res.status(400).json({ message: "All fields required" });
@@ -76,11 +76,16 @@ const registerUser = async (req, res) => {
 
         const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
         let roleName = "STAFF";
-        const checkDesig = (designation || "").toLowerCase();
-        if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) {
-            roleName = "FACULTY";
-        } else if (/technician|programmer/i.test(checkDesig)) {
-            roleName = "TECHNICIAN";
+        
+        if (userType) {
+            roleName = userType.toUpperCase();
+        } else {
+            const checkDesig = (designation || "").toLowerCase();
+            if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) {
+                roleName = "FACULTY";
+            } else if (/technician|programmer/i.test(checkDesig)) {
+                roleName = "TECHNICIAN";
+            }
         }
 
         let defaultRole = await Role.findOne({ name: roleName, app: appName });
@@ -335,6 +340,36 @@ const searchUser = async (req, res) => {
                     localField: 'userAppRoles.role',
                     foreignField: '_id',
                     as: 'roles'
+                }
+            },
+            {
+                $addFields: {
+                    roles: {
+                        $map: {
+                            input: "$roles",
+                            as: "role",
+                            in: {
+                                $mergeObjects: [
+                                    "$$role",
+                                    {
+                                        departments: {
+                                            $let: {
+                                                vars: {
+                                                    uar: {
+                                                        $arrayElemAt: [
+                                                            { $filter: { input: "$userAppRoles", as: "u", cond: { $eq: ["$$u.role", "$$role._id"] } } },
+                                                            0
+                                                        ]
+                                                    }
+                                                },
+                                                in: "$$uar.departments"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
                 }
             },
             {
@@ -734,6 +769,36 @@ const getAllEmployees = async (req, res) => {
                     localField: 'userAppRoles.role',
                     foreignField: '_id',
                     as: 'roles'
+                }
+            },
+            {
+                $addFields: {
+                    roles: {
+                        $map: {
+                            input: "$roles",
+                            as: "role",
+                            in: {
+                                $mergeObjects: [
+                                    "$$role",
+                                    {
+                                        departments: {
+                                            $let: {
+                                                vars: {
+                                                    uar: {
+                                                        $arrayElemAt: [
+                                                            { $filter: { input: "$userAppRoles", as: "u", cond: { $eq: ["$$u.role", "$$role._id"] } } },
+                                                            0
+                                                        ]
+                                                    }
+                                                },
+                                                in: "$$uar.departments"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    }
                 }
             },
             {
