@@ -330,6 +330,15 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const previousHIndexYear = startYear - 1;
         const currentHIndexYear = startYear;
 
+        // Find all academic year IDs sharing the same year string due to program-specific documents
+        const matchingYearDocs = acYearDoc
+            ? await AcademicYear.find({ year: acYearDoc.year }).select("_id")
+            : [];
+        const matchingYearIds = matchingYearDocs.length > 0
+            ? matchingYearDocs.map(y => y._id)
+            : [academicYearId];
+
+
         // Check if there is an active saved Appraisal
         let appraisal = await Appraisal.findOne({ facultyId, academicYearId });
 
@@ -374,7 +383,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // Query by faculty's institutionId
         const subjectResults = await FacultySubjectResult.find({
             facultyId: faculty.institutionId,
-            academicYearId
+            academicYearId: { $in: matchingYearIds }
         }).populate("branchId", "code");
 
         // 1.1 THEORY Courses Pass Percentage Points
@@ -426,8 +435,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // 1.2 Course Feedback
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
-            academicYearId,
-            subjectType: "Theory"
+            academicYearId: { $in: matchingYearIds },
+            subjectType: { $in: ["Theory", "THEORY"] }
         }).populate("branchId", "code");
 
         // Filter: If both Phase 1 and Phase 2 feedbacks exist for a course/section, consider Phase 2. Otherwise, consider whichever is present.

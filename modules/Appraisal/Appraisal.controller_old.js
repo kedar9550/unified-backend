@@ -339,6 +339,17 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
         }
 
+        const AcademicYear = require('../academicYear/academicYear.model');
+        const acYearDoc = await AcademicYear.findById(academicYearId);
+
+        // Find all academic year IDs sharing the same year string due to program-specific documents
+        const matchingYearDocs = acYearDoc
+            ? await AcademicYear.find({ year: acYearDoc.year }).select("_id")
+            : [];
+        const matchingYearIds = matchingYearDocs.length > 0
+            ? matchingYearDocs.map(y => y._id)
+            : [academicYearId];
+
         // ==========================================
         // DYNAMIC CALCULATIONS
         // ==========================================
@@ -347,7 +358,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // Query by faculty's institutionId
         const subjectResults = await FacultySubjectResult.find({
             facultyId: faculty.institutionId,
-            academicYearId
+            academicYearId: { $in: matchingYearIds }
         }).populate("branchId", "code");
 
         // 1.1 THEORY Courses Pass Percentage Points
@@ -399,7 +410,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // 1.2 Course Feedback
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
-            academicYearId
+            academicYearId: { $in: matchingYearIds },
+            subjectType: { $in: ["Theory", "THEORY"] }
         }).populate("branchId", "code");
 
         // Filter: If both Phase 1 and Phase 2 feedbacks exist for a course/section, consider Phase 2. Otherwise, consider whichever is present.
