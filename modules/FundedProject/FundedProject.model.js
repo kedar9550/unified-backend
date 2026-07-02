@@ -27,8 +27,8 @@ const FundedProjectSchema = new mongoose.Schema({
     panNumber: { type: String },
     
     title: { type: String, required: true },
-    duration: { type: String, required: true },
-    fundingAgency: { type: String, required: true },
+    duration: { type: String },
+    fundingAgency: { type: String },
     fundingAgencyAditya: { type: String, enum: ['Yes', 'No'], default: 'No' },
     scheme: { type: String },
     otherInvestigators: { type: String },
@@ -48,12 +48,12 @@ const FundedProjectSchema = new mongoose.Schema({
     },
     recurring: { type: String },
     nonRecurring: { type: String },
-    sanctionedAmount: { type: String, required: true },
-    sanctionDate: { type: Date, required: true },
-    applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
+    sanctionedAmount: { type: String },
+    sanctionDate: { type: Date },
+    applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
     
     // Files
-    sanctionOrder: { type: String, required: true },
+    sanctionOrder: { type: String },
     
     status: {
         type: String,
