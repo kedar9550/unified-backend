@@ -27,13 +27,14 @@ const ConsultancySchema = new mongoose.Schema({
     panNumber: { type: String },
     
     title: { type: String, required: true },
-    fundingAgency: { type: String, required: true },
-    fundingAdityaUniversity: { type: String, enum: ['Yes', 'No'], required: true },
-    amount: { type: String, required: true },
+    fundingAgency: { type: String },
+    fundingAdityaUniversity: { type: String, enum: ['Yes', 'No'] },
+    amount: { type: String },
     duration: { type: String },
     month: { type: String },
     year: { type: String },
-    applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
+    applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
+    organization: { type: String }, // Legacy field fallback
     investigatorType: { type: String, enum: ['Principal Investigator (PI)', 'Co-Principal Investigator (Co-PI)'] },
     principalInvestigator: {
         type: String,
@@ -69,9 +70,14 @@ const ConsultancySchema = new mongoose.Schema({
     rndComment: { type: String },
     approvedAmount: { type: Number },
     
-    createdAt: {
-        type: Date,
-        default: Date.now
+});
+
+ConsultancySchema.pre('save', function() {
+    if (!this.fundingAgency && this.organization) {
+        this.fundingAgency = this.organization;
+    }
+    if (!this.fundingAdityaUniversity) {
+        this.fundingAdityaUniversity = 'No';
     }
 });
 
