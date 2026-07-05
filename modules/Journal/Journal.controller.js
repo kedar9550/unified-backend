@@ -124,6 +124,33 @@ exports.createJournal = async (req, res) => {
         }
 
         await journal.save();
+
+        // Target: Send notification to the applicant's HOD
+        try {
+            const { getHODByDepartment } = require('../../utils/hodHelper');
+            const NotificationService = require('../notification/notification.service');
+            
+            // Re-fetch applicant to ensure department is populated or available
+            const emp = await Employee.findById(req.user.userId);
+            if (emp && (emp.coreDepartment || emp.department)) {
+                const hodUserId = await getHODByDepartment(emp.coreDepartment || emp.department);
+                if (hodUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: hodUserId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'ACTION_REQUIRED',
+                        title: 'Journal Approval Required',
+                        message: `${emp.name || 'A faculty member'} has submitted a new Journal: ${journal.paperTitle}`,
+                        link: `/research/approvals` // Use correct frontend route for approvals
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send journal notification:", notifErr);
+            // Non-blocking error
+        }
+
         res.status(201).json({ success: true, data: journal });
     } catch (err) {
         console.error("Create Journal Error:", err);

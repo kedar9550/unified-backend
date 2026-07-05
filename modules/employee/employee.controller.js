@@ -84,7 +84,7 @@ const registerUser = async (req, res) => {
             if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) {
                 roleName = "FACULTY";
             } else if (/technician|programmer/i.test(checkDesig)) {
-                roleName = "TECHNICIAN";
+                roleName = "TECHNICAL_STAFF";
             }
         }
 
@@ -506,7 +506,7 @@ const bulkRegisterUser = async (req, res) => {
                 let roleName = "STAFF";
                 const checkDesig = (ecapDesig || "").toLowerCase();
                 if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) roleName = "FACULTY";
-                else if (/technician|programmer/i.test(checkDesig)) roleName = "TECHNICIAN";
+                else if (/technician|programmer/i.test(checkDesig)) roleName = "TECHNICAL_STAFF";
 
                 let defaultRole = await Role.findOne({ name: roleName, app: appName });
                 if (!defaultRole) defaultRole = await Role.create({ name: roleName, app: appName, defaultRole: true, description: `Default role for ${roleName}` });

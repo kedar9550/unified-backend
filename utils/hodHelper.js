@@ -41,4 +41,19 @@ const getHODDepartments = async (user) => {
     return deptIds;
 };
 
-module.exports = { getHODDepartments };
+const getHODByDepartment = async (departmentId) => {
+    const hodRoleDoc = await Role.findOne({ 
+        name: 'HOD', 
+        app: process.env.APP_NAME || 'UNIFIED_SYSTEM' 
+    });
+    if (!hodRoleDoc) return null;
+    
+    const mapping = await UserAppRole.findOne({ 
+        role: hodRoleDoc._id,
+        departments: departmentId 
+    });
+    
+    return mapping ? mapping.userId : null;
+};
+
+module.exports = { getHODDepartments, getHODByDepartment };

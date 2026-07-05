@@ -210,7 +210,7 @@ const getIdentityBasedRoleName = (userType, designation) => {
     if (userType === "Student") return "STUDENT";
     const desig = (designation || "").toLowerCase();
     if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(desig)) return "FACULTY";
-    if (/technician|programmer/i.test(desig)) return "TECHNICIAN";
+    if (/technician|programmer/i.test(desig)) return "TECHNICAL_STAFF";
     return "STAFF";
 };
 
@@ -235,7 +235,7 @@ exports.syncEmployeeRoles = async (req, res, next) => {
         if (selectedDefaultRoles.length !== 1) {
             return res.status(400).json({
                 success: false,
-                message: `An employee must have exactly one default identity role (e.g., STUDENT, FACULTY, STAFF, TECHNICIAN). You provided ${selectedDefaultRoles.length}.`
+                message: `An employee must have exactly one default identity role (e.g., STUDENT, FACULTY, STAFF, TECHNICAL_STAFF). You provided ${selectedDefaultRoles.length}.`
             });
         }
 
