@@ -218,6 +218,10 @@ exports.redirectUrl = async (req, res) => {
         utility.clicks += 1;
         await utility.save();
 
+        if (req.headers.accept && req.headers.accept.includes('application/json')) {
+            return res.status(200).json({ success: true, longUrl: utility.longUrl });
+        }
+
         res.redirect(utility.longUrl);
     } catch (error) {
         console.error('Redirection error:', error);
