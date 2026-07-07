@@ -27,12 +27,7 @@ app.use(helmet({
 }));
 
 // 2. CORS: Cross-Origin Resource Sharing
-const corsOptions = {
-    origin: process.env.FRONTEND_URI || 'http://localhost:5173',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-};
+const { corsOptions } = require('./config/cors');
 app.use(cors(corsOptions));
 
 // 3. Rate Limiting: Prevent Brute Force / DDoS

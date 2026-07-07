@@ -5,12 +5,9 @@ let io;
 
 module.exports = {
     init: (httpServer) => {
+        const { corsOptions } = require("./cors");
         io = new Server(httpServer, {
-            cors: {
-                origin: process.env.FRONTEND_URI || "http://localhost:5173",
-                methods: ["GET", "POST", "PUT", "DELETE"],
-                credentials: true,
-            },
+            cors: corsOptions,
         });
 
         // Middleware for authentication
