@@ -376,7 +376,7 @@ exports.getServiceEmps = async (req, res, next) => {
       roleType: "SERVICE_EMP",
       isActive: true
     })
-      .populate("employee", "name institutionId email designation")
+      .populate("employee", "name institutionId email designation phone")
       .lean();
 
     res.json({ success: true, data: emps });
