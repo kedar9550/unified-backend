@@ -128,7 +128,7 @@ exports.softDeleteMyUtility = async (req, res) => {
 exports.getAllUtilitiesAdmin = async (req, res) => {
     try {
         const utilities = await Utility.find()
-            .populate('userId', 'name employeeId designation')
+            .populate('userId', 'name employeeId institutionId designation')
             .sort('-createdAt');
         res.status(200).json({ success: true, data: utilities });
     } catch (error) {
