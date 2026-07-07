@@ -118,6 +118,8 @@ app.use('/api/appraisal', require('./modules/Appraisal/Appraisal.route'));
 app.use('/api/leadership-roles', require('./modules/leadershipRole/leadershipRole.route'));
 app.use('/api/notifications', require('./modules/notification/notification.routes'));
 app.use('/api/utilities', require('./modules/utilities/utilities.route'));
+app.use('/api/service-desk/services', require('./modules/serviceDesk/service.route'));
+app.use('/api/service-desk/tickets', require('./modules/serviceDesk/ticket.route'));
 
 // --- Error Handling ---
 

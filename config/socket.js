@@ -43,6 +43,21 @@ module.exports = {
                 console.log(`Socket ${socket.id} joined room ${socket.user.userId}`);
             }
 
+            // Service Desk — join/leave a per-ticket room so addComment's
+            // io.to(`service-desk-ticket-${ticket._id}`).emit("new_message", ...)
+            // (ticket.controller.js) actually reaches everyone viewing that ticket.
+            socket.on("join_ticket_room", (ticketId) => {
+                if (!ticketId) return;
+                socket.join(`service-desk-ticket-${ticketId}`);
+                console.log(`Socket ${socket.id} joined ticket room ${ticketId}`);
+            });
+
+            socket.on("leave_ticket_room", (ticketId) => {
+                if (!ticketId) return;
+                socket.leave(`service-desk-ticket-${ticketId}`);
+                console.log(`Socket ${socket.id} left ticket room ${ticketId}`);
+            });
+
             socket.on("disconnect", () => {
                 console.log(`Socket disconnected: ${socket.id}`);
             });
