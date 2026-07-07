@@ -253,7 +253,7 @@ exports.getTicketById = async (req, res, next) => {
 // @access SERVICE_ADMIN of the ticket's service
 exports.assignTicket = async (req, res, next) => {
   try {
-    const { employeeIds, priority } = req.body;
+    const { employeeIds, priority, dueDate } = req.body;
 
     if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
       res.status(400);
@@ -285,6 +285,7 @@ exports.assignTicket = async (req, res, next) => {
     }
 
     if (priority) ticket.priority = priority;
+    if (dueDate) ticket.dueDate = dueDate;
 
     // Merge: keep existing rows for employees already assigned (don't
     // reset their progress), add fresh rows for newly added employees.
@@ -555,6 +556,37 @@ exports.getComments = async (req, res, next) => {
       .lean();
 
     res.json({ success: true, data: comments });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ---------------------------------------------------------------------
+// Activities
+// ---------------------------------------------------------------------
+
+// @desc   Fetch activity timeline for a ticket
+// @route  GET /api/service-desk/tickets/:id/activities
+exports.getTicketActivities = async (req, res, next) => {
+  try {
+    const ticket = await Ticket.findById(req.params.id).lean();
+    if (!ticket) {
+      res.status(404);
+      return next(new Error("Ticket not found"));
+    }
+
+    const allowed = await hasTicketAccess(req, ticket);
+    if (!allowed) {
+      res.status(403);
+      return next(new Error("Access denied"));
+    }
+
+    const activities = await Activity.find({ ticket: ticket._id })
+      .populate("performedBy", "name")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    res.json({ success: true, data: activities });
   } catch (error) {
     next(error);
   }

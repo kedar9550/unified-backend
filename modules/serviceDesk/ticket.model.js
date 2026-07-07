@@ -85,6 +85,11 @@ const ticketSchema = new mongoose.Schema({
     default: "MEDIUM"
   },
 
+  dueDate: {
+    type: Date,
+    default: null
+  },
+
   // Ticket-level status is a DERIVED summary of the assignedTo[] rows
   // below (the controller recalculates this every time an emp's row
   // changes — it is not set directly by an emp action):

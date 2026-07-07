@@ -19,6 +19,7 @@ const {
   updateAssignmentStatus,
   addComment,
   getComments,
+  getTicketActivities,
   downloadAttachment
 } = require("./ticket.controller");
 
@@ -104,10 +105,11 @@ router.post("/:id/reject", requireServiceAdminOfTicket, adminRejectTicket);
 router.put("/:id/my-status", updateAssignmentStatus);
 
 // ---------------------------------------------------------------------
-// Chat (access checked inline via hasTicketAccess)
+// Chat & Activities (access checked inline via hasTicketAccess)
 // ---------------------------------------------------------------------
 router.post("/:id/comments", addComment);
 router.get("/:id/comments", getComments);
+router.get("/:id/activities", getTicketActivities);
 
 // ---------------------------------------------------------------------
 // Attachments (access checked inline via hasTicketAccess)
