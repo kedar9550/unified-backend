@@ -90,7 +90,7 @@ const uploadUnifiedResults = async (req, res) => {
             try {
                 // 1. Validate mandatory fields
                 if (!facultyid) throw new Error("Faculty ID is missing");
-                
+
                 const searchId = facultyid.trim();
                 const cleanId = searchId.replace(/\s+/g, "");
                 const faculty = await Employee.findOne({
@@ -134,7 +134,7 @@ const uploadUnifiedResults = async (req, res) => {
                 let programDoc = programCache[programName];
                 if (!programDoc) {
                     const escapedName = escapeRegex(programName);
-                    programDoc = await Program.findOne({ 
+                    programDoc = await Program.findOne({
                         $or: [
                             { name: { $regex: new RegExp(`^${escapedName}$`, "i") } },
                             { code: programName.toUpperCase() }
@@ -158,12 +158,12 @@ const uploadUnifiedResults = async (req, res) => {
                 let branchDoc = branchCache[branchCacheKey];
                 if (!branchDoc) {
                     const escapedBranchName = escapeRegex(branchName);
-                    branchDoc = await Branch.findOne({ 
+                    branchDoc = await Branch.findOne({
                         $or: [
                             { name: { $regex: new RegExp(`^${escapedBranchName}$`, "i") } },
                             { code: branchName.toUpperCase() }
                         ],
-                        programId: programDoc._id 
+                        programId: programDoc._id
                     });
                     if (!branchDoc) throw new Error(`Branch '${branchName}' not found for program '${programName}'`);
                     branchCache[branchCacheKey] = branchDoc;
@@ -206,10 +206,10 @@ const uploadUnifiedResults = async (req, res) => {
                     } else {
                         const num = Number(inputStr);
                         if (isNaN(num)) throw new Error(`Invalid semester number '${inputStr}' for SEM program`);
-                        
-                        semesterNumber = inputStr; 
+
+                        semesterNumber = inputStr;
                         const typeStr = num % 2 === 0 ? "EVEN" : "ODD";
-                        
+
                         let st = semTypeCache[typeStr];
                         if (!st) {
                             st = await SemesterType.findOne({ name: typeStr });
@@ -221,8 +221,8 @@ const uploadUnifiedResults = async (req, res) => {
                 } else if (programDoc.programPattern === "YEAR") {
                     const num = Number(inputStr);
                     if (isNaN(num)) throw new Error(`Invalid year number '${inputStr}' for YEAR program`);
-                    yearNumber = inputStr; 
-                    semesterTypeId = null; 
+                    yearNumber = inputStr;
+                    semesterTypeId = null;
                 } else {
                     throw new Error(`Unsupported program pattern '${programDoc.programPattern}'`);
                 }
@@ -241,7 +241,7 @@ const uploadUnifiedResults = async (req, res) => {
                         throw new Error(`Duplicate entry in CSV: Another faculty (ID: ${existingFacultyInCsv}) is also assigned to Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}'`);
                     }
                 }
-                
+
                 const query = {
                     academicYearId: ayId,
                     courseCode: trimmedCourseCode,
@@ -348,9 +348,9 @@ const getActiveStateForProgram = async (programId) => {
     const ay = await AcademicYear.findOne({
         isGlobalActive: true
     }).populate("programs.activeSemesterTypeId");
-    
+
     if (!ay) return null;
-    
+
     const progEntry = ay.programs.find(p => p.programId.toString() === programId.toString());
     if (!progEntry) return null;
 
@@ -378,19 +378,19 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
 
     // 2. Find the program entry in THIS specific academic year document
     const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
-    
+
     // 3. If the program is marked as Active in this year, check the semester
     if (progEntry && recordYearDoc.isGlobalActive) {
         const activeSemId = progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId;
-        
+
         if (activeSemId && semesterTypeId) {
             if (activeSemId.toString() !== semesterTypeId.toString()) {
                 const recordSemDoc = await SemesterType.findById(semesterTypeId);
                 const activeSemDoc = await SemesterType.findById(activeSemId);
-                
-                return { 
-                    deletable: false, 
-                    reason: `The program is currently in the ${activeSemDoc?.name || 'active'} semester of ${recordYearDoc.year}. Records from the ${recordSemDoc?.name || 'requested'} semester cannot be deleted.` 
+
+                return {
+                    deletable: false,
+                    reason: `The program is currently in the ${activeSemDoc?.name || 'active'} semester of ${recordYearDoc.year}. Records from the ${recordSemDoc?.name || 'requested'} semester cannot be deleted.`
                 };
             }
         }
@@ -403,9 +403,9 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
         isGlobalActive: true
     });
 
-    return { 
-        deletable: false, 
-        reason: `This record belongs to ${recordYearDoc.year}, but the program's currently active year is ${currentActiveYearDoc?.year || 'a different year'}. Only records from the active period can be deleted.` 
+    return {
+        deletable: false,
+        reason: `This record belongs to ${recordYearDoc.year}, but the program's currently active year is ${currentActiveYearDoc?.year || 'a different year'}. Only records from the active period can be deleted.`
     };
 };
 
@@ -459,17 +459,17 @@ const deleteSemesterData = async (req, res) => {
         });
 
         if (activeProgramIds.length === 0) {
-            return res.status(403).json({ 
-                message: `Deletion Blocked: The ${semester?.toUpperCase() || ''} semester for ${academicYear || 'this year'} is not currently active for any program. Historical data cannot be removed.` 
+            return res.status(403).json({
+                message: `Deletion Blocked: The ${semester?.toUpperCase() || ''} semester for ${academicYear || 'this year'} is not currently active for any program. Historical data cannot be removed.`
             });
         }
 
         // If a programId was explicitly requested, verify it's in the active list
         if (filter.programId && !activeProgramIds.includes(filter.programId.toString())) {
-             const prog = await Program.findById(filter.programId);
-             return res.status(403).json({ 
-                 message: `Deletion Blocked: ${prog?.name || 'This program'} is not currently in the ${semester?.toUpperCase() || ''} phase. Only active period records can be deleted.` 
-             });
+            const prog = await Program.findById(filter.programId);
+            return res.status(403).json({
+                message: `Deletion Blocked: ${prog?.name || 'This program'} is not currently in the ${semester?.toUpperCase() || ''} phase. Only active period records can be deleted.`
+            });
         }
 
         // Only delete for programs that are currently active for this period
@@ -500,11 +500,11 @@ const getResults = async (req, res) => {
         if (programId) query.programId = programId;
 
         if (academicYearId || academicYear || semester) {
-            const { academicYearId: resolvedAyId, semesterTypeId } = await resolveAcademicIds({ 
-                academicYear: academicYearId || academicYear, 
-                semester 
+            const { academicYearId: resolvedAyId, semesterTypeId } = await resolveAcademicIds({
+                academicYear: academicYearId || academicYear,
+                semester
             });
-            
+
             if (resolvedAyId) query.academicYearId = resolvedAyId;
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
@@ -519,7 +519,7 @@ const getResults = async (req, res) => {
         const formatted = results.map((r) => {
             const obj = r.toObject();
             const semType = obj.semesterTypeId?.name || "";
-            
+
             let semesterDisplay = "";
             if (semType === "SUMMER") {
                 semesterDisplay = "Summer";
@@ -644,8 +644,8 @@ const deleteResult = async (req, res) => {
 
         const { deletable, reason } = await checkDeletability(record.academicYearId, record.programId, record.semesterTypeId);
         if (!deletable) {
-            return res.status(403).json({ 
-                message: `Deletion Denied: ${reason}` 
+            return res.status(403).json({
+                message: `Deletion Denied: ${reason}`
             });
         }
 
@@ -697,7 +697,7 @@ const createResult = async (req, res) => {
 
         let semesterNumber = req.body.semesterNumber;
         let yearNumber = req.body.yearNumber;
-        
+
         if (resolvedProgramId) {
             const programDoc = await Program.findById(resolvedProgramId);
             if (programDoc) {
@@ -787,9 +787,9 @@ const getCoAttainment = async (req, res) => {
 
         if (academicYear || semester) {
             const { academicYearId, semesterTypeId } = await resolveAcademicIds({ academicYear, semester });
-            
+
             if (academicYearId) query.academicYearId = academicYearId;
-            
+
             if (semesterTypeId) query.semesterTypeId = semesterTypeId;
         }
 
@@ -850,15 +850,15 @@ const getAvailableSemesters = async (req, res) => {
             }
         }
 
-        const teachingSems  = (await FacultySubjectResult.distinct("semesterNumber", query)).filter(Boolean);
+        const teachingSems = (await FacultySubjectResult.distinct("semesterNumber", query)).filter(Boolean);
         const teachingYears = (await FacultySubjectResult.distinct("yearNumber", query)).filter(Boolean);
 
         // Also check proctoring assignments
         const proctorQuery = {};
         if (facultyId) proctorQuery.currentProctorId = facultyId.trim();
-        if (academicYear) proctorQuery.fromAcademicYear = academicYear; 
-        
-        const proctoringSems  = (await ProctorMapping.distinct("fromSemester", proctorQuery)).filter(Boolean);
+        if (academicYear) proctorQuery.fromAcademicYear = academicYear;
+
+        const proctoringSems = (await ProctorMapping.distinct("fromSemester", proctorQuery)).filter(Boolean);
         const proctoringYears = (await ProctorMapping.distinct("fromYearName", proctorQuery)).filter(Boolean);
 
         // Also check Feedback results
@@ -875,7 +875,7 @@ const getAvailableSemesters = async (req, res) => {
 
         // Format and Merge
         const allItems = new Set();
-        
+
         // Helper to format
         const addSems = (list) => list.forEach(s => {
             const str = String(s);
@@ -897,11 +897,11 @@ const getAvailableSemesters = async (req, res) => {
         addSems(teachingSems);
         addSems(proctoringSems);
         addSems(feedSems);
-        
+
         addYears(teachingYears);
         addYears(proctoringYears);
         addYears(feedYears);
-        
+
         const sorted = Array.from(allItems).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
         res.json(sorted);

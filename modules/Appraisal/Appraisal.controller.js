@@ -807,7 +807,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             let claimedBy = null;
 
             const claimants = n.appraisalClaimants || [];
-            
+
             if (claimants.includes(faculty.institutionId)) {
                 claimStatus = "claimed_by_me";
                 const isEligible = isClaimantEligible(n, faculty.institutionId);
@@ -1733,7 +1733,7 @@ exports.getPendingRNDAppraisals = async (req, res) => {
                             appraisal.research.hIndexCurrentYear = hIndexCurrentYear;
                             modified = true;
                         }
-                        
+
                         if (modified) {
                             const config = await AppraisalConfig.findOne({ academicYearId: appraisal.academicYearId });
                             if (appraisal.research.scopusCitations !== null) {
@@ -1749,12 +1749,12 @@ exports.getPendingRNDAppraisals = async (req, res) => {
                         }
 
                         if (modified) {
-                            const paperPts   = appraisal.research.papers?.totalClaimed          || 0;
-                            const phdPts     = appraisal.research.phdGuiding?.totalClaimed      || 0;
-                            const bookPts    = appraisal.research.booksChapters?.totalClaimed   || 0;
-                            const patentPts  = appraisal.research.patents?.totalClaimed         || 0;
-                            const novelPts   = appraisal.research.novelProducts?.totalClaimed   || 0;
-                            const projPts    = appraisal.research.projectsConsultancies?.totalClaimed || 0;
+                            const paperPts = appraisal.research.papers?.totalClaimed || 0;
+                            const phdPts = appraisal.research.phdGuiding?.totalClaimed || 0;
+                            const bookPts = appraisal.research.booksChapters?.totalClaimed || 0;
+                            const patentPts = appraisal.research.patents?.totalClaimed || 0;
+                            const novelPts = appraisal.research.novelProducts?.totalClaimed || 0;
+                            const projPts = appraisal.research.projectsConsultancies?.totalClaimed || 0;
 
                             const citationScoreFinal = appraisal.research.scopusCitationScore || 0;
                             const hIndexPointsFinal = appraisal.research.scopusHIndexScore || 0;
@@ -1845,12 +1845,12 @@ exports.evaluateRNDAppraisal = async (req, res) => {
             if (acYearDoc) {
                 const [startYearStr] = acYearDoc.year.split('-');
                 const startYear = parseInt(startYearStr, 10);
-                
+
                 let doc = await AuthorCitations.findOne({ empid });
                 if (!doc) {
                     doc = new AuthorCitations({ empid, citations: {}, hIndex: {} });
                 }
-                
+
                 doc.citations.set(String(startYear), Number(scopusCitations));
                 if (hIndexPrevYear !== undefined && hIndexPrevYear !== null) {
                     doc.hIndex.set(String(startYear - 1), Number(hIndexPrevYear));
@@ -1858,7 +1858,7 @@ exports.evaluateRNDAppraisal = async (req, res) => {
                 if (hIndexCurrentYear !== undefined && hIndexCurrentYear !== null) {
                     doc.hIndex.set(String(startYear), Number(hIndexCurrentYear));
                 }
-                
+
                 await doc.save();
             }
         }
@@ -2364,10 +2364,10 @@ exports.getScopusData = async (req, res) => {
 
         // Get appraisal config for citation/hindex rates
         const config = await AppraisalConfig.findOne({ academicYearId });
-        const citationRate   = config?.research?.citationRate   ?? 0.2;
-        const hRateLow       = config?.research?.hIndexRateLow  ?? 1;
-        const hRateMid       = config?.research?.hIndexRateMid  ?? 2;
-        const hRateHigh      = config?.research?.hIndexRateHigh ?? 4;
+        const citationRate = config?.research?.citationRate ?? 0.2;
+        const hRateLow = config?.research?.hIndexRateLow ?? 1;
+        const hRateMid = config?.research?.hIndexRateMid ?? 2;
+        const hRateHigh = config?.research?.hIndexRateHigh ?? 4;
 
         const AcademicYear = require('../academicYear/academicYear.model');
         const acYearDoc = await AcademicYear.findById(academicYearId);
@@ -2399,28 +2399,28 @@ exports.getScopusData = async (req, res) => {
         }
 
         // ── Score Calculation ──────────────────────────────────
-        const citationScore  = Math.round(citationsCurrentYear * citationRate * 10) / 10;
-        const hIndexRaise    = Math.max(0, hIndexCurrentYear - hIndexPrevYear);
-        const hIndexPoints   = computeHIndexPoints(hIndexPrevYear, hIndexCurrentYear, hRateLow, hRateMid, hRateHigh);
+        const citationScore = Math.round(citationsCurrentYear * citationRate * 10) / 10;
+        const hIndexRaise = Math.max(0, hIndexCurrentYear - hIndexPrevYear);
+        const hIndexPoints = computeHIndexPoints(hIndexPrevYear, hIndexCurrentYear, hRateLow, hRateMid, hRateHigh);
 
         // ── Save to Appraisal document ─────────────────────────
         const appraisal = await Appraisal.findOne({ facultyId, academicYearId });
         if (appraisal) {
             const isEvaluator = ["ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT HOD", "HOD"].includes(req.user.role);
             if (appraisal.status === "Draft" || appraisal.status === "Rejected by HOD" || isEvaluator) {
-                appraisal.research.scopusCitations      = citationsCurrentYear;
-                appraisal.research.hIndexPrevYear       = hIndexPrevYear;
-                appraisal.research.hIndexCurrentYear    = hIndexCurrentYear;
-                appraisal.research.scopusCitationScore  = citationScore;
-                appraisal.research.scopusHIndexScore     = hIndexPoints;
+                appraisal.research.scopusCitations = citationsCurrentYear;
+                appraisal.research.hIndexPrevYear = hIndexPrevYear;
+                appraisal.research.hIndexCurrentYear = hIndexCurrentYear;
+                appraisal.research.scopusCitationScore = citationScore;
+                appraisal.research.scopusHIndexScore = hIndexPoints;
 
                 // Recalculate total research points
-                const paperPts   = appraisal.research.papers?.totalClaimed          || 0;
-                const phdPts     = appraisal.research.phdGuiding?.totalClaimed      || 0;
-                const bookPts    = appraisal.research.booksChapters?.totalClaimed   || 0;
-                const patentPts  = appraisal.research.patents?.totalClaimed         || 0;
-                const novelPts   = appraisal.research.novelProducts?.totalClaimed   || 0;
-                const projPts    = appraisal.research.projectsConsultancies?.totalClaimed || 0;
+                const paperPts = appraisal.research.papers?.totalClaimed || 0;
+                const phdPts = appraisal.research.phdGuiding?.totalClaimed || 0;
+                const bookPts = appraisal.research.booksChapters?.totalClaimed || 0;
+                const patentPts = appraisal.research.patents?.totalClaimed || 0;
+                const novelPts = appraisal.research.novelProducts?.totalClaimed || 0;
+                const projPts = appraisal.research.projectsConsultancies?.totalClaimed || 0;
 
                 const citationScoreFinal = (appraisal.research.scopusCitationStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? citationScore : 0;
                 const hIndexPointsFinal = (appraisal.research.scopusHIndexStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? hIndexPoints : 0;
