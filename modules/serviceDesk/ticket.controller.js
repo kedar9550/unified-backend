@@ -52,12 +52,11 @@ const purgeTicketChat = async (ticketId) => {
 };
 
 // Called when a ticket becomes CLOSED or REJECTED (terminal states) —
-// removes attachments from disk + wipes chat history, exactly as the
-// original app did.
+// removes attachments from disk and disables new chat.
 const purgeTicketData = async (ticket) => {
   deleteTicketAttachments(ticket);
   ticket.isChatActive = false;
-  await purgeTicketChat(ticket._id);
+  // Chat history is retained as per user request, only new chat is disabled
 };
 
 // Recalculates the ticket-level `status` from the per-employee rows in
@@ -409,6 +408,11 @@ exports.updateAssignmentStatus = async (req, res, next) => {
     row.updatedAt = new Date();
 
     recalculateTicketStatus(ticket);
+
+    if (ticket.status === "RESOLVED") {
+      ticket.isChatActive = false;
+    }
+
     await ticket.save();
 
     await Activity.create({
