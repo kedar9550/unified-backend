@@ -412,6 +412,90 @@ const getecapdata = async (req, res) => {
 };
 
 /**
+ * Sync logged-in employee profile details from ECAP
+ */
+const syncProfileWithECAP = async (req, res) => {
+    try {
+        const userType = req.user.userType || (/^\d+$/.test(req.user.institutionId) ? 'Employee' : 'Student');
+        const institutionId = req.user.institutionId;
+
+        if (!institutionId) {
+            return res.status(400).json({ message: "Invalid session. Please log in again." });
+        }
+
+        if (userType === 'Student') {
+            return res.status(400).json({ message: "Student profile sync is not supported yet." });
+        }
+
+        // Fetch ECAP Data
+        const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${institutionId}`);
+        const identityData = identityResponse?.data?.[0];
+
+        if (!identityData || identityData.error) {
+            return res.status(404).json({ message: "Employee details not found in ECAP API." });
+        }
+
+        const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
+        const ecapDept = (identityData.departmentname || identityData.DepartmentName)?.trim();
+        const ecapDesig = (identityData.designation || identityData.Designation)?.trim();
+        const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim();
+
+        // Find Employee
+        const employee = await Employee.findOne({ institutionId });
+        if (!employee) {
+            return res.status(404).json({ message: "Employee not found in database." });
+        }
+
+        // Match Department
+        let deptId = employee.department;
+        if (ecapDept) {
+            const escapedEcapDept = escapeRegex(ecapDept);
+            const deptRecord = await Department.findOne({
+                $or: [
+                    { name: new RegExp(`^${escapedEcapDept}$`, 'i') },
+                    { code: new RegExp(`^${escapedEcapDept}$`, 'i') }
+                ]
+            });
+            if (deptRecord) deptId = deptRecord._id;
+        }
+
+        // Update employee
+        const updateData = {
+            name: ecapName || employee.name,
+            department: deptId,
+            designation: ecapDesig || employee.designation,
+            phone: ecapPhone || employee.phone
+        };
+
+        // Only set coreDepartment if it's currently missing
+        if (!employee.coreDepartment) {
+            updateData.coreDepartment = deptId || employee.department;
+        }
+
+        const updatedUser = await Employee.findOneAndUpdate(
+            { institutionId },
+            { $set: updateData },
+            { new: true }
+        ).populate('department', 'name').populate('coreDepartment', 'name');
+
+        // Refresh token with updated user data
+        const normalizedUser = authService.normalizeUser(updatedUser, 'Employee');
+        generateToken({
+            userId: updatedUser._id,
+            institutionId: updatedUser.institutionId,
+            userType: 'Employee',
+            app: req.user.app || 'UNIFIED_SYSTEM',
+            roles: req.user.roles
+        }, res);
+
+        return res.json({ success: true, user: normalizedUser });
+    } catch (err) {
+        console.error("syncProfileWithECAP error:", err);
+        res.status(500).json({ message: err.message || "Server error during sync" });
+    }
+};
+
+/**
  * Bulk Register Employees
  */
 const bulkRegisterUser = async (req, res) => {
@@ -829,6 +913,7 @@ module.exports = {
     profileImage,
     searchUser,
     getecapdata,
+    syncProfileWithECAP,
     bulkRegisterUser,
     bulkUpdateEmployees,
     adminUpdateEmployee,
