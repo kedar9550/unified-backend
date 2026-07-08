@@ -72,8 +72,7 @@ const recalculateTicketStatus = (ticket) => {
 
   if (statuses.every(s => s === "REJECTED")) {
     // every single emp rejected their part — falls back to OPEN so the
-    // Service Admin can re-assign someone else (ticket itself is NOT
-    // auto-rejected; only an explicit admin action rejects the ticket).
+    // Service Admin can re-assign someone else. It stays in Active Tickets.
     ticket.status = "OPEN";
   } else if (statuses.filter(s => s !== "REJECTED").every(s => s === "RESOLVED")) {
     // everyone who didn't reject has resolved their part
@@ -171,7 +170,16 @@ exports.getMyTickets = async (req, res, next) => {
 // @route  GET /api/service-desk/tickets/assigned-to-me
 exports.getAssignedTickets = async (req, res, next) => {
   try {
-    const tickets = await Ticket.find({ "assignedTo.employee": req.user.userId })
+    const { tab } = req.query;
+    const filter = {};
+    
+    if (tab === 'rejected') {
+      filter.assignedTo = { $elemMatch: { employee: req.user.userId, status: "REJECTED" } };
+    } else {
+      filter.assignedTo = { $elemMatch: { employee: req.user.userId, status: { $ne: "REJECTED" } } };
+    }
+
+    const tickets = await Ticket.find(filter)
       .populate("service", "name")
       .populate("createdBy", "name institutionId email")
       .sort({ createdAt: -1 })
@@ -203,6 +211,11 @@ exports.getServiceTickets = async (req, res, next) => {
     const filter = { service: serviceId };
     if (req.query.status) filter.status = req.query.status;
 
+    if (req.query.tab === 'rejected') {
+      filter.status = "REJECTED";
+    } else if (req.query.tab === 'active') {
+      filter.status = { $ne: "REJECTED" };
+    }
     const tickets = await Ticket.find(filter)
       .populate("createdBy", "name institutionId email")
       .populate("assignedTo.employee", "name institutionId email")
@@ -287,38 +300,56 @@ exports.assignTicket = async (req, res, next) => {
     if (dueDate) ticket.dueDate = dueDate;
 
     // Merge: keep existing rows for employees already assigned (don't
-    // reset their progress), add fresh rows for newly added employees.
-    const existingIds = ticket.assignedTo.map(a => a.employee.toString());
-    const newRows = employeeIds
-      .filter(id => !existingIds.includes(id.toString()))
-      .map(id => ({
-        employee: id,
-        assignedBy: req.user.userId,
-        status: "ASSIGNED"
-      }));
+    // reset their progress), BUT if they had previously REJECTED it,
+    // reset their status to ASSIGNED so they can work on it again.
+    const newRows = [];
+    const reassignedIds = [];
+
+    for (const id of employeeIds) {
+      const existingRow = ticket.assignedTo.find(a => a.employee.toString() === id.toString());
+      if (existingRow) {
+        if (existingRow.status === "REJECTED") {
+          existingRow.status = "ASSIGNED";
+          existingRow.assignedBy = req.user.userId;
+          existingRow.note = "";
+          existingRow.updatedAt = new Date();
+          reassignedIds.push(id.toString());
+        }
+      } else {
+        newRows.push({
+          employee: id,
+          assignedBy: req.user.userId,
+          status: "ASSIGNED"
+        });
+      }
+    }
 
     ticket.assignedTo.push(...newRows);
     recalculateTicketStatus(ticket);
     await ticket.save();
 
-    await Activity.create({
-      ticket: ticket._id,
-      action: "TICKET_ASSIGNED",
-      performedBy: req.user.userId,
-      metadata: { employeeIds: newRows.map(r => r.employee) }
-    });
+    const allNotifiedIds = [...newRows.map(r => r.employee.toString()), ...reassignedIds];
 
-    for (const row of newRows) {
-      await NotificationService.sendNotification({
-        recipientId: row.employee,
-        senderId: req.user.userId,
-        module: MODULE,
-        type: "ACTION_REQUIRED",
-        title: "Ticket Assigned to You",
-        message: `Ticket ${ticket.ticketNumber} — "${ticket.title}" has been assigned to you.`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
+    if (allNotifiedIds.length > 0) {
+      await Activity.create({
+        ticket: ticket._id,
+        action: "TICKET_ASSIGNED",
+        performedBy: req.user.userId,
+        metadata: { employeeIds: allNotifiedIds }
       });
+
+      for (const empId of allNotifiedIds) {
+        await NotificationService.sendNotification({
+          recipientId: empId,
+          senderId: req.user.userId,
+          module: MODULE,
+          type: "ACTION_REQUIRED",
+          title: "Ticket Assigned to You",
+          message: `Ticket ${ticket.ticketNumber} — "${ticket.title}" has been assigned to you.`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: { ticketId: ticket._id }
+        });
+      }
     }
 
     res.json({ success: true, message: "Ticket assigned successfully", data: ticket });
@@ -647,4 +678,154 @@ exports.closeTicketAfterFeedback = async (ticket) => {
     performedBy: ticket.createdBy,
     metadata: {}
   });
+};
+
+exports.getServiceDeskReports = async (req, res, next) => {
+  try {
+    const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
+    let allowedServiceIds = [];
+
+    if (!isPrime) {
+      const adminMemberships = await ServiceMember.find({
+        employee: req.user.userId,
+        roleType: "SERVICE_ADMIN",
+        isActive: true
+      }).lean();
+      
+      if (adminMemberships.length === 0) {
+        res.status(403);
+        return next(new Error("Not authorized to view any service desk reports"));
+      }
+      allowedServiceIds = adminMemberships.map(m => m.service.toString());
+    }
+
+    const { dateRange, startDate, endDate, serviceId, priority } = req.query;
+    const filter = {};
+
+    if (serviceId && serviceId !== "all") {
+      if (!isPrime && !allowedServiceIds.includes(serviceId)) {
+        res.status(403);
+        return next(new Error("Not authorized to view reports for this service"));
+      }
+      filter.service = serviceId;
+    } else if (!isPrime) {
+      filter.service = { $in: allowedServiceIds };
+    }
+
+    if (priority && priority !== "all") {
+      filter.priority = priority.toUpperCase();
+    }
+
+    if (dateRange && dateRange !== "all") {
+      const now = new Date();
+      let start = new Date();
+      if (dateRange === "last10days") start.setDate(now.getDate() - 10);
+      else if (dateRange === "last30days") start.setDate(now.getDate() - 30);
+      else if (dateRange === "last3months") start.setMonth(now.getMonth() - 3);
+      else if (dateRange === "last6months") start.setMonth(now.getMonth() - 6);
+      else if (dateRange === "lastyear") start.setFullYear(now.getFullYear() - 1);
+      else if (dateRange === "custom" && startDate) {
+        start = new Date(startDate);
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          filter.createdAt = { $gte: start, $lte: end };
+        } else {
+          filter.createdAt = { $gte: start };
+        }
+      }
+      
+      if (dateRange !== "custom") {
+        filter.createdAt = { $gte: start };
+      }
+    }
+
+    const tickets = await Ticket.find(filter)
+      .populate("assignedTo.employee", "name")
+      .populate("service", "name")
+      .lean();
+
+    let total = tickets.length;
+    let resolvedOrClosed = 0;
+    let totalHandlingMs = 0;
+    let overdueCount = 0;
+    
+    const statusCounts = {};
+    const trendMap = {}; 
+    
+    tickets.forEach(t => {
+      statusCounts[t.status] = (statusCounts[t.status] || 0) + 1;
+      
+      if (t.status === "RESOLVED" || t.status === "CLOSED") {
+        resolvedOrClosed++;
+        if (t.closedAt || t.updatedAt) {
+          totalHandlingMs += new Date(t.closedAt || t.updatedAt).getTime() - new Date(t.createdAt).getTime();
+        }
+      }
+
+      if (t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "RESOLVED" && t.status !== "CLOSED") {
+        overdueCount++;
+      }
+
+      const createdStr = new Date(t.createdAt).toISOString().split('T')[0];
+      if (!trendMap[createdStr]) trendMap[createdStr] = { date: createdStr, created: 0, closed: 0 };
+      trendMap[createdStr].created++;
+
+      if (t.status === "RESOLVED" || t.status === "CLOSED") {
+        const closedDate = t.closedAt || t.updatedAt;
+        if (closedDate) {
+          const closedStr = new Date(closedDate).toISOString().split('T')[0];
+          if (!trendMap[closedStr]) trendMap[closedStr] = { date: closedStr, created: 0, closed: 0 };
+          trendMap[closedStr].closed++;
+        }
+      }
+    });
+
+    const resolutionRate = total > 0 ? Math.round((resolvedOrClosed / total) * 100) + "%" : "0%";
+    const avgMs = resolvedOrClosed > 0 ? (totalHandlingMs / resolvedOrClosed) : 0;
+    const avgHandlingTime = avgMs > 0 ? (avgMs / (1000 * 60 * 60 * 24)).toFixed(1) + " Days" : "0 Days";
+
+    const statusColors = {
+      OPEN: "#f97316",       // Orange for Unassigned
+      ASSIGNED: "#3b82f6",   // Blue for Assigned (replaced violet)
+      IN_PROGRESS: "#f59e0b",// Amber for In Progress
+      RESOLVED: "#22c55e",   // Green for Resolved
+      REJECTED: "#ef4444",   // Red for Rejected
+      CLOSED: "#64748b"      // Slate for Closed
+    };
+
+    const statusData = Object.keys(statusCounts).map(status => {
+      let displayName = status.replace("_", " ");
+      if (status === "OPEN") displayName = "UNASSIGNED";
+      
+      return {
+        name: displayName,
+        value: statusCounts[status],
+        color: statusColors[status] || "#cbd5e1"
+      };
+    });
+
+    const trendData = Object.values(trendMap).sort((a, b) => a.date.localeCompare(b.date));
+
+    const recentTickets = tickets.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(t => ({
+      _id: t._id,
+      ticketNumber: t.ticketNumber,
+      title: t.title,
+      status: t.status,
+      priority: t.priority,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+      dueDate: t.dueDate,
+      assignedTo: t.assignedTo?.map(a => a.employee?.name).filter(Boolean).join(", ") || null
+    }));
+
+    res.json({
+      summary: { resolutionRate, avgHandlingTime, overdueTickets: overdueCount },
+      statusData,
+      trendData,
+      recentTickets
+    });
+  } catch (error) {
+    next(error);
+  }
 };

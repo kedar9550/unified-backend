@@ -20,7 +20,9 @@ const {
   addComment,
   getComments,
   getTicketActivities,
-  downloadAttachment
+  downloadAttachment,
+  closeTicket,
+  getServiceDeskReports
 } = require("./ticket.controller");
 
 const {
@@ -80,6 +82,7 @@ router.get("/my", getMyTickets);
 router.get("/assigned-to-me", getAssignedTickets);
 
 // Feedback list endpoints — must come before GET /:id
+router.get("/reports", getServiceDeskReports);
 router.get("/feedback/pending", getPendingFeedback);
 router.get("/feedback/analytics", getAllFeedback);
 
