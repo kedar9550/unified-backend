@@ -14,6 +14,7 @@ const {
     profileImage,
     searchUser,
     getecapdata,
+    syncProfileWithECAP,
     bulkRegisterUser,
     bulkUpdateEmployees,
     adminUpdateEmployee,
@@ -74,6 +75,7 @@ router.get('/me', protect, getMe);
 router.put('/me/update', protect, updateProfile);
 router.put('/me/change-password', protect, changePassword);
 router.post('/me/profile-image', protect, upload.single('image'), profileImage);
+router.post('/me/sync-ecap', protect, syncProfileWithECAP);
 
 // --- Admin / Discovery ---
 router.get('/', protect, getAllEmployees);
