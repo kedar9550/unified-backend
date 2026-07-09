@@ -20,7 +20,9 @@ const {
     adminUpdateEmployee,
     changePassword,
     getStaffData,
-    getAllEmployees
+    getAllEmployees,
+    getHODStaff,
+    addHODStaff
 } = require('./employee.controller');
 
 // --- Multer Setup ---
@@ -79,6 +81,8 @@ router.post('/me/sync-ecap', protect, syncProfileWithECAP);
 
 // --- Admin / Discovery ---
 router.get('/', protect, getAllEmployees);
+router.get('/hod/staff', protect, getHODStaff);
+router.post('/hod/add-staff', protect, addHODStaff);
 router.get('/search', protect, searchUser);
 router.get('/staff/:id', protect, getStaffData);
 router.post('/ecap-data', getecapdata);
