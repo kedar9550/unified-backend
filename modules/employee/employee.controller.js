@@ -14,6 +14,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const csv = require('csv-parser');
+const { getHODDepartments } = require('../../utils/hodHelper');
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -346,7 +347,7 @@ const searchUser = async (req, res) => {
             ]
         };
 
-        const users = await Employee.aggregate([
+        let users = await Employee.aggregate([
             { $match: matchStage },
             { $limit: 20 },
             {
@@ -408,6 +409,149 @@ const searchUser = async (req, res) => {
                 }
             }
         ]);
+
+        // If no local users found and query looks like an ID, fetch from ECAP and auto-register
+        if (users.length === 0 && /^\d+$/.test(query.trim())) {
+            try {
+                const empId = query.trim();
+                const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${empId}`);
+                const identityData = identityResponse?.data?.[0];
+
+                if (identityData && !identityData.error && identityData.employeecode) {
+                    // Check if employee already exists in DB
+                    let employee = await Employee.findOne({ institutionId: identityData.employeecode });
+                    if (!employee) {
+                        // Find or Create Department
+                        const ecapDeptName = (identityData.departmentname || identityData.DepartmentName || "General").trim();
+                        const escapedDept = escapeRegex(ecapDeptName);
+                        let deptRecord = await Department.findOne({
+                            $or: [
+                                { name: new RegExp(`^${escapedDept}$`, 'i') },
+                                { code: new RegExp(`^${escapedDept}$`, 'i') }
+                            ]
+                        });
+
+                        if (!deptRecord) {
+                            const deptCode = ecapDeptName.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "DEPT";
+                            deptRecord = await Department.create({
+                                name: ecapDeptName,
+                                code: deptCode,
+                                type: 'Academic'
+                            });
+                        }
+
+                        const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
+                        const ecapDesig = (identityData.designation || identityData.Designation)?.trim();
+                        const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim() || "0000000000";
+
+                        // Create Employee
+                        employee = await Employee.create({
+                            name: ecapName || "ECAP Staff",
+                            institutionId: identityData.employeecode,
+                            department: deptRecord._id,
+                            coreDepartment: deptRecord._id,
+                            designation: ecapDesig || "Staff",
+                            email: `${identityData.employeecode.toLowerCase()}@adityauniversity.in`,
+                            password: "Welcome@123",
+                            phone: ecapPhone,
+                            college: identityData.college || "Aditya University"
+                        });
+
+                        // Assign Default Role
+                        const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
+                        let roleName = "STAFF";
+                        const checkDesig = (ecapDesig || "").toLowerCase();
+                        if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) {
+                            roleName = "FACULTY";
+                        } else if (/technician|programmer/i.test(checkDesig)) {
+                            roleName = "TECHNICAL_STAFF";
+                        }
+
+                        let defaultRole = await Role.findOne({ name: roleName, app: appName });
+                        if (!defaultRole) {
+                            defaultRole = await Role.create({
+                                name: roleName,
+                                app: appName,
+                                defaultRole: true,
+                                description: `Default role for ${roleName}`
+                            });
+                        }
+
+                        await UserAppRole.create({
+                            userId: employee._id,
+                            userModel: 'Employee',
+                            app: appName,
+                            role: defaultRole._id,
+                        });
+                    }
+
+                    // Query the newly registered employee in standard format
+                    users = await Employee.aggregate([
+                        { $match: { _id: employee._id } },
+                        {
+                            $lookup: {
+                                from: 'userapproles',
+                                localField: '_id',
+                                foreignField: 'userId',
+                                as: 'userAppRoles'
+                            }
+                        },
+                        {
+                            $lookup: {
+                                from: 'roles',
+                                localField: 'userAppRoles.role',
+                                foreignField: '_id',
+                                as: 'roles'
+                            }
+                        },
+                        {
+                            $addFields: {
+                                roles: {
+                                    $map: {
+                                        input: "$roles",
+                                        as: "role",
+                                        in: {
+                                            $mergeObjects: [
+                                                "$$role",
+                                                {
+                                                    departments: {
+                                                        $let: {
+                                                            vars: {
+                                                                uar: {
+                                                                    $arrayElemAt: [
+                                                                        { $filter: { input: "$userAppRoles", as: "u", cond: { $eq: ["$$u.role", "$$role._id"] } } },
+                                                                        0
+                                                                    ]
+                                                                }
+                                                            },
+                                                            in: "$$uar.departments"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            $project: {
+                                name: 1,
+                                institutionId: 1,
+                                email: 1,
+                                department: 1,
+                                coreDepartment: 1,
+                                designation: 1,
+                                userType: { $literal: 'Employee' },
+                                roles: 1
+                            }
+                        }
+                    ]);
+                }
+            } catch (apiErr) {
+                console.error("ECAP search & auto-register failed:", apiErr.message);
+            }
+        }
 
         res.status(200).json(users);
     } catch (error) {
@@ -927,6 +1071,105 @@ const getAllEmployees = async (req, res) => {
     }
 };
 
+/**
+ * Get all staff in the HOD's department(s) based on coreDepartment
+ */
+const getHODStaff = async (req, res) => {
+    try {
+        const deptIds = await getHODDepartments(req.user);
+        if (!deptIds || deptIds.length === 0) {
+            return res.status(200).json([]);
+        }
+
+        const staff = await Employee.find({
+            coreDepartment: { $in: deptIds },
+            isActive: true
+        })
+        .select('-password -otp -otpExpiry')
+        .populate('department', 'name code')
+        .populate('coreDepartment', 'name code')
+        .sort({ name: 1 })
+        .lean();
+
+        res.status(200).json(staff);
+    } catch (error) {
+        console.error('Error fetching HOD staff:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/**
+ * Add a staff member to HOD's department (only change their coreDepartment to HOD's coreDepartment)
+ */
+const addHODStaff = async (req, res) => {
+    try {
+        const { employeeId } = req.body;
+        if (!employeeId) {
+            return res.status(400).json({ message: "Employee ID is required" });
+        }
+
+        // 1. Get the HOD's details to find their core department
+        const hod = await Employee.findById(req.user.userId || req.user._id);
+        if (!hod) {
+            return res.status(404).json({ message: "HOD user not found" });
+        }
+
+        let hodCoreDept = hod.coreDepartment;
+
+        // Safety check: verify if coreDepartment is valid and exists in DB
+        let isCoreDeptValid = false;
+        if (hodCoreDept && mongoose.Types.ObjectId.isValid(hodCoreDept)) {
+            const coreDeptExists = await Department.exists({ _id: hodCoreDept });
+            if (coreDeptExists) {
+                isCoreDeptValid = true;
+            }
+        }
+
+        if (!isCoreDeptValid) {
+            // Fallback 1: Try HOD's department field
+            if (hod.department && mongoose.Types.ObjectId.isValid(hod.department)) {
+                const deptExists = await Department.exists({ _id: hod.department });
+                if (deptExists) {
+                    hodCoreDept = hod.department;
+                    isCoreDeptValid = true;
+                }
+            }
+            
+            // Fallback 2: Try HOD's first managed department ID from role mapping
+            if (!isCoreDeptValid) {
+                const deptIds = await getHODDepartments(req.user);
+                if (deptIds && deptIds.length > 0) {
+                    hodCoreDept = deptIds[0];
+                    isCoreDeptValid = true;
+                }
+            }
+        }
+
+        if (!isCoreDeptValid || !hodCoreDept) {
+            return res.status(400).json({ message: "HOD does not have a valid core department assigned" });
+        }
+
+        // 2. Find the target employee
+        const staffMember = await Employee.findById(employeeId);
+        if (!staffMember) {
+            return res.status(404).json({ message: "Staff member not found" });
+        }
+
+        // 3. Update the staff member's coreDepartment to HOD's coreDepartment
+        staffMember.coreDepartment = hodCoreDept;
+        await staffMember.save();
+
+        res.status(200).json({
+            success: true,
+            message: `Staff member ${staffMember.name} successfully added to your department.`,
+            data: staffMember
+        });
+    } catch (error) {
+        console.error('Error adding staff member to HOD department:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -942,5 +1185,7 @@ module.exports = {
     adminUpdateEmployee,
     changePassword,
     getStaffData,
-    getAllEmployees
+    getAllEmployees,
+    getHODStaff,
+    addHODStaff
 };
