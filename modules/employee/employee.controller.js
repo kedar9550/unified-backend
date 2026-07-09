@@ -129,7 +129,7 @@ const registerUser = async (req, res) => {
  */
 const validateUser = async (req, res) => {
     try {
-        const { id, password, app } = req.body;
+        const { id, password, app, fcmToken } = req.body;
         if (!id || !password || !app) {
             return res.status(400).json({ message: "id, password, and app are required" });
         }
@@ -143,6 +143,14 @@ const validateUser = async (req, res) => {
             app,
             roles: data.roles
         }, res);
+
+        if (fcmToken) {
+            if (data.user.userType === 'Student') {
+                await Student.findByIdAndUpdate(data.user._id, { $addToSet: { fcmIds: fcmToken } }).catch(err => console.error("FCM Token save error:", err));
+            } else {
+                await Employee.findByIdAndUpdate(data.user._id, { $addToSet: { fcmIds: fcmToken } }).catch(err => console.error("FCM Token save error:", err));
+            }
+        }
 
         res.json({ message: "Login success", user: { ...data.user, roles: data.roles } });
     } catch (e) {
@@ -195,7 +203,22 @@ const getMe = async (req, res) => {
 /**
  * Logout
  */
-const logoutUser = (req, res) => {
+const logoutUser = async (req, res) => {
+    const { fcmToken } = req.body;
+    if (fcmToken && req.user) {
+        const userId = req.user.userId;
+        const userType = req.user.userType || (/^\d+$/.test(req.user.institutionId) ? 'Employee' : 'Student');
+        try {
+            if (userType === 'Student') {
+                await Student.findByIdAndUpdate(userId, { $pull: { fcmIds: fcmToken } });
+            } else {
+                await Employee.findByIdAndUpdate(userId, { $pull: { fcmIds: fcmToken } });
+            }
+        } catch (err) {
+            console.error("FCM Token remove error on logout:", err);
+        }
+    }
+
     res.clearCookie("token", {
         httpOnly: true,
         secure: isProd,

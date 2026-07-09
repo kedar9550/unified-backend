@@ -118,6 +118,11 @@ const EmployeeSchema = new mongoose.Schema({
         default: null
     },
 
+    fcmIds: {
+        type: [String],
+        default: []
+    },
+
 }, { timestamps: true });
 
 const isLeadershipDesignation = (designation) => {

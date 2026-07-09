@@ -135,6 +135,11 @@ const studentSchema = new mongoose.Schema({
     password: { type: String, required: true },
     otp: String,
     otpExpiry: Date
+  },
+
+  fcmIds: {
+    type: [String],
+    default: []
   }
 
 }, {
