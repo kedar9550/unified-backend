@@ -20,12 +20,30 @@ const generateShortCode = async () => {
 // @access  Private
 exports.createShortUrl = async (req, res) => {
     try {
-        const { longUrl, expiresAt } = req.body;
+        const { longUrl, expiresAt, customSlug } = req.body;
         if (!longUrl) {
             return res.status(400).json({ success: false, message: 'longUrl is required' });
         }
 
-        const shortCode = await generateShortCode();
+        let shortCode;
+
+        if (customSlug) {
+            // Validate custom slug format (only letters, numbers, hyphens)
+            const slugRegex = /^[a-zA-Z0-9-]+$/;
+            if (!slugRegex.test(customSlug)) {
+                return res.status(400).json({ success: false, message: 'Custom link can only contain letters, numbers, and hyphens.' });
+            }
+
+            // Check if slug is already taken
+            const existing = await Utility.findOne({ shortCode: customSlug });
+            if (existing) {
+                return res.status(400).json({ success: false, message: 'This custom link is already taken. Please try another one.' });
+            }
+
+            shortCode = customSlug;
+        } else {
+            shortCode = await generateShortCode();
+        }
         
         const utility = await Utility.create({
             longUrl,
