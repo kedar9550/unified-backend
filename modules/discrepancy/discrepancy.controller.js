@@ -1,6 +1,9 @@
 const Discrepancy = require("./discrepancy.model");
 const path = require("path");
 const fs = require("fs");
+const FacultySubjectResult = require("../FacultySubjectResult/FacultySubjectResult.model");
+const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
+const FacultyFeedResult = require("../FacultyFeedbackResults/FacultyFeedResult.model");
 
 // Section → responsible role mapping
 const SECTION_ROLE_MAP = {
@@ -21,6 +24,33 @@ const raiseDiscrepancy = async (req, res) => {
 
         if (!academicYearId || !section || !note) {
             return res.status(400).json({ message: "academicYearId, section, and note are required." });
+        }
+
+        const instId = req.user.institutionId || facultyInstitutionId;
+        const userType = req.user.userType || (/^\d+$/.test(req.user.institutionId) ? 'Employee' : 'Student');
+
+        if (userType === 'Employee' && instId) {
+            if (section === 'TEACHING') {
+                const hasData = await FacultySubjectResult.exists({ facultyId: instId, academicYearId });
+                if (!hasData) {
+                    return res.status(400).json({ message: "No Course Average Pass Percentage records found for you in the selected Academic Year." });
+                }
+            } else if (section === 'PROCTORING') {
+                const hasData = await ProctorSummary.exists({ proctorId: instId, academicYearId });
+                if (!hasData) {
+                    return res.status(400).json({ message: "No Proctoring Students' Average Pass Percentage records found for you in the selected Academic Year." });
+                }
+            } else if (section === 'FEEDBACK') {
+                const hasData = await FacultyFeedResult.exists({ facultyId: instId, academicYearId });
+                if (!hasData) {
+                    return res.status(400).json({ message: "No Feedback records found for you in the selected Academic Year." });
+                }
+            } else if (section === 'CO_ATTAINMENT') {
+                const hasData = await FacultySubjectResult.exists({ facultyId: instId, academicYearId, noOfCos: { $gt: 0 } });
+                if (!hasData) {
+                    return res.status(400).json({ message: "No CO Attainment records found for you in the selected Academic Year." });
+                }
+            }
         }
 
         let assignedRole = SECTION_ROLE_MAP[section] || "ADMIN";
