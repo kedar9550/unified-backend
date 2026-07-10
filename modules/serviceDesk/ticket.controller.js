@@ -89,7 +89,17 @@ const notifyServiceAdmins = async (serviceId, { excludeEmployeeId, ...notif }) =
   const admins = await ServiceMember.find({ service: serviceId, roleType: "SERVICE_ADMIN", isActive: true }).lean();
   for (const admin of admins) {
     if (excludeEmployeeId && admin.employee.toString() === excludeEmployeeId.toString()) continue;
-    await NotificationService.sendNotification({ recipientId: admin.employee, module: MODULE, ...notif });
+    
+    // Inject targetRole so frontend can auto-switch roles when clicking the notification
+    const modifiedNotif = {
+      ...notif,
+      metadata: {
+        ...(notif.metadata || {}),
+        targetRole: "SERVICE_ADMIN"
+      }
+    };
+    
+    await NotificationService.sendNotification({ recipientId: admin.employee, module: MODULE, ...modifiedNotif });
   }
 };
 
