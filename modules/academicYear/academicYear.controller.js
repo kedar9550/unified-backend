@@ -61,7 +61,7 @@ const createAcademicYear = async (req, res) => {
 
                 yearDoc.programs.push({
                     programId: programIdVal,
-                    isActive: yearDoc.isGlobalActive || false,
+                    isActive: false,
                     activeSemesterTypeId: oddType._id
                 });
                 await yearDoc.save();
@@ -309,7 +309,44 @@ const deleteAcademicYear = async (req, res) => {
    Returns the full year doc (caller can read .year string from it).
 ───────────────────────────────────────────────────────────── */
 const resolveActiveAcademicYear = async (programIdentifier) => {
-    // Find the globally active academic year
+    if (programIdentifier) {
+        let query = {};
+        if (mongoose.Types.ObjectId.isValid(programIdentifier)) {
+            query = {
+                programs: {
+                    $elemMatch: {
+                        programId: new mongoose.Types.ObjectId(programIdentifier),
+                        isActive: true
+                    }
+                }
+            };
+        } else {
+            // Find program by name or code first
+            const prog = await Program.findOne({
+                $or: [
+                    { name: new RegExp('^' + escapeRegex(programIdentifier) + '$', 'i') },
+                    { code: new RegExp('^' + escapeRegex(programIdentifier) + '$', 'i') }
+                ]
+            });
+            if (prog) {
+                query = {
+                    programs: {
+                        $elemMatch: {
+                            programId: prog._id,
+                            isActive: true
+                        }
+                    }
+                };
+            }
+        }
+
+        if (Object.keys(query).length > 0) {
+            const yearDoc = await AcademicYear.findOne(query);
+            if (yearDoc) return yearDoc;
+        }
+    }
+
+    // Fallback to the globally active academic year
     return await AcademicYear.findOne({ isGlobalActive: true });
 };
 
@@ -321,24 +358,22 @@ const activateAcademicYear = async (req, res) => {
     try {
         const { id } = req.params;
 
-        // 1. Deactivate all years and set their programs' isActive to false
+        // 1. Deactivate all years globally
         await AcademicYear.updateMany(
             {},
             { 
                 $set: { 
-                    isGlobalActive: false, 
-                    "programs.$[].isActive": false 
+                    isGlobalActive: false
                 } 
             }
         );
 
-        // 2. Activate the target year and set its programs' isActive to true
+        // 2. Activate the target year globally
         const updatedYear = await AcademicYear.findByIdAndUpdate(
             id,
             { 
                 $set: { 
-                    isGlobalActive: true, 
-                    "programs.$[].isActive": true 
+                    isGlobalActive: true
                 } 
             },
             { new: true }

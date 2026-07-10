@@ -6,6 +6,7 @@ const { parseCSV, validateHeaders } = require("../../utils/csvParser");
 const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
 const SemesterType = require("../semesterType/semesterType.model");
 const AcademicYear = require("../academicYear/academicYear.model");
+const { resolveActiveAcademicYear } = require("../academicYear/academicYear.controller");
 const Student = require("../StudentData/Studentdata.model");
 const Department = require("../academics/department.model");
 
@@ -82,7 +83,7 @@ const checkDeletability = async (programId, examYear, semesterNum) => {
     const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
 
     // 2. If the program is marked as Active in this year doc, check the semester
-    if (progEntry && recordYearDoc.isGlobalActive) {
+    if (progEntry && progEntry.isActive) {
         const activeSemType = progEntry.activeSemesterTypeId;
         
         if (!activeSemType) return { deletable: true };
@@ -106,9 +107,7 @@ const checkDeletability = async (programId, examYear, semesterNum) => {
     }
 
     // 3. If the program is NOT active in this specific year doc, find the currently active one
-    const activeYearDoc = await AcademicYear.findOne({
-        isGlobalActive: true
-    });
+    const activeYearDoc = await resolveActiveAcademicYear(programId);
 
     return { 
         deletable: false, 
