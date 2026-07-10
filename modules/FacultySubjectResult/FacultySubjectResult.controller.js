@@ -1,6 +1,7 @@
 const FacultySubjectResult = require("./FacultySubjectResult.model");
 const escapeRegex = require("../../utils/escapeRegex");
 const AcademicYear = require("../academicYear/academicYear.model");
+const { resolveActiveAcademicYear } = require("../academicYear/academicYear.controller");
 const SemesterType = require("../semesterType/semesterType.model");
 const Program = require("../academics/program.model");
 const Branch = require("../academics/branch.model");
@@ -345,9 +346,7 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
  * Helper to get the current active state (Year & Semester) for a program.
  */
 const getActiveStateForProgram = async (programId) => {
-    const ay = await AcademicYear.findOne({
-        isGlobalActive: true
-    }).populate("programs.activeSemesterTypeId");
+    const ay = await resolveActiveAcademicYear(programId);
 
     if (!ay) return null;
 
@@ -380,7 +379,7 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
     const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
 
     // 3. If the program is marked as Active in this year, check the semester
-    if (progEntry && recordYearDoc.isGlobalActive) {
+    if (progEntry && progEntry.isActive) {
         const activeSemId = progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId;
 
         if (activeSemId && semesterTypeId) {
@@ -399,9 +398,7 @@ const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
     }
 
     // 4. If the program is NOT active in this year, find what the current active year IS
-    const currentActiveYearDoc = await AcademicYear.findOne({
-        isGlobalActive: true
-    });
+    const currentActiveYearDoc = await resolveActiveAcademicYear(programId);
 
     return {
         deletable: false,
@@ -444,16 +441,17 @@ const deleteSemesterData = async (req, res) => {
         // --- PROTECTION LOGIC ---
         // If we are deleting by Semester/Year, we must ensure it's the ACTIVE one for the programs involved
         const matchingYears = await AcademicYear.find({
-            year: academicYear || (await AcademicYear.findById(filter.academicYearId))?.year,
-            isGlobalActive: true
+            year: academicYear || (await AcademicYear.findById(filter.academicYearId))?.year
         });
 
         const activeProgramIds = [];
         matchingYears.forEach(ay => {
             ay.programs.forEach(p => {
-                const pSemId = p.activeSemesterTypeId?._id || p.activeSemesterTypeId;
-                if (!filter.semesterTypeId || (pSemId && pSemId.toString() === filter.semesterTypeId.toString())) {
-                    activeProgramIds.push(p.programId.toString());
+                if (p.isActive) {
+                    const pSemId = p.activeSemesterTypeId?._id || p.activeSemesterTypeId;
+                    if (!filter.semesterTypeId || (pSemId && pSemId.toString() === filter.semesterTypeId.toString())) {
+                        activeProgramIds.push(p.programId.toString());
+                    }
                 }
             });
         });
