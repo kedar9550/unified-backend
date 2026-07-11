@@ -1133,7 +1133,7 @@ exports.getFacultyDashboardData = async (req, res, next) => {
         });
 
     } catch (error) {
-        console.error('Error fetching Faculty dashboard data:', error);
+        console.error('Error fetching Faculty dashboards data:', error);
         next(error);
     }
 };
