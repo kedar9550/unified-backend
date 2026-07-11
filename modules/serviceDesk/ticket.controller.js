@@ -360,7 +360,7 @@ exports.assignTicket = async (req, res, next) => {
           title: "New Ticket Assigned",
           message: `A new support ticket ${ticket.ticketNumber} has been assigned to you.\nPlease review the issue and begin processing it.`,
           link: `/service-desk/ticket/${ticket._id}`,
-          metadata: { ticketId: ticket._id }
+          metadata: { ticketId: ticket._id, targetRole: "SERVICE_EMP" }
         });
       }
 
@@ -598,6 +598,16 @@ exports.addComment = async (req, res, next) => {
     participantIds.delete(req.user.userId.toString());
 
     for (const recipientId of participantIds) {
+      let targetRole = undefined;
+      const isAssignee = (ticket.assignedTo || []).some(a => a.employee.toString() === recipientId.toString());
+      const isAdmin = admins.some(a => a.employee.toString() === recipientId.toString());
+
+      if (isAssignee) {
+        targetRole = "SERVICE_EMP";
+      } else if (isAdmin) {
+        targetRole = "SERVICE_ADMIN";
+      }
+
       await NotificationService.sendNotification({
         recipientId,
         senderId: req.user.userId,
@@ -606,7 +616,7 @@ exports.addComment = async (req, res, next) => {
         title: "New Message",
         message: `New message on Ticket ${ticket.ticketNumber}`,
         link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
+        metadata: { ticketId: ticket._id, targetRole }
       });
     }
 

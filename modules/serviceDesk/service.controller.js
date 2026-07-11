@@ -215,7 +215,7 @@ exports.assignServiceAdmin = async (req, res, next) => {
       title: "You are now a Service Admin",
       message: `You have been made Service Admin for "${service.name}".`,
       link: `/service-desk/admin/${serviceId}`,
-      metadata: { serviceId }
+      metadata: { serviceId, targetRole: "SERVICE_ADMIN" }
     });
 
     res.status(201).json({ success: true, message: "Service Admin assigned successfully", data: member });
@@ -340,7 +340,7 @@ exports.assignServiceEmp = async (req, res, next) => {
       title: "You are now a Service Emp",
       message: `You have been made Service Emp for "${service.name}".`,
       link: `/service-desk/assigned-to-me`,
-      metadata: { serviceId }
+      metadata: { serviceId, targetRole: "SERVICE_EMP" }
     });
 
     res.status(201).json({ success: true, message: "Service Emp assigned successfully", data: member });
