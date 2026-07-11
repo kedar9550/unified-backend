@@ -19,6 +19,81 @@ class NotificationService {
      */
     static async sendNotification(data) {
         try {
+            // Auto-detect targetRole if not explicitly set
+            if (!data.metadata) {
+                data.metadata = {};
+            }
+
+            if (!data.metadata.targetRole) {
+                try {
+                    const UserAppRole = require('../userAppRole/userAppRole.model');
+                    const userAppRoles = await UserAppRole.find({ userId: data.recipientId }).populate('role');
+                    const roles = userAppRoles.map(uar => uar.role?.name?.toUpperCase()).filter(Boolean);
+
+                    if (roles.length === 1) {
+                        data.metadata.targetRole = roles[0];
+                    } else if (roles.length > 1) {
+                        const link = data.link || '';
+                        const module = data.module || '';
+
+                        // 1. Service Desk Module
+                        if (module === 'Service Desk' || module === 'ServiceDesk' || link.includes('/service-desk')) {
+                            if (link.includes('/admin') || link.includes('/reports')) {
+                                if (roles.includes('SERVICE_ADMIN')) {
+                                    data.metadata.targetRole = 'SERVICE_ADMIN';
+                                }
+                            } else if (link.includes('/assigned-to-me')) {
+                                if (roles.includes('SERVICE_EMP')) {
+                                    data.metadata.targetRole = 'SERVICE_EMP';
+                                }
+                            } else if (link.includes('/ticket/')) {
+                                const msgLower = (data.message || '').toLowerCase();
+                                const titleLower = (data.title || '').toLowerCase();
+                                const isForEmp = titleLower.includes('assigned') || msgLower.includes('assigned to you') || msgLower.includes('by user');
+                                
+                                if (isForEmp && roles.includes('SERVICE_EMP')) {
+                                    data.metadata.targetRole = 'SERVICE_EMP';
+                                } else if (roles.includes('SERVICE_ADMIN') && (titleLower.includes('admin') || titleLower.includes('new ticket') || titleLower.includes('escalated'))) {
+                                    data.metadata.targetRole = 'SERVICE_ADMIN';
+                                } else {
+                                    const clientRoles = ['FACULTY', 'STAFF', 'TECHNICAL STAFF', 'EXAMSECTION', 'HOD', 'STUDENT'];
+                                    const matchedRole = clientRoles.find(r => roles.includes(r));
+                                    if (matchedRole) {
+                                        data.metadata.targetRole = matchedRole;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // 2. Research / Approvals Modules
+                        const researchModules = ['Research', 'Journal', 'Conference', 'BookChapter', 'Textbook', 'Patent', 'FundedProject', 'Consultancy', 'NovelProduct'];
+                        if (researchModules.includes(module) || link.includes('/research') || link.includes('/hod') || link.includes('/research-dean') || link.includes('/research-coordinator')) {
+                            if (link.includes('/hod/')) {
+                                if (roles.includes('HOD')) {
+                                    data.metadata.targetRole = 'HOD';
+                                }
+                            } else if (link.includes('/research-dean/')) {
+                                if (roles.includes('RESEARCH_DEAN')) {
+                                    data.metadata.targetRole = 'RESEARCH_DEAN';
+                                }
+                            } else if (link.includes('/research-coordinator/')) {
+                                if (roles.includes('RESEARCH_COORDINATOR')) {
+                                    data.metadata.targetRole = 'RESEARCH_COORDINATOR';
+                                }
+                            } else {
+                                if (roles.includes('FACULTY')) {
+                                    data.metadata.targetRole = 'FACULTY';
+                                } else if (roles.includes('STUDENT')) {
+                                    data.metadata.targetRole = 'STUDENT';
+                                }
+                            }
+                        }
+                    }
+                } catch (roleErr) {
+                    console.error("Failed to auto-detect targetRole:", roleErr.message);
+                }
+            }
+
             // 1. Save to Database
             const notification = await Notification.create(data);
 

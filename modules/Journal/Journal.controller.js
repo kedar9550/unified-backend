@@ -142,7 +142,8 @@ exports.createJournal = async (req, res) => {
                         type: 'ACTION_REQUIRED',
                         title: 'Journal Approval Required',
                         message: `${emp.name || 'A faculty member'} has submitted a new Journal: ${journal.paperTitle}`,
-                        link: `/research/approvals` // Use correct frontend route for approvals
+                        link: `/research/approvals`, // Use correct frontend route for approvals
+                        metadata: { targetRole: "HOD" }
                     });
                 }
             }

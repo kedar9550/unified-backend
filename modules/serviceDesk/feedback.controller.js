@@ -80,7 +80,7 @@ exports.submitFeedback = async (req, res, next) => {
         title: "Ticket Closed",
         message: `Ticket ${ticket.ticketNumber} was closed after feedback was submitted.`,
         link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
+        metadata: { ticketId: ticket._id, targetRole: "SERVICE_ADMIN" }
       });
     }
 
