@@ -53,7 +53,7 @@ const registerUser = async (req, res) => {
         }
 
         const escapedDept = escapeRegex(department);
-        const deptRecord = await Department.findOne({
+        let deptRecord = await Department.findOne({
             $or: [
                 { name: new RegExp(`^${escapedDept}$`, 'i') },
                 { code: new RegExp(`^${escapedDept}$`, 'i') }
@@ -61,7 +61,12 @@ const registerUser = async (req, res) => {
         });
 
         if (!deptRecord) {
-            return res.status(404).json({ message: `Department '${department}' not found in our system. Please add it first.` });
+            const deptCode = department.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "DEPT";
+            deptRecord = await Department.create({
+                name: department,
+                code: deptCode,
+                type: 'Academic'
+            });
         }
 
         const employee = await Employee.create({
