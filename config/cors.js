@@ -1,6 +1,6 @@
 const allowedOrigins = [
     'http://localhost:5173',
-    'https://unified-frontend-neon.vercel.app'
+    'https://digitalservices.adityauniversity.in'
 ];
 
 if (process.env.FRONTEND_URI) {

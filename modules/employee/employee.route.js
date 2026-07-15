@@ -24,7 +24,8 @@ const {
     getHODStaff,
     addHODStaff,
     sendSignupOtp,
-    verifySignupOtp
+    verifySignupOtp,
+    saveFcmToken
 } = require('./employee.controller');
 
 // --- Multer Setup ---
@@ -75,6 +76,7 @@ router.post('/login', validateUser);
 router.post('/logout', protect, logoutUser);
 router.post('/send-signup-otp', sendSignupOtp);
 router.post('/verify-signup-otp', verifySignupOtp);
+router.post('/save-fcm-token', protect, saveFcmToken);
 
 // --- Profile & User Data ---
 router.get('/me', protect, getMe);

@@ -1317,6 +1317,33 @@ const verifySignupOtp = async (req, res) => {
     }
 };
 
+/**
+ * Save FCM Token for Push Notifications
+ */
+const saveFcmToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+        if (!fcmToken || !req.user) {
+            return res.status(400).json({ message: "fcmToken and authenticated user are required" });
+        }
+
+        // Sometimes req.user uses _id and sometimes userId depending on the middleware
+        const userId = req.user.userId || req.user._id; 
+        const userType = req.user.userType || (/^\d+$/.test(req.user.institutionId) ? 'Employee' : 'Student');
+
+        if (userType === 'Student') {
+            await Student.findByIdAndUpdate(userId, { $addToSet: { fcmIds: fcmToken } });
+        } else {
+            await Employee.findByIdAndUpdate(userId, { $addToSet: { fcmIds: fcmToken } });
+        }
+
+        res.status(200).json({ success: true, message: "FCM Token saved successfully" });
+    } catch (e) {
+        console.error("FCM Token save error:", e);
+        res.status(500).json({ message: "Server error while saving FCM token" });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -1336,5 +1363,6 @@ module.exports = {
     getHODStaff,
     addHODStaff,
     sendSignupOtp,
-    verifySignupOtp
+    verifySignupOtp,
+    saveFcmToken
 };
