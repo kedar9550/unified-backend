@@ -247,7 +247,7 @@ const getMe = async (req, res) => {
 const logoutUser = async (req, res) => {
     const { fcmToken } = req.body;
     if (fcmToken && req.user) {
-        const userId = req.user.userId;
+        const userId = req.user.userId || req.user._id;
         const userType = req.user.userType || (/^\d+$/.test(req.user.institutionId) ? 'Employee' : 'Student');
         try {
             if (userType === 'Student') {
