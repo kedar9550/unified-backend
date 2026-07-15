@@ -123,10 +123,39 @@ const createAcademicYear = async (req, res) => {
 ───────────────────────────────────────────────────────────── */
 const getAcademicYears = async (req, res) => {
     try {
-        const years = await AcademicYear.find({})
-            .populate('programs.programId')
-            .populate('programs.activeSemesterTypeId', 'name')
-            .sort({ year: -1 });
+        const currentDate = new Date();
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth() + 1; // 1-12
+
+        let firstYearStr, secondYearStr;
+
+        const oldYearStr = `${currentYear - 1}-${currentYear}`;
+        const newYearStr = `${currentYear}-${currentYear + 1}`;
+
+        if (currentMonth <= 6) {
+            // Jan-Jun: Old one first, new one next
+            firstYearStr = oldYearStr;
+            secondYearStr = newYearStr;
+        } else {
+            // Jul-Dec: New one first, old one next
+            firstYearStr = newYearStr;
+            secondYearStr = oldYearStr;
+        }
+
+        // Ensure both exist in DB and fetch them
+        const firstYearDoc = await AcademicYear.findOneAndUpdate(
+            { year: firstYearStr },
+            { $setOnInsert: { year: firstYearStr } },
+            { new: true, upsert: true }
+        ).populate('programs.programId').populate('programs.activeSemesterTypeId', 'name');
+
+        const secondYearDoc = await AcademicYear.findOneAndUpdate(
+            { year: secondYearStr },
+            { $setOnInsert: { year: secondYearStr } },
+            { new: true, upsert: true }
+        ).populate('programs.programId').populate('programs.activeSemesterTypeId', 'name');
+
+        const years = [firstYearDoc, secondYearDoc];
 
         res.json({ count: years.length, years });
     } catch (err) {
