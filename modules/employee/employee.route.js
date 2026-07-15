@@ -22,7 +22,9 @@ const {
     getStaffData,
     getAllEmployees,
     getHODStaff,
-    addHODStaff
+    addHODStaff,
+    sendSignupOtp,
+    verifySignupOtp
 } = require('./employee.controller');
 
 // --- Multer Setup ---
@@ -71,6 +73,8 @@ const uploadCsv = multer({
 router.post('/register', registerUser);
 router.post('/login', validateUser); 
 router.post('/logout', protect, logoutUser);
+router.post('/send-signup-otp', sendSignupOtp);
+router.post('/verify-signup-otp', verifySignupOtp);
 
 // --- Profile & User Data ---
 router.get('/me', protect, getMe);
