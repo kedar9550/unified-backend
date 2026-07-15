@@ -23,10 +23,45 @@ const isProd = process.env.NODE_ENV === 'production';
  */
 const registerUser = async (req, res) => {
     try {
-        const { fullname, id, department, designation, email, phone, password, userType } = req.body;
+        const { fullname, id, department, designation, email, phone, password, userType, otp, signature, expiry } = req.body;
 
         if (!fullname || !id || !department || !designation || !email || !phone || !password) {
             return res.status(400).json({ message: "All fields required" });
+        }
+
+        // Check if this is a public signup vs an admin-initiated registration
+        let token;
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+            token = req.headers.authorization.split(' ')[1];
+        } else if (req.cookies?.token) {
+            token = req.cookies.token;
+        }
+
+        let isSelfSignup = true;
+        if (token) {
+            try {
+                const jwt = require('jsonwebtoken');
+                jwt.verify(token, process.env.JWT_SECRET || 'secret');
+                isSelfSignup = false; // Valid admin token present, bypass OTP
+            } catch (err) {
+                // If token invalid, treat as self-signup
+            }
+        }
+
+        if (isSelfSignup) {
+            if (!otp || !signature || !expiry) {
+                return res.status(400).json({ message: "OTP verification is required for signup" });
+            }
+            if (Date.now() > Number(expiry)) {
+                return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+            }
+            const expectedSignature = crypto.createHmac('sha256', process.env.JWT_SECRET || 'secret')
+                .update(`${id.trim()}|${phone.trim()}|${otp.trim()}|${expiry}`)
+                .digest('hex');
+
+            if (signature !== expectedSignature) {
+                return res.status(400).json({ message: "Invalid OTP" });
+            }
         }
 
         const existingInstitution = await Employee.findOne({ institutionId: id });
@@ -1175,6 +1210,113 @@ const addHODStaff = async (req, res) => {
     }
 };
 
+/**
+ * Send OTP for Sign Up
+ */
+const sendSignupOtp = async (req, res) => {
+    try {
+        const { institutionId } = req.body;
+        if (!institutionId) {
+            return res.status(400).json({ message: "Institution ID is required" });
+        }
+
+        const cleanId = institutionId.trim();
+
+        // 1. Check if already registered
+        const existingEmployee = await Employee.findOne({ institutionId: cleanId });
+        if (existingEmployee) {
+            return res.status(409).json({ message: "Employee with this ID is already registered" });
+        }
+
+        // 2. Fetch from ECAP API
+        let identityData;
+        try {
+            const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${cleanId}`);
+            identityData = identityResponse?.data?.[0];
+        } catch (apiErr) {
+            console.error("ECAP ERROR:", apiErr.message);
+        }
+
+        if (!identityData || identityData.error) {
+            return res.status(404).json({ message: "Invalid Employee ID. Not found in ECAP" });
+        }
+
+        const name = (identityData.employeename || identityData.EmployeeName)?.trim();
+        const phone = (identityData.mobileno || identityData.MobileNo)?.trim();
+        const department = (identityData.departmentname || identityData.DepartmentName)?.trim();
+        const designation = (identityData.designation || identityData.Designation)?.trim();
+
+        if (!phone) {
+            return res.status(400).json({ message: "No mobile number associated with this ID in ECAP records" });
+        }
+
+        // 3. Generate OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+        // 4. Send OTP via SMS
+        const smsApiUrl = "https://pgapi.vispl.in/fe/api/v1/multiSend?username=aditrpg1.trans&password=Ad1tya@1234&unicode=false&from=ADIUNV&to=" + phone + "&text=Dear+" + encodeURIComponent(name || "User") + ",%0AThank+you+for+reaching+out+to+us.+%0ATo+verify+your+request+and+proceed+with+further+actions,+please+use+the+following+One-Time+Password+(OTP):" + otp + "+@ADITYA+UNIVERSITY";
+
+        try {
+            console.log(`[AUTH-SIGNUP] Attempting to send SMS to ${phone}. OTP: ${otp}`);
+            const smsResponse = await axios.get(smsApiUrl);
+            if (smsResponse.status !== 200) {
+                console.warn("[AUTH-SIGNUP] SMS API responded with non-200 status:", smsResponse.status);
+            }
+        } catch (smsError) {
+            console.error("[AUTH-SIGNUP] Error sending SMS: " + smsError.message);
+        }
+
+        // 5. Generate cryptographic signature
+        const signature = crypto.createHmac('sha256', process.env.JWT_SECRET || 'secret')
+            .update(`${cleanId}|${phone}|${otp}|${expiry}`)
+            .digest('hex');
+
+        res.status(200).json({
+            success: true,
+            message: "OTP sent successfully",
+            signature,
+            expiry,
+            details: {
+                fullname: name,
+                department,
+                designation,
+                phone
+            }
+        });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+};
+
+/**
+ * Verify OTP for Sign Up
+ */
+const verifySignupOtp = async (req, res) => {
+    try {
+        const { institutionId, phone, otp, signature, expiry } = req.body;
+        if (!institutionId || !phone || !otp || !signature || !expiry) {
+            return res.status(400).json({ message: "All OTP validation fields are required" });
+        }
+
+        if (Date.now() > Number(expiry)) {
+            return res.status(400).json({ message: "OTP has expired. Please request a new one." });
+        }
+
+        const expectedSignature = crypto.createHmac('sha256', process.env.JWT_SECRET || 'secret')
+            .update(`${institutionId.trim()}|${phone.trim()}|${otp.trim()}|${expiry}`)
+            .digest('hex');
+
+        if (signature !== expectedSignature) {
+            return res.status(400).json({ message: "Invalid OTP" });
+        }
+
+        res.status(200).json({ success: true, message: "OTP verified successfully" });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -1192,5 +1334,7 @@ module.exports = {
     getStaffData,
     getAllEmployees,
     getHODStaff,
-    addHODStaff
+    addHODStaff,
+    sendSignupOtp,
+    verifySignupOtp
 };
