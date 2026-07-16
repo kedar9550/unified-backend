@@ -72,7 +72,7 @@ const registerUser = async (req, res) => {
 
         // Verify Identity with Institute API (Persona Check)
         try {
-            const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${id}`);
+            const identityResponse = await axios.get(`${process.env.STAFF_DATA_API_URL}${id}`);
             const identityData = identityResponse?.data?.[0];
 
             if (!identityData || identityData.error) {
@@ -454,7 +454,7 @@ const searchUser = async (req, res) => {
         if (users.length === 0 && /^\d+$/.test(query.trim())) {
             try {
                 const empId = query.trim();
-                const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${empId}`);
+                const identityResponse = await axios.get(`${process.env.STAFF_DATA_API_URL}${empId}`);
                 const identityData = identityResponse?.data?.[0];
 
                 if (identityData && !identityData.error && identityData.employeecode) {
@@ -607,9 +607,9 @@ const getecapdata = async (req, res) => {
         const { institutionId, role } = req.body;
         let response;
         if (role === "Employee") {
-            response = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${institutionId}`);
+            response = await axios.get(`${process.env.STAFF_DATA_API_URL}${institutionId}`);
         } else if (role === "Student") {
-            response = await axios.get(`https://info.aec.edu.in/adityaapi/api/studentdata/${institutionId}`);
+            response = await axios.get(`${process.env.STUDENT_DATA_API_URL}${institutionId}`);
         }
         const data = response.data?.[0];
         res.json(data);
@@ -635,7 +635,7 @@ const syncProfileWithECAP = async (req, res) => {
         }
 
         // Fetch ECAP Data
-        const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${institutionId}`);
+        const identityResponse = await axios.get(`${process.env.STAFF_DATA_API_URL}${institutionId}`);
         const identityData = identityResponse?.data?.[0];
 
         if (!identityData || identityData.error) {
@@ -745,7 +745,7 @@ const bulkRegisterUser = async (req, res) => {
                 // Fetch ECAP Data
                 let identityData = null;
                 try {
-                    const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${institutionId}`);
+                    const identityResponse = await axios.get(`${process.env.STAFF_DATA_API_URL}${institutionId}`);
                     identityData = identityResponse?.data?.[0];
                 } catch (apiErr) {
                     errors.push({ id: institutionId, error: "Failed to connect to ECAP API" });
@@ -840,7 +840,7 @@ const bulkUpdateEmployees = async (req, res) => {
                 if (!institutionId) continue;
 
                 // Fetch ECAP Data
-                const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${institutionId}`);
+                const identityResponse = await axios.get(`${process.env.STAFF_DATA_API_URL}${institutionId}`);
                 const identityData = identityResponse?.data?.[0];
 
                 if (!identityData || identityData.error) {
@@ -1025,7 +1025,7 @@ const changePassword = async (req, res) => {
 const getStaffData = async (req, res) => {
     try {
         const { id } = req.params;
-        const response = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${id}`);
+        const response = await axios.get(`${process.env.STAFF_DATA_API_URL}${id}`);
         const data = response.data;
 
         if (!data || data.length === 0) {
@@ -1231,7 +1231,7 @@ const sendSignupOtp = async (req, res) => {
         // 2. Fetch from ECAP API
         let identityData;
         try {
-            const identityResponse = await axios.get(`https://info.aec.edu.in/adityaAPI/API/staffdata/${cleanId}`);
+            const identityResponse = await axios.get(`${process.env.STAFF_DATA_API_URL}${cleanId}`);
             identityData = identityResponse?.data?.[0];
         } catch (apiErr) {
             console.error("ECAP ERROR:", apiErr.message);
@@ -1255,7 +1255,7 @@ const sendSignupOtp = async (req, res) => {
         const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
 
         // 4. Send OTP via SMS
-        const smsApiUrl = "https://pgapi.vispl.in/fe/api/v1/multiSend?username=aditrpg1.trans&password=Ad1tya@1234&unicode=false&from=ADIUNV&to=" + phone + "&text=Dear+" + encodeURIComponent(name || "User") + ",%0AThank+you+for+reaching+out+to+us.+%0ATo+verify+your+request+and+proceed+with+further+actions,+please+use+the+following+One-Time+Password+(OTP):" + otp + "+@ADITYA+UNIVERSITY";
+        const smsApiUrl = process.env.SMS_API_URL + phone + "&text=Dear+" + encodeURIComponent(name || "User") + ",%0AThank+you+for+reaching+out+to+us.+%0ATo+verify+your+request+and+proceed+with+further+actions,+please+use+the+following+One-Time+Password+(OTP):" + otp + "+@ADITYA+UNIVERSITY";
 
         try {
             console.log(`[AUTH-SIGNUP] Attempting to send SMS to ${phone}. OTP: ${otp}`);

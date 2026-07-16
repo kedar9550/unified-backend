@@ -110,7 +110,7 @@ exports.sendOtp = async (req, res, next) => {
 
         // Send Mobile SMS
         const name = user.name || (userType === "Student" ? user.studentName : "User");
-        const smsApiUrl = "https://pgapi.vispl.in/fe/api/v1/multiSend?username=aditrpg1.trans&password=Ad1tya@1234&unicode=false&from=ADIUNV&to=" + contactValue + "&text=Dear+" + encodeURIComponent(name) + ",%0AThank+you+for+reaching+out+to+us.+%0ATo+verify+your+request+and+proceed+with+further+actions,+please+use+the+following+One-Time+Password+(OTP):" + otp + "+@ADITYA+UNIVERSITY";
+        const smsApiUrl = process.env.SMS_API_URL + contactValue + "&text=Dear+" + encodeURIComponent(name) + ",%0AThank+you+for+reaching+out+to+us.+%0ATo+verify+your+request+and+proceed+with+further+actions,+please+use+the+following+One-Time+Password+(OTP):" + otp + "+@ADITYA+UNIVERSITY";
 
         try {
             console.log("[AUTH] Attempting to send SMS to " + contactValue + "...");
