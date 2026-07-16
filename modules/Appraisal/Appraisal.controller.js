@@ -2253,7 +2253,7 @@ exports.updateProctoringDuties = async (req, res) => {
 // SCOPUS HELPER FUNCTIONS
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SCOPUS_API_KEY = process.env.SCOPUS_API_KEY || "0436d4fe788649172354545ceca9e650";
+const SCOPUS_API_KEY = process.env.SCOPUS_API_KEY;
 const SCOPUS_SEARCH_BASE = "https://api.elsevier.com/content/search/scopus";
 
 /**
