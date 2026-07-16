@@ -47,12 +47,12 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             Employee.countDocuments(),
             Role.countDocuments(),
             School.countDocuments(),
-            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean(),
+            AcademicYear.find({}).lean(),
             Discrepancy.countDocuments({ status: 'PENDING', section: 'PROCTORING' })
         ]);
 
         // Filter for active years in JS
-        const activeYearObjs = allYearObjs.filter(ay => ay.isGlobalActive);
+        const activeYearObjs = allYearObjs.filter(ay => ay.active);
 
         // Format years from 2025-2026 to 2025-26
         const formatYear = (y) => {
@@ -66,8 +66,11 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
         const activeYear = activeYearObjs.length > 0 
             ? activeYearObjs.map(ay => formatYear(ay.year)).join(' & ') 
             : 'N/A';
+            
+        const activeYearStart = activeYearObjs.length > 0 ? activeYearObjs[0].startDate : null;
+        const activeYearEnd = activeYearObjs.length > 0 ? activeYearObjs[0].endDate : null;
         
-        const activeSemester = activeYearObjs[0]?.programs?.find(p => p.isActive)?.activeSemesterTypeId?.name || 'N/A';
+        const activeSemester = 'N/A';
 
         // Parallel lists (top 5)
         const [
@@ -167,6 +170,8 @@ exports.getUniprimeDashboardData = async (req, res, next) => {
             data: {
                 academicYearsCount,
                 activeYear,
+                activeYearStart,
+                activeYearEnd,
                 activeSemester,
                 departmentsCount,
                 programsCount,
@@ -250,20 +255,18 @@ exports.getFeedbackDashboardData = async (req, res, next) => {
                 .limit(5)
                 .lean(),
             // Active Academic Years
-            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean()
+            AcademicYear.find({}).lean()
         ]);
 
         const avgRatingValue = avgRatingData.length > 0 ? (avgRatingData[0].avg / 20).toFixed(1) : "0.0";
         const lowRatingsCount = lowRatingsData.length > 0 ? lowRatingsData[0].count : 0;
-        const activeYearObjs = allYearObjs.filter(ay => ay.isGlobalActive);
+        const activeYearObjs = allYearObjs.filter(ay => ay.active);
         
         const activeYearStr = activeYearObjs.length > 0 
             ? [...new Set(activeYearObjs.map(ay => formatYear(ay.year)))].join(' & ') 
             : 'N/A';
             
-        const activeSemester = activeYearObjs.length > 0
-            ? [...new Set(activeYearObjs.flatMap(ay => ay.programs.filter(p => p.isActive).map(p => p.activeSemesterTypeId?.name)))].filter(Boolean).join(' / ')
-            : 'N/A';
+        const activeSemester = 'N/A';
 
         res.status(200).json({
             status: 'success',
@@ -348,7 +351,7 @@ exports.getExamDashboardData = async (req, res, next) => {
                 .populate('uploadedBy', 'name profileImage')
                 .lean(),
             // Active Academic Years
-            AcademicYear.find({}).populate('programs.activeSemesterTypeId', 'name').lean()
+            AcademicYear.find({}).lean()
         ]);
 
         const submittedFacultiesCount = uniqueSubmittedFaculties.length;
@@ -358,13 +361,11 @@ exports.getExamDashboardData = async (req, res, next) => {
             avgPassRate = Number(avgPassRateData[0].avg).toFixed(1);
         }
         
-        const activeYearObjs = allYearObjs.filter(ay => ay.isGlobalActive);
+        const activeYearObjs = allYearObjs.filter(ay => ay.active);
         const activeYearStr = activeYearObjs.length > 0 
             ? [...new Set(activeYearObjs.map(ay => formatYear(ay.year)))].join(' & ') 
             : 'N/A';
-        const activeSemester = activeYearObjs.length > 0
-            ? [...new Set(activeYearObjs.flatMap(ay => ay.programs.filter(p => p.isActive).map(p => p.activeSemesterTypeId?.name)))].filter(Boolean).join(' / ')
-            : 'N/A';
+        const activeSemester = 'N/A';
 
         // Discrepancy count
         const totalDiscrepancies = await Discrepancy.countDocuments({

@@ -31,18 +31,22 @@ const AcademicYearSchema = new mongoose.Schema({
     year: {
         type: String,
         required: true,
-        unique: true,           // ONE doc per year string — this is the key constraint
+        unique: true,
         trim: true,
         match: [/^\d{4}-\d{4}$/, 'Format must be YYYY-YYYY']
     },
-    // programs: {
-    //     type: [ProgramEntrySchema],
-    //     default: []
-    // },
-    // isGlobalActive: {
-    //     type: Boolean,
-    //     default: false
-    // }
+    startDate: {
+        type: Date,
+        required: true
+    },
+    endDate: {
+        type: Date,
+        required: true
+    },
+    active: {
+        type: Boolean,
+        default: false
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('AcademicYear', AcademicYearSchema);
