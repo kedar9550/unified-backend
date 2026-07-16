@@ -390,20 +390,20 @@ const activateAcademicYear = async (req, res) => {
         // 1. Deactivate all years globally
         await AcademicYear.updateMany(
             {},
-            { 
-                $set: { 
+            {
+                $set: {
                     isGlobalActive: false
-                } 
+                }
             }
         );
 
         // 2. Activate the target year globally
         const updatedYear = await AcademicYear.findByIdAndUpdate(
             id,
-            { 
-                $set: { 
+            {
+                $set: {
                     isGlobalActive: true
-                } 
+                }
             },
             { new: true }
         );

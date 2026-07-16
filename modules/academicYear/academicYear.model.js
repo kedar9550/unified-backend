@@ -9,23 +9,23 @@ const mongoose = require('mongoose');
  * 24 program-scoped records into 3 year-level documents and fix all refs.
  */
 
-const ProgramEntrySchema = new mongoose.Schema({
-    programId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Program',
-        required: true
-    },
-    isActive: {
-        type: Boolean,
-        default: false
-    },
-    // Which semester / year period is currently active for this program
-    activeSemesterTypeId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'SemesterType',
-        default: null
-    }
-}, { _id: false });          // no separate _id per array entry — not needed
+// const ProgramEntrySchema = new mongoose.Schema({
+//     programId: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: 'Program',
+//         required: true
+//     },
+//     isActive: {
+//         type: Boolean,
+//         default: false
+//     },
+//     // Which semester / year period is currently active for this program
+//     activeSemesterTypeId: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: 'SemesterType',
+//         default: null
+//     }
+// }, { _id: false });         
 
 const AcademicYearSchema = new mongoose.Schema({
     year: {
@@ -35,14 +35,14 @@ const AcademicYearSchema = new mongoose.Schema({
         trim: true,
         match: [/^\d{4}-\d{4}$/, 'Format must be YYYY-YYYY']
     },
-    programs: {
-        type: [ProgramEntrySchema],
-        default: []
-    },
-    isGlobalActive: {
-        type: Boolean,
-        default: false
-    }
+    // programs: {
+    //     type: [ProgramEntrySchema],
+    //     default: []
+    // },
+    // isGlobalActive: {
+    //     type: Boolean,
+    //     default: false
+    // }
 }, { timestamps: true });
 
 module.exports = mongoose.model('AcademicYear', AcademicYearSchema);
