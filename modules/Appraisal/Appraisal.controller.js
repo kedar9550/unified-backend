@@ -436,10 +436,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
             academicYearId: { $in: matchingYearIds },
-            subjectType: { $in: ["Theory", "THEORY"] }
+            subjectType: { $in: ["Theory", "THEORY"] },
+            phase: 2
         }).populate("branchId", "code");
 
-        // Filter: If both Phase 1 and Phase 2 feedbacks exist for a course/section, consider Phase 2. Otherwise, consider whichever is present.
+        // Filter: Group Phase 2 feedback records by course/section
         const feedbackGroups = {};
         feedbackResults.forEach(res => {
             const subjectKey = (res.subjectCode || res.subjectName || "").trim().toLowerCase();
@@ -460,9 +461,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         Object.values(feedbackGroups).forEach(group => {
             if (group.length === 0) return;
 
-            // Select Phase 2 record if present, otherwise default to whichever is present (e.g. Phase 1)
-            const phase2Record = group.find(r => r.phase === 2);
-            const targetRecord = phase2Record || group[0];
+            // Select Phase 2 record
+            const targetRecord = group[0];
 
             const selectedPercentage = targetRecord.percentage || 0;
 
