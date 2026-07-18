@@ -7,7 +7,6 @@ const fs = require("fs");
 const {
     getAppraisalConfig,
     saveAppraisalConfig,
-    getActiveAppraisalYear,
     initiateOrGetAppraisal,
     getUnresolvedClaims,
     resolveClaim,
@@ -18,7 +17,10 @@ const {
     getPendingRNDAppraisals,
     evaluateRNDAppraisal,
     updateProctoringDuties,
-    getScopusData
+    getScopusData,
+    getAllAppraisals,
+    getAppraisalById,
+    getActiveAppraisalYear
 } = require("./Appraisal.controller");
 
 const { protect, authorize } = require("../../middlewares/authMiddleware");
@@ -78,5 +80,9 @@ router.put("/hod-evaluate/:id", protect, authorize("DEPARTMENT HOD", "HOD"), eva
 // R&D Admin Appraisal actions
 router.get("/pending-rnd", protect, authorize("ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR"), getPendingRNDAppraisals);
 router.put("/rnd-evaluate/:id", protect, authorize("ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR"), evaluateRNDAppraisal);
+
+// All Appraisals (UNIPRIME)
+router.get("/all/:academicYearId", protect, authorize("UNIPRIME"), getAllAppraisals);
+router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL"), getAppraisalById);
 
 module.exports = router;

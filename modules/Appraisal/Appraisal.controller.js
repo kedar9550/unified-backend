@@ -259,7 +259,7 @@ exports.getAppraisalConfig = async (req, res) => {
 // 2. Save/Update Appraisal Point Config (UNIPRIME)
 exports.saveAppraisalConfig = async (req, res) => {
     try {
-        const { academicYearId, teaching, research, valueAddition, administration, isActive } = req.body;
+        const { academicYearId, teaching, research, valueAddition, administration, minimumPoints, isActive } = req.body;
         if (!academicYearId) {
             return res.status(400).json({ success: false, message: "Academic Year ID is required." });
         }
@@ -270,6 +270,7 @@ exports.saveAppraisalConfig = async (req, res) => {
             config.research = research || config.research;
             config.valueAddition = valueAddition || config.valueAddition;
             config.administration = administration || config.administration;
+            if (minimumPoints) config.minimumPoints = minimumPoints;
             if (isActive !== undefined) {
                 config.isActive = isActive;
             }
@@ -282,6 +283,7 @@ exports.saveAppraisalConfig = async (req, res) => {
                 research,
                 valueAddition,
                 administration,
+                minimumPoints: minimumPoints || {},
                 isActive: isActive || false,
                 lastUpdatedBy: req.user.userId
             });
@@ -319,6 +321,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         if (!faculty.wosId) missingProfileFields.push("Web of Science ID");
         if (!faculty.orcidId) missingProfileFields.push("ORCID ID");
         if (!faculty.designation) missingProfileFields.push("Designation");
+        if (!faculty.qualification || faculty.qualification.trim() === "") missingProfileFields.push("Qualification");
 
         const isProfileComplete = missingProfileFields.length === 0;
 
@@ -1435,6 +1438,10 @@ exports.submitAppraisal = async (req, res) => {
         if (!faculty) {
             return res.status(404).json({ success: false, message: "Faculty profile not found." });
         }
+        
+        if (!faculty.qualification || faculty.qualification.trim() === "") {
+            return res.status(400).json({ success: false, message: "Please update your profile qualification before submitting the appraisal." });
+        }
 
         // Determine thresholds based on category
         const doc = (faculty.doctorate || "").toLowerCase().trim();
@@ -2460,5 +2467,75 @@ exports.getScopusData = async (req, res) => {
         console.error("Scopus Data Fetch Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
+};// --- UNIPRIME All Appraisals ---
+exports.getAllAppraisals = async (req, res) => {
+    try {
+        const { academicYearId } = req.params;
+        
+        // Ensure academic year exists
+        const academicYear = await AcademicYear.findById(academicYearId);
+        if (!academicYear) {
+            return res.status(404).json({ success: false, message: "Academic Year not found." });
+        }
+
+        const appraisals = await Appraisal.find({ academicYearId })
+            .populate({
+                path: 'facultyId',
+                select: 'name email phone institutionId designation profileImage department coreDepartment qualification',
+                populate: [
+                    { path: 'department', select: 'name' },
+                    { path: 'coreDepartment', select: 'name' }
+                ]
+            })
+            .sort({ updatedAt: -1 });
+
+        res.json({
+            success: true,
+            data: appraisals
+        });
+    } catch (err) {
+        console.error("Get All Appraisals Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
 };
 
+// --- Get Appraisal by ID ---
+exports.getAppraisalById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const appraisal = await Appraisal.findById(id).populate({
+            path: 'facultyId',
+            select: 'name email phone institutionId designation profileImage department coreDepartment qualification',
+            populate: [
+                { path: 'department', select: 'name' },
+                { path: 'coreDepartment', select: 'name' }
+            ]
+        });
+
+        if (!appraisal) {
+            return res.status(404).json({ success: false, message: "Appraisal not found." });
+        }
+
+        res.json({
+            success: true,
+            data: appraisal
+        });
+    } catch (err) {
+        console.error("Get Appraisal By ID Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// --- Get Active Appraisal Year ---
+exports.getActiveAppraisalYear = async (req, res) => {
+    try {
+        const activeConfig = await AppraisalConfig.findOne({ isActive: true });
+        res.json({
+            success: true,
+            data: activeConfig ? activeConfig.academicYearId : null
+        });
+    } catch (err) {
+        console.error("Get Active Appraisal Year Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};

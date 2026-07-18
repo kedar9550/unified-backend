@@ -116,8 +116,33 @@ const AppraisalConfigSchema = new mongoose.Schema({
             drcDept: { type: Number, default: 5 },
             antiRaggingCentral: { type: Number, default: 5 },
             antiRaggingDept: { type: Number, default: 3 },
-            otherCentral: { type: Number, default: 10 },
             otherDept: { type: Number, default: 5 }
+        }
+    },
+    minimumPoints: {
+        doctorates: {
+            teaching: { type: Number, default: 50 },
+            research: { type: Number, default: 50 },
+            valueAddition: { type: Number, default: 20 },
+            administration: { type: Number, default: 15 },
+            interpersonalSkills: { type: Number, default: 30 },
+            total: { type: Number, default: 165 }
+        },
+        nonDoctorates: {
+            teaching: { type: Number, default: 50 },
+            research: { type: Number, default: 30 },
+            valueAddition: { type: Number, default: 20 },
+            administration: { type: Number, default: 10 },
+            interpersonalSkills: { type: Number, default: 30 },
+            total: { type: Number, default: 140 }
+        },
+        leadershipTeam: {
+            teaching: { type: Number, default: 40 },
+            research: { type: Number, default: 30 },
+            valueAddition: { type: Number, default: 20 },
+            administration: { type: Number, default: 20 },
+            interpersonalSkills: { type: Number, default: 30 },
+            total: { type: Number, default: 140 }
         }
     },
     isActive: {
