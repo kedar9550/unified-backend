@@ -20,7 +20,8 @@ const {
     getScopusData,
     getAllAppraisals,
     getAppraisalById,
-    getActiveAppraisalYear
+    getActiveAppraisalYear,
+    getMyAppraisals
 } = require("./Appraisal.controller");
 
 const { protect, authorize } = require("../../middlewares/authMiddleware");
@@ -63,6 +64,7 @@ router.get("/config/:academicYearId", protect, getAppraisalConfig);
 router.post("/config", protect, authorize("ADMIN", "UNIPRIME"), saveAppraisalConfig);
 
 // Faculty Self Appraisal actions
+router.get("/my-appraisals", protect, authorize("FACULTY"), getMyAppraisals);
 router.get("/initiate/:academicYearId", protect, authorize("FACULTY"), initiateOrGetAppraisal);
 router.get("/unresolved-claims/:academicYearId", protect, authorize("FACULTY"), getUnresolvedClaims);
 router.post("/resolve-claim", protect, authorize("FACULTY"), resolveClaim);

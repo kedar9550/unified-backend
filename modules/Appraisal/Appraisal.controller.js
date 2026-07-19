@@ -2529,13 +2529,75 @@ exports.getAppraisalById = async (req, res) => {
 // --- Get Active Appraisal Year ---
 exports.getActiveAppraisalYear = async (req, res) => {
     try {
-        const activeConfig = await AppraisalConfig.findOne({ isActive: true });
+        const activeConfig = await AppraisalConfig.findOne({ isActive: true }).populate('academicYearId');
         res.json({
             success: true,
             data: activeConfig ? activeConfig.academicYearId : null
         });
     } catch (err) {
         console.error("Get Active Appraisal Year Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// --- Get My Appraisals (Faculty List View) ---
+exports.getMyAppraisals = async (req, res) => {
+    try {
+        const facultyId = req.user.userId;
+        const faculty = await Employee.findById(facultyId);
+        if (!faculty) {
+            return res.status(404).json({ success: false, message: "Faculty not found." });
+        }
+
+        const appraisals = await Appraisal.find({ facultyId })
+            .populate('academicYearId', 'year')
+            .sort({ createdAt: -1 });
+
+        // Calculate total points and determine minimum points based on qualification/designation
+        const formattedAppraisals = await Promise.all(appraisals.map(async (app) => {
+            const teachingPts = app.teaching?.totalClaimed || 0;
+            const researchPts = app.research?.totalClaimed || 0;
+            const valueAddPts = app.valueAddition?.totalClaimed || 0;
+            const adminPts = app.administration?.totalClaimed || 0;
+            const hodPts = app.hodEvaluation?.totalInterpersonalPoints || 0;
+            const totalPointsGained = Number((teachingPts + researchPts + valueAddPts + adminPts + hodPts).toFixed(2));
+
+            let minPointsRequired = 0;
+            const config = await AppraisalConfig.findOne({ academicYearId: app.academicYearId._id });
+            
+            if (config && config.minimumPoints) {
+                // Simplified designation/qualification check
+                const qual = (faculty.qualification || "").toLowerCase();
+                const isDoctorate = qual.includes("ph.d") || qual.includes("phd") || qual.includes("doctorate");
+                const desig = (faculty.designation || "").toLowerCase();
+                const isLeadership = desig.includes("dean") || desig.includes("principal") || desig.includes("director");
+                
+                if (isLeadership) {
+                    minPointsRequired = config.minimumPoints.leadershipTeam?.total || 140;
+                } else if (isDoctorate) {
+                    minPointsRequired = config.minimumPoints.doctorates?.total || 165;
+                } else {
+                    minPointsRequired = config.minimumPoints.nonDoctorates?.total || 140;
+                }
+            }
+
+            return {
+                _id: app._id,
+                academicYearId: app.academicYearId, // includes _id and year
+                totalPointsGained,
+                minPointsRequired,
+                status: app.status,
+                createdAt: app.createdAt
+            };
+        }));
+
+        res.json({
+            success: true,
+            data: formattedAppraisals
+        });
+
+    } catch (err) {
+        console.error("Get My Appraisals Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };
