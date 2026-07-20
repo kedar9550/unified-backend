@@ -703,7 +703,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (b.appraisalClaimant && b.appraisalClaimant !== faculty.institutionId) {
                 continue;
             }
-            
+
             let pts = 0;
             if (b.appraisalClaimant === faculty.institutionId) {
                 pts = config.research.bookConferencePoints.isbnBook || 10;
@@ -784,7 +784,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (p.appraisalClaimant && p.appraisalClaimant !== faculty.institutionId) {
                 return; // skip
             }
-            
+
             let pts = 0;
             if (p.appraisalClaimant === faculty.institutionId) {
                 const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
@@ -1442,7 +1442,7 @@ exports.submitAppraisal = async (req, res) => {
         if (!faculty) {
             return res.status(404).json({ success: false, message: "Faculty profile not found." });
         }
-        
+
         if (!faculty.qualification || faculty.qualification.trim() === "") {
             return res.status(400).json({ success: false, message: "Please update your profile qualification before submitting the appraisal." });
         }
@@ -2475,7 +2475,7 @@ exports.getScopusData = async (req, res) => {
 exports.getAllAppraisals = async (req, res) => {
     try {
         const { academicYearId } = req.params;
-        
+
         // Ensure academic year exists
         const academicYear = await AcademicYear.findById(academicYearId);
         if (!academicYear) {
@@ -2534,7 +2534,7 @@ exports.getAppraisalById = async (req, res) => {
 
         // Fetch related details
         const facultyId = appraisal.facultyId?._id || appraisal.facultyId;
-        const facultyId = appraisal.facultyId._id;
+
         const academicYearId = appraisal.academicYearId;
 
         const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } })
@@ -2599,14 +2599,14 @@ exports.getMyAppraisals = async (req, res) => {
 
             let minPointsRequired = 0;
             const config = await AppraisalConfig.findOne({ academicYearId: app.academicYearId._id });
-            
+
             if (config && config.minimumPoints) {
                 // Simplified designation/qualification check
                 const qual = (faculty.qualification || "").toLowerCase();
                 const isDoctorate = qual.includes("ph.d") || qual.includes("phd") || qual.includes("doctorate");
                 const desig = (faculty.designation || "").toLowerCase();
                 const isLeadership = desig.includes("dean") || desig.includes("principal") || desig.includes("director");
-                
+
                 if (isLeadership) {
                     minPointsRequired = config.minimumPoints.leadershipTeam?.total || 140;
                 } else if (isDoctorate) {
