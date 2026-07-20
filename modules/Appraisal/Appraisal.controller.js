@@ -700,8 +700,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         let totalBookConfPoints = 0;
 
         for (const b of books) {
+            if (b.appraisalClaimant && b.appraisalClaimant !== faculty.institutionId) {
+                continue;
+            }
+            
             let pts = 0;
-            if (b.appraisalClaimant && b.appraisalClaimant === faculty.institutionId) {
+            if (b.appraisalClaimant === faculty.institutionId) {
                 pts = config.research.bookConferencePoints.isbnBook || 10;
             }
             const isbn = b.isbn || b.isbnNumber || null;
@@ -717,9 +721,13 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         }
 
         for (const c of chapters) {
+            if (c.appraisalClaimant && c.appraisalClaimant !== faculty.institutionId) {
+                continue;
+            }
+
             let pts = 0;
             const isbn = c.isbnNumber || null;
-            if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId && isbn) {
+            if (c.appraisalClaimant === faculty.institutionId && isbn) {
                 pts = config.research.bookConferencePoints.isbnBookChapter || 5;
             }
             bookChapterItems.push({
@@ -734,8 +742,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         }
 
         for (const c of conferences) {
+            if (c.appraisalClaimant && c.appraisalClaimant !== faculty.institutionId) {
+                continue;
+            }
+
             let pts = 0;
-            if (c.appraisalClaimant && c.appraisalClaimant === faculty.institutionId) {
+            if (c.appraisalClaimant === faculty.institutionId) {
                 pts = config.research.bookConferencePoints.scopusConference || 5;
             }
             const issn = c.issnIsbn || null;
@@ -769,8 +781,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         let totalPatentPoints = 0;
 
         patents.forEach(p => {
+            if (p.appraisalClaimant && p.appraisalClaimant !== faculty.institutionId) {
+                return; // skip
+            }
+            
             let pts = 0;
-            if (p.appraisalClaimant && p.appraisalClaimant === faculty.institutionId) {
+            if (p.appraisalClaimant === faculty.institutionId) {
                 const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
                 if (statusKey === 'published' || statusKey === 'granted') {
                     pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
@@ -818,10 +834,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
                     pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
                 }
-            } else if (claimants.length > 0) {
-                claimStatus = "claimed_by_other";
-                claimedBy = "Other Internal Faculty";
-                pts = 0;
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
@@ -892,10 +904,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                         pts = config.research.projectProposalPoints.shortlisted || 5;
                     }
                 }
-            } else if (claimants.length > 0) {
-                claimStatus = "claimed_by_other";
-                claimedBy = "Other Internal Faculty";
-                pts = 0;
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
@@ -951,10 +959,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                         pts = config.research.projectProposalPoints.shortlisted || 5;
                     }
                 }
-            } else if (claimants.length > 0) {
-                claimStatus = "claimed_by_other";
-                claimedBy = "Other Internal Faculty";
-                pts = 0;
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
@@ -1016,8 +1020,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const savedCitations = latestCitations !== null ? latestCitations : (appraisal ? appraisal.research.scopusCitations : null);
         const savedHIndexPrevYear = latestHIndexPrevYear !== null ? latestHIndexPrevYear : (appraisal ? appraisal.research.hIndexPrevYear : null);
         const savedHIndexCurrentYear = latestHIndexCurrentYear !== null ? latestHIndexCurrentYear : (appraisal ? appraisal.research.hIndexCurrentYear : null);
-        const savedCitationStatus = appraisal ? (appraisal.research.scopusCitationStatus || "Pending") : "Pending";
-        const savedHIndexStatus = appraisal ? (appraisal.research.scopusHIndexStatus || "Pending") : "Pending";
+        const savedCitationStatus = (latestCitations !== null) ? "Approved" : (appraisal ? (appraisal.research.scopusCitationStatus || "Pending") : "Pending");
+        const savedHIndexStatus = (latestHIndexPrevYear !== null && latestHIndexCurrentYear !== null) ? "Approved" : (appraisal ? (appraisal.research.scopusHIndexStatus || "Pending") : "Pending");
         const savedCitationRemarks = appraisal ? (appraisal.research.scopusCitationRemarks || "") : "";
         const savedHIndexRemarks = appraisal ? (appraisal.research.scopusHIndexRemarks || "") : "";
 
