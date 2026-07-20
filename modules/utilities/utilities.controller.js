@@ -213,7 +213,7 @@ exports.hardDeleteUtility = async (req, res) => {
 };
 
 // @desc    Redirect short code to long url
-// @route   GET /api/utilities/r/:shortCode
+// @route   GET /api/utilities/go/:shortCode
 // @access  Public
 exports.redirectUrl = async (req, res) => {
     try {

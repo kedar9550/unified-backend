@@ -17,7 +17,7 @@ const {
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 
 // Public route for redirection
-router.get('/r/:shortCode', redirectUrl);
+router.get('/go/:shortCode', redirectUrl);
 
 // Protected routes (Any logged in user)
 router.use(protect);
