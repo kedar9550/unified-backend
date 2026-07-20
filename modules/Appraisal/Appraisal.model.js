@@ -148,6 +148,7 @@ const AppraisalSchema = new mongoose.Schema({
                 productId: { type: mongoose.Schema.Types.ObjectId, ref: 'NovelProduct' },
                 title: String,
                 status: String, // Developed / Implemented
+                organizationName: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }
