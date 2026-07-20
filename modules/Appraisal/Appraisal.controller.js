@@ -2520,9 +2520,39 @@ exports.getAppraisalById = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
         }
 
+        // Security check for FACULTY role
+        const userRoles = req.user.roles.map(r => r.role?.toUpperCase());
+        const isFaculty = userRoles.includes("FACULTY");
+        const isHigherRole = userRoles.some(r => ["UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD"].includes(r));
+
+        if (isFaculty && !isHigherRole) {
+            const facultyIdStr = appraisal.facultyId?._id?.toString() || appraisal.facultyId?.toString();
+            if (facultyIdStr !== req.user.userId.toString()) {
+                return res.status(403).json({ success: false, message: "Access denied. You can only view your own appraisal." });
+            }
+        }
+
+        // Fetch related details
+        const facultyId = appraisal.facultyId?._id || appraisal.facultyId;
+        const academicYearId = appraisal.academicYearId;
+
+        const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } })
+            .populate("programId", "name code programPattern")
+            .populate("branchId", "name code");
+        const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+        const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
+
+        const appObj = appraisal.toObject();
+        appObj.proctoringDetail = proctoringEntries;
+        appObj.proctoringDetails = proctoringEntries;
+        appObj.resourceUtilizationDetails = resourceUt;
+        appObj.contributionDetails = contributions;
+        appObj.administrationDetail = adminRoles;
+
         res.json({
             success: true,
-            data: appraisal
+            data: appObj
         });
     } catch (err) {
         console.error("Get Appraisal By ID Error:", err);
