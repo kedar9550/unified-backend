@@ -2520,6 +2520,20 @@ exports.getAppraisalById = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
         }
 
+        // Security check for FACULTY role
+        const userRoles = req.user.roles.map(r => r.role?.toUpperCase());
+        const isFaculty = userRoles.includes("FACULTY");
+        const isHigherRole = userRoles.some(r => ["UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD"].includes(r));
+
+        if (isFaculty && !isHigherRole) {
+            const facultyIdStr = appraisal.facultyId?._id?.toString() || appraisal.facultyId?.toString();
+            if (facultyIdStr !== req.user.userId.toString()) {
+                return res.status(403).json({ success: false, message: "Access denied. You can only view your own appraisal." });
+            }
+        }
+
+        // Fetch related details
+        const facultyId = appraisal.facultyId?._id || appraisal.facultyId;
         const facultyId = appraisal.facultyId._id;
         const academicYearId = appraisal.academicYearId;
 

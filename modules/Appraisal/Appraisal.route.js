@@ -85,6 +85,6 @@ router.put("/rnd-evaluate/:id", protect, authorize("ADMIN", "RESEARCH_DEAN", "RE
 
 // All Appraisals (UNIPRIME)
 router.get("/all/:academicYearId", protect, authorize("UNIPRIME"), getAllAppraisals);
-router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL"), getAppraisalById);
+router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD", "FACULTY"), getAppraisalById);
 
 module.exports = router;
