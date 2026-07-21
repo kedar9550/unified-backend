@@ -122,7 +122,8 @@ const AppraisalConfigSchema = new mongoose.Schema({
     minimumPoints: {
         doctorates: {
             teaching: { type: Number, default: 50 },
-            research: { type: Number, default: 50 },
+            research21: { type: Number, default: 40 },
+            research22_28: { type: Number, default: 10 },
             valueAddition: { type: Number, default: 20 },
             administration: { type: Number, default: 15 },
             interpersonalSkills: { type: Number, default: 30 },
@@ -130,7 +131,8 @@ const AppraisalConfigSchema = new mongoose.Schema({
         },
         nonDoctorates: {
             teaching: { type: Number, default: 50 },
-            research: { type: Number, default: 30 },
+            research21: { type: Number, default: 30 },
+            research22_28: { type: Number, default: 0 },
             valueAddition: { type: Number, default: 20 },
             administration: { type: Number, default: 10 },
             interpersonalSkills: { type: Number, default: 30 },
@@ -138,7 +140,8 @@ const AppraisalConfigSchema = new mongoose.Schema({
         },
         leadershipTeam: {
             teaching: { type: Number, default: 40 },
-            research: { type: Number, default: 30 },
+            research21: { type: Number, default: 30 },
+            research22_28: { type: Number, default: 0 },
             valueAddition: { type: Number, default: 20 },
             administration: { type: Number, default: 20 },
             interpersonalSkills: { type: Number, default: 30 },
