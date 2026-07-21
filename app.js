@@ -98,6 +98,7 @@ app.use('/api/research/book-chapter', require('./modules/BookChapter/BookChapter
 app.use('/api/research/journal', require('./modules/Journal/Journal.router'));
 app.use('/api/research/patent', require('./modules/Patent/Patent.router'));
 app.use('/api/research/funded-project', require('./modules/FundedProject/FundedProject.router'));
+app.use('/api/research-uploads', require('./modules/ResearchUploads/ResearchUploads.route'));
 app.use('/api/research/consultancy', require('./modules/Consultancy/Consultancy.router'));
 app.use('/api/research/conference', require('./modules/Conference/Conference.router'));
 app.use('/api/research/phd-scholar', require('./modules/PhdScholar/PhdScholar.router'));
