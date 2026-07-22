@@ -76,8 +76,8 @@ const EmployeeSchema = new mongoose.Schema({
 
     scopusId: { type: String, default: "" },
     wosId: { type: String, default: "" },
-    orcidId: { 
-        type: String, 
+    orcidId: {
+        type: String,
         default: "",
         validate: {
             validator: function (v) {
@@ -87,10 +87,10 @@ const EmployeeSchema = new mongoose.Schema({
         }
     },
     googleScholarId: { type: String, default: "" },
-    panNumber: { 
-        type: String, 
-        uppercase: true, 
-        trim: true, 
+    panNumber: {
+        type: String,
+        uppercase: true,
+        trim: true,
         default: "",
         validate: {
             validator: function (v) {
@@ -99,10 +99,10 @@ const EmployeeSchema = new mongoose.Schema({
             message: "Invalid PAN format"
         }
     },
-    college: { 
-        type: String, 
-        enum: ["Aditya University", "Aditya college of engineering and technology", "Aditya College of Pharmacy", ""],
-        default: "" 
+    college: {
+        type: String,
+        enum: ["Aditya University", "Aditya College of Pharmacy",],
+        default: ""
     },
 
     isActive: {
