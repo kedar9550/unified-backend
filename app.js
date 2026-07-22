@@ -117,6 +117,8 @@ app.use('/api/utilities', require('./modules/utilities/utilities.route'));
 app.use('/api/service-desk/services', require('./modules/serviceDesk/service.route'));
 app.use('/api/service-desk/tickets', require('./modules/serviceDesk/ticket.route'));
 app.use('/api/events', require('./modules/Events/Events.route'));
+app.use('/api/clubs', require('./modules/Club/Club.route'));
+app.use('/api/event-assignments', require('./modules/EventAssignment/EventAssignment.route'));
 
 // --- Error Handling ---
 
