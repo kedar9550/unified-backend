@@ -120,7 +120,7 @@ exports.getAllDepartments = async (req, res, next) => {
             ];
         }
 
-        const departments = await Department.find(query).populate('schoolIds').populate('programId');
+        const departments = await Department.find(query).populate('schoolIds').populate('programIds');
         res.status(200).json({ success: true, data: departments });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -207,10 +207,10 @@ exports.getAllPrograms = async (req, res, next) => {
             const branches = await Branch.find({ departmentId: req.query.departmentId }).select('programId');
             const programIds = [...new Set(branches.map(b => b.programId.toString()))];
 
-            // Also find if the department itself has a direct programId
+            // Also find if the department itself has direct programIds
             const dept = await Department.findById(req.query.departmentId);
-            if (dept && dept.programId) {
-                programIds.push(dept.programId.toString());
+            if (dept && dept.programIds && dept.programIds.length > 0) {
+                dept.programIds.forEach(id => programIds.push(id.toString()));
             }
             query._id = { $in: [...new Set(programIds)] };
         }
