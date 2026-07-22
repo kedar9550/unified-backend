@@ -27,10 +27,7 @@ const departmentSchema = new mongoose.Schema({
         default: 'Academic',
         required: true
     },
-    schoolId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'School'
-    },
+
     schoolIds: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School'
