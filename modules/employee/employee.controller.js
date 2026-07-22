@@ -922,8 +922,8 @@ const bulkUpdateEmployees = async (req, res) => {
 const adminUpdateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, coreDepartment } = req.body;
-        console.log("Admin Update Request:", { id, email, coreDepartment });
+        const { email, coreDepartment, name, department, designation } = req.body;
+        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation });
 
         const employee = await Employee.findById(id);
         if (!employee) {
@@ -947,6 +947,10 @@ const adminUpdateEmployee = async (req, res) => {
             // If it's missing in DB and not provided in request, default it to department
             employee.coreDepartment = employee.department;
         }
+
+        if (name) employee.name = name;
+        if (department) employee.department = department;
+        if (designation) employee.designation = designation;
 
         await employee.save();
 
