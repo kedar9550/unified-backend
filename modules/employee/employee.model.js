@@ -101,7 +101,7 @@ const EmployeeSchema = new mongoose.Schema({
     },
     college: {
         type: String,
-        enum: ["Aditya University", "Aditya College of Pharmacy",],
+        enum: ["Aditya University", "Aditya College of Pharmacy", ""],
         default: ""
     },
 

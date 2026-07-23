@@ -322,6 +322,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         if (!faculty.orcidId) missingProfileFields.push("ORCID ID");
         if (!faculty.designation) missingProfileFields.push("Designation");
         if (!faculty.qualification || faculty.qualification.trim() === "") missingProfileFields.push("Qualification");
+        if (!faculty.coreDepartment) missingProfileFields.push("Core Department");
 
         const isProfileComplete = missingProfileFields.length === 0;
 
@@ -1445,6 +1446,10 @@ exports.submitAppraisal = async (req, res) => {
 
         if (!faculty.qualification || faculty.qualification.trim() === "") {
             return res.status(400).json({ success: false, message: "Please update your profile qualification before submitting the appraisal." });
+        }
+
+        if (!faculty.coreDepartment) {
+            return res.status(400).json({ success: false, message: "Your Core Department is not set. Please contact the Administrator to assign it before submitting your appraisal." });
         }
 
         // Determine thresholds based on category
