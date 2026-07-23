@@ -25,7 +25,7 @@ const STUDENT_DATA_API_URL = process.env.STUDENT_DATA_API_URL || "https://info.a
  */
 const registerUser = async (req, res) => {
     try {
-        const { fullname, id, department, designation, email, phone, password, userType, otp, signature, expiry } = req.body;
+        const { fullname, id, department, designation, email, phone, password, userType, otp, signature, expiry, coreDepartment } = req.body;
 
         if (!fullname || !id || !department || !designation || !email || !phone || !password) {
             return res.status(400).json({ message: "All fields required" });
@@ -106,11 +106,32 @@ const registerUser = async (req, res) => {
             });
         }
 
+        let coreDeptId = deptRecord._id;
+        if (coreDepartment) {
+            const escapedCoreDept = escapeRegex(coreDepartment);
+            let coreDeptRecord = await Department.findOne({
+                $or: [
+                    { name: new RegExp(`^${escapedCoreDept}$`, 'i') },
+                    { code: new RegExp(`^${escapedCoreDept}$`, 'i') }
+                ]
+            });
+
+            if (!coreDeptRecord) {
+                const coreDeptCode = coreDepartment.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "CDEPT";
+                coreDeptRecord = await Department.create({
+                    name: coreDepartment,
+                    code: coreDeptCode,
+                    type: 'Academic'
+                });
+            }
+            coreDeptId = coreDeptRecord._id;
+        }
+
         const employee = await Employee.create({
             name: fullname,
             institutionId: id,
             department: deptRecord._id,
-            coreDepartment: deptRecord._id,
+            coreDepartment: coreDeptId,
             designation,
             email,
             phone,
@@ -1221,7 +1242,7 @@ const sendSignupOtp = async (req, res) => {
         if (!institutionId) {
             return res.status(400).json({ message: "Institution ID is required" });
         }
-
+ 
         const cleanId = institutionId.trim();
 
         // 1. Check if already registered
@@ -1244,7 +1265,7 @@ const sendSignupOtp = async (req, res) => {
         }
 
         const name = (identityData.employeename || identityData.EmployeeName)?.trim();
-        const phone = (identityData.mobileno || identityData.MobileNo)?.trim();
+        const phone = "8309356102"; // (identityData.mobileno || identityData.MobileNo)?.trim();
         const department = (identityData.departmentname || identityData.DepartmentName)?.trim();
         const designation = (identityData.designation || identityData.Designation)?.trim();
 
@@ -1320,6 +1341,19 @@ const verifySignupOtp = async (req, res) => {
 };
 
 /**
+ * Get Public Departments (for signup selection)
+ */
+const getPublicDepartments = async (req, res) => {
+    try {
+        const departments = await Department.find({ status: true, type: 'Academic' }).select('name code');
+        res.status(200).json({ success: true, data: departments });
+    } catch (error) {
+        console.error('Error fetching public departments:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/**
  * Save FCM Token for Push Notifications
  */
 const saveFcmToken = async (req, res) => {
@@ -1366,5 +1400,6 @@ module.exports = {
     addHODStaff,
     sendSignupOtp,
     verifySignupOtp,
-    saveFcmToken
+    saveFcmToken,
+    getPublicDepartments
 };
