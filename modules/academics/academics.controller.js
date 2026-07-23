@@ -112,10 +112,10 @@ exports.getAllDepartments = async (req, res, next) => {
 
         if (req.query.programId) {
             // Find all branches for this program
-            const branches = await Branch.find({ programId: req.query.programId }).select('departmentId');
+            const branches = await Branch.find({ programIds: req.query.programId }).select('departmentId');
             const deptIds = branches.map(b => b.departmentId);
             query.$or = [
-                { programId: req.query.programId },
+                { programIds: req.query.programId },
                 { _id: { $in: deptIds } }
             ];
         }
@@ -204,8 +204,8 @@ exports.getAllPrograms = async (req, res, next) => {
 
         if (req.query.departmentId) {
             // Find all unique programs that have branches in this department
-            const branches = await Branch.find({ departmentId: req.query.departmentId }).select('programId');
-            const programIds = [...new Set(branches.map(b => b.programId.toString()))];
+            const branches = await Branch.find({ departmentId: req.query.departmentId }).select('programIds');
+            const programIds = [...new Set(branches.flatMap(b => (b.programIds || []).map(id => id.toString())))];
 
             // Also find if the department itself has direct programIds
             const dept = await Department.findById(req.query.departmentId);
@@ -247,7 +247,7 @@ exports.deleteProgram = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Program not found' });
         }
         // Check for associated branches
-        const branchesCount = await Branch.countDocuments({ programId: program._id });
+        const branchesCount = await Branch.countDocuments({ programIds: program._id });
         if (branchesCount > 0) {
             return res.status(400).json({ success: false, message: 'Cannot delete program with existing branches' });
         }
@@ -267,11 +267,15 @@ exports.deleteProgram = async (req, res, next) => {
 // @access  Private (UNIPRIME only)
 exports.createBranch = async (req, res, next) => {
     try {
-        const { programId, departmentId, name, code, status, schoolId } = req.body;
+        const { programIds, departmentId, name, code, status, schoolId } = req.body;
 
-        const program = await Program.findById(programId);
-        if (!program) {
-            return res.status(404).json({ success: false, message: 'Program not found' });
+        if (!programIds || !Array.isArray(programIds) || programIds.length === 0) {
+            return res.status(400).json({ success: false, message: 'At least one program is required' });
+        }
+
+        const programsCount = await Program.countDocuments({ _id: { $in: programIds } });
+        if (programsCount !== programIds.length) {
+            return res.status(404).json({ success: false, message: 'One or more programs not found' });
         }
 
         const dept = await Department.findById(departmentId);
@@ -279,7 +283,7 @@ exports.createBranch = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Department not found' });
         }
 
-        const branch = new Branch({ programId, departmentId, name, code, status, schoolId });
+        const branch = new Branch({ programIds, departmentId, name, code, status, schoolId });
         const savedBranch = await branch.save();
         res.status(201).json({ success: true, data: savedBranch });
     } catch (error) {
@@ -306,7 +310,7 @@ exports.createBranch = async (req, res, next) => {
 exports.getAllBranches = async (req, res, next) => {
     try {
         const query = {};
-        if (req.query.programId) query.programId = req.query.programId;
+        if (req.query.programId) query.programIds = req.query.programId;
         if (req.query.departmentId) query.departmentId = req.query.departmentId;
 
         if (req.query.status !== undefined) {
@@ -316,7 +320,7 @@ exports.getAllBranches = async (req, res, next) => {
         }
 
         const branches = await Branch.find(query)
-            .populate('programId')
+            .populate('programIds')
             .populate('departmentId');
         res.status(200).json({ success: true, data: branches });
     } catch (error) {
