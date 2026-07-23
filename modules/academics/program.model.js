@@ -38,10 +38,7 @@ const programSchema = new mongoose.Schema({
         default: true,
         index: true
     },
-    schoolId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'School'
-    }
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Program', programSchema);

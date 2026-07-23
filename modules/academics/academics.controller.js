@@ -1,7 +1,7 @@
 const Department = require('./department.model');
 const Program = require('./program.model');
 const Branch = require('./branch.model');
-const School = require('./school.model'); 
+const School = require('./school.model');
 
 // ====================
 // SCHOOL CONTROLLERS
@@ -56,12 +56,9 @@ exports.deleteSchool = async (req, res, next) => {
     try {
         const school = await School.findById(req.params.id);
         if (!school) return res.status(404).json({ success: false, message: 'School not found' });
-        
+
         const deptCount = await Department.countDocuments({
-            $or: [
-                { schoolId: school._id },
-                { schoolIds: school._id }
-            ]
+            schoolIds: school._id
         });
         if (deptCount > 0) {
             return res.status(400).json({ success: false, message: 'Cannot delete school with existing departments' });
@@ -88,9 +85,9 @@ exports.createDepartment = async (req, res, next) => {
     } catch (error) {
         if (error.code === 11000) {
             const field = Object.keys(error.keyPattern)[0];
-            return res.status(400).json({ 
-                success: false, 
-                message: `Duplicate value error: A department with this ${field} already exists.` 
+            return res.status(400).json({
+                success: false,
+                message: `Duplicate value error: A department with this ${field} already exists.`
             });
         }
         res.status(500).json({ success: false, message: error.message });
@@ -123,7 +120,7 @@ exports.getAllDepartments = async (req, res, next) => {
             ];
         }
 
-        const departments = await Department.find(query).populate('schoolId').populate('schoolIds').populate('programId');
+        const departments = await Department.find(query).populate('schoolIds').populate('programIds');
         res.status(200).json({ success: true, data: departments });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -175,16 +172,16 @@ exports.deleteDepartment = async (req, res, next) => {
 // @access  Private (UNIPRIME only)
 exports.createProgram = async (req, res, next) => {
     try {
-        const { name, code, type, description, status, schoolId, durationYears, programPattern } = req.body;
-        
-        const program = new Program({ name, code, type, description, status, schoolId, durationYears, programPattern });
+        const { name, code, type, description, status, durationYears, programPattern } = req.body;
+
+        const program = new Program({ name, code, type, description, status, durationYears, programPattern });
         const savedProgram = await program.save();
         res.status(201).json({ success: true, data: savedProgram });
     } catch (error) {
         if (error.code === 11000) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `Duplicate value error: This program (name or code) already exists.` 
+            return res.status(400).json({
+                success: false,
+                message: `Duplicate value error: This program (name or code) already exists.`
             });
         }
         res.status(500).json({ success: false, message: error.message });
@@ -198,31 +195,27 @@ exports.getAllPrograms = async (req, res, next) => {
     try {
         const query = {};
         if (req.query.type) query.type = req.query.type;
-        
+
         if (req.query.status !== undefined) {
             query.status = req.query.status === 'true';
         } else {
             query.status = true; // Default to active only
         }
 
-        if (req.query.schoolId) {
-            query.schoolId = req.query.schoolId;
-        }
-
         if (req.query.departmentId) {
             // Find all unique programs that have branches in this department
             const branches = await Branch.find({ departmentId: req.query.departmentId }).select('programId');
             const programIds = [...new Set(branches.map(b => b.programId.toString()))];
-            
-            // Also find if the department itself has a direct programId
+
+            // Also find if the department itself has direct programIds
             const dept = await Department.findById(req.query.departmentId);
-            if (dept && dept.programId) {
-                programIds.push(dept.programId.toString());
+            if (dept && dept.programIds && dept.programIds.length > 0) {
+                dept.programIds.forEach(id => programIds.push(id.toString()));
             }
             query._id = { $in: [...new Set(programIds)] };
         }
 
-        const programs = await Program.find(query).populate('schoolId');
+        const programs = await Program.find(query);
         res.status(200).json({ success: true, data: programs });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -298,9 +291,9 @@ exports.createBranch = async (req, res, next) => {
             } else if (keys.includes('name')) {
                 field = 'name';
             }
-            return res.status(400).json({ 
-                success: false, 
-                message: `Branch with this ${field} already exists for this program and department.` 
+            return res.status(400).json({
+                success: false,
+                message: `Branch with this ${field} already exists for this program and department.`
             });
         }
         res.status(500).json({ success: false, message: error.message });
@@ -315,7 +308,7 @@ exports.getAllBranches = async (req, res, next) => {
         const query = {};
         if (req.query.programId) query.programId = req.query.programId;
         if (req.query.departmentId) query.departmentId = req.query.departmentId;
-        
+
         if (req.query.status !== undefined) {
             query.status = req.query.status === 'true';
         } else {
@@ -350,9 +343,9 @@ exports.updateBranch = async (req, res, next) => {
             } else if (keys.includes('name')) {
                 field = 'name';
             }
-            return res.status(400).json({ 
-                success: false, 
-                message: `Branch with this ${field} already exists for this program and department.` 
+            return res.status(400).json({
+                success: false,
+                message: `Branch with this ${field} already exists for this program and department.`
             });
         }
         res.status(500).json({ success: false, message: error.message });
