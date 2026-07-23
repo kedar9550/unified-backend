@@ -104,6 +104,23 @@ exports.getAllAssignments = async (req, res, next) => {
     }
 };
 
+exports.getMyFestAssignments = async (req, res, next) => {
+    try {
+        if (!req.user?.institutionId) {
+            return res.status(400).json({ success: false, message: 'User institution ID not found' });
+        }
+
+        const assignments = await EventAssignment.find({
+            assignmentType: 'Fest',
+            'assignees.employeeId': req.user.institutionId
+        }).select('eventName assignees').sort({ eventName: 1 });
+
+        res.status(200).json({ success: true, assignments });
+    } catch (error) {
+        next(error);
+    }
+};
+
 exports.updateAssignment = async (req, res, next) => {
     try {
         const { assignmentType, eventName, club, assignees } = req.body;
