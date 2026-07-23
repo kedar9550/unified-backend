@@ -35,21 +35,6 @@ exports.uploadExcel = async (req, res) => {
         const errors = [];
         let successCount = 0;
 
-        const academicyear = req.body.academicYear; 
-        
-        if (!academicyear) {
-            return res.status(400).json({ message: "Academic Year is required" });
-        }
-
-        let ayDoc = await AcademicYear.findOne({ year: academicyear });
-        if (!ayDoc && mongoose.Types.ObjectId.isValid(academicyear)) {
-            ayDoc = await AcademicYear.findById(academicyear);
-        }
-        if (!ayDoc) {
-            return res.status(400).json({ message: "Academic Year not found" });
-        }
-        const ayId = ayDoc._id;
-
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
             const rowNum = i + 2;
@@ -72,11 +57,6 @@ exports.uploadExcel = async (req, res) => {
                 const rowAyDoc = await AcademicYear.findOne({ year: String(rowAcademicYear).trim() });
                 if (!rowAyDoc) {
                     throw new Error(`Academic Year '${rowAcademicYear}' not found in the system`);
-                }
-                
-                // Ensure it matches the active/selected academic year from frontend view
-                if (String(rowAyDoc._id) !== String(ayId)) {
-                    throw new Error(`Academic Year '${rowAcademicYear}' does not match the selected Academic Year '${ayDoc.year}'`);
                 }
 
                 if (!empId) throw new Error("Emp Id is missing");
@@ -128,7 +108,7 @@ exports.uploadExcel = async (req, res) => {
 
                 // Check for duplicate in the database
                 const duplicateDb = await FacultyProctoringEntry.findOne({
-                    academicYear: ayId,
+                    academicYear: rowAyDoc._id,
                     empId: String(empId).trim(),
                     programme: String(programme).trim(),
                     branch: String(branch).trim(),
@@ -142,7 +122,7 @@ exports.uploadExcel = async (req, res) => {
 
                 // Check for duplicate in the current upload batch
                 const isDuplicateBatch = results.some(r => 
-                    String(r.academicYear) === String(ayId) &&
+                    String(r.academicYear) === String(rowAyDoc._id) &&
                     r.empId === String(empId).trim() &&
                     r.programme === String(programme).trim() &&
                     r.branch === String(branch).trim() &&
@@ -179,7 +159,7 @@ exports.uploadExcel = async (req, res) => {
                     facultyId: faculty._id,
                     empId: faculty.institutionId,
                     facultyName: faculty.name,
-                    academicYear: ayId,
+                    academicYear: rowAyDoc._id,
                     programme: String(programme).trim(),
                     programId: programDoc._id,
                     branch: String(branch).trim(),
