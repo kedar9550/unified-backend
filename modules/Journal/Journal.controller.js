@@ -319,6 +319,7 @@ exports.rndAction = async (req, res) => {
         if (finalJcrImpactFactor !== undefined) journal.jcrImpactFactor = finalJcrImpactFactor;
         if (req.body.citations !== undefined) journal.citations = req.body.citations;
         if (req.body.journalQuartile !== undefined) journal.journalQuartile = req.body.journalQuartile;
+        if (req.body.journalType !== undefined) journal.journalType = req.body.journalType;
 
         if (status === 'Approved' && (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') && journal.appraisalClaimant) {
             journal.incentiveClaimant = journal.appraisalClaimant;
@@ -416,7 +417,7 @@ exports.getClarivateJournalType = async (req, res) => {
 exports.updateJournalMetrics = async (req, res) => {
     try {
         const { id } = req.params;
-        const { hIndex, jcrImpactFactor, impactFactor, citations, journalQuartile } = req.body;
+        const { hIndex, jcrImpactFactor, impactFactor, citations, journalQuartile, journalType } = req.body;
 
         const updates = {};
         if (hIndex !== undefined) updates.hIndex = hIndex;
@@ -424,6 +425,7 @@ exports.updateJournalMetrics = async (req, res) => {
         if (finalJcrImpactFactor !== undefined) updates.jcrImpactFactor = finalJcrImpactFactor;
         if (citations !== undefined) updates.citations = citations;
         if (journalQuartile !== undefined) updates.journalQuartile = journalQuartile;
+        if (journalType !== undefined) updates.journalType = journalType;
 
         const journal = await Journal.findByIdAndUpdate(id, updates, { new: true })
             .populate({
