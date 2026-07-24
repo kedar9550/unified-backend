@@ -5,6 +5,8 @@ const AcademicYear = require('../academicYear/academicYear.model');
 const { isFutureDate, isDateWithinAcademicYear, isValidURL } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
 const { syncAppraisalOnContributionRejection } = require('../../utils/appraisalSyncHelper');
+const fs = require('fs');
+const path = require('path');
 
 const normalizeDurationToWeeks = (duration) => {
     if (typeof duration === 'number') {
@@ -529,6 +531,16 @@ exports.updateContribution = async (req, res) => {
                     success: false,
                     message: `Proof document is too large (${(req.file.size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
+            }
+            if (record.proof) {
+                const oldPath = path.join(__dirname, '../..', record.proof);
+                if (fs.existsSync(oldPath)) {
+                    try {
+                        fs.unlinkSync(oldPath);
+                    } catch (e) {
+                        console.error('Error deleting old proof file:', e);
+                    }
+                }
             }
             record.proof = `/uploads/contributions/${req.file.filename}`;
         }

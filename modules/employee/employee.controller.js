@@ -73,9 +73,10 @@ const registerUser = async (req, res) => {
         if (existingEmail) return res.status(409).json({ message: "Email is already registered" });
 
         // Verify Identity with Institute API (Persona Check)
+        let identityData;
         try {
             const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${id}`);
-            const identityData = identityResponse?.data?.[0];
+            identityData = identityResponse?.data?.[0];
 
             if (!identityData || identityData.error) {
                 return res.status(404).json({ message: `Invalid Employee ID. Not found in ECAP` });
@@ -135,7 +136,8 @@ const registerUser = async (req, res) => {
             designation,
             email,
             phone,
-            password
+            password,
+            college: (identityData && identityData.college) || ""
         });
 
         const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
@@ -473,148 +475,7 @@ const searchUser = async (req, res) => {
             }
         ]);
 
-        // If no local users found and query looks like an ID, fetch from ECAP and auto-register
-        if (users.length === 0 && /^\d+$/.test(query.trim())) {
-            try {
-                const empId = query.trim();
-                const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${empId}`);
-                const identityData = identityResponse?.data?.[0];
 
-                if (identityData && !identityData.error && identityData.employeecode) {
-                    // Check if employee already exists in DB
-                    let employee = await Employee.findOne({ institutionId: identityData.employeecode });
-                    if (!employee) {
-                        // Find or Create Department
-                        const ecapDeptName = (identityData.departmentname || identityData.DepartmentName || "General").trim();
-                        const escapedDept = escapeRegex(ecapDeptName);
-                        let deptRecord = await Department.findOne({
-                            $or: [
-                                { name: new RegExp(`^${escapedDept}$`, 'i') },
-                                { code: new RegExp(`^${escapedDept}$`, 'i') }
-                            ]
-                        });
-
-                        if (!deptRecord) {
-                            const deptCode = ecapDeptName.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "DEPT";
-                            deptRecord = await Department.create({
-                                name: ecapDeptName,
-                                code: deptCode,
-                                type: 'Academic'
-                            });
-                        }
-
-                        const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
-                        const ecapDesig = (identityData.designation || identityData.Designation)?.trim();
-                        const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim() || "0000000000";
-
-                        // Create Employee
-                        employee = await Employee.create({
-                            name: ecapName || "ECAP Staff",
-                            institutionId: identityData.employeecode,
-                            department: deptRecord._id,
-                            coreDepartment: deptRecord._id,
-                            designation: ecapDesig || "Staff",
-                            email: `${identityData.employeecode.toLowerCase()}@adityauniversity.in`,
-                            password: "Welcome@123",
-                            phone: ecapPhone,
-                            college: identityData.college || "Aditya University"
-                        });
-
-                        // Assign Default Role
-                        const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
-                        let roleName = "STAFF";
-                        const checkDesig = (ecapDesig || "").toLowerCase();
-                        if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) {
-                            roleName = "FACULTY";
-                        } else if (/technician|programmer/i.test(checkDesig)) {
-                            roleName = "TECHNICAL_STAFF";
-                        }
-
-                        let defaultRole = await Role.findOne({ name: roleName, app: appName });
-                        if (!defaultRole) {
-                            defaultRole = await Role.create({
-                                name: roleName,
-                                app: appName,
-                                defaultRole: true,
-                                description: `Default role for ${roleName}`
-                            });
-                        }
-
-                        await UserAppRole.create({
-                            userId: employee._id,
-                            userModel: 'Employee',
-                            app: appName,
-                            role: defaultRole._id,
-                        });
-                    }
-
-                    // Query the newly registered employee in standard format
-                    users = await Employee.aggregate([
-                        { $match: { _id: employee._id } },
-                        {
-                            $lookup: {
-                                from: 'userapproles',
-                                localField: '_id',
-                                foreignField: 'userId',
-                                as: 'userAppRoles'
-                            }
-                        },
-                        {
-                            $lookup: {
-                                from: 'roles',
-                                localField: 'userAppRoles.role',
-                                foreignField: '_id',
-                                as: 'roles'
-                            }
-                        },
-                        {
-                            $addFields: {
-                                roles: {
-                                    $map: {
-                                        input: "$roles",
-                                        as: "role",
-                                        in: {
-                                            $mergeObjects: [
-                                                "$$role",
-                                                {
-                                                    departments: {
-                                                        $let: {
-                                                            vars: {
-                                                                uar: {
-                                                                    $arrayElemAt: [
-                                                                        { $filter: { input: "$userAppRoles", as: "u", cond: { $eq: ["$$u.role", "$$role._id"] } } },
-                                                                        0
-                                                                    ]
-                                                                }
-                                                            },
-                                                            in: "$$uar.departments"
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        {
-                            $project: {
-                                name: 1,
-                                institutionId: 1,
-                                email: 1,
-                                department: 1,
-                                coreDepartment: 1,
-                                designation: 1,
-                                userType: { $literal: 'Employee' },
-                                roles: 1
-                            }
-                        }
-                    ]);
-                }
-            } catch (apiErr) {
-                console.error("ECAP search & auto-register failed:", apiErr.message);
-            }
-        }
 
         res.status(200).json(users);
     } catch (error) {
@@ -742,6 +603,8 @@ const bulkRegisterUser = async (req, res) => {
             try {
                 const institutionId = (row.institutionId || row.id || row.institution || row.institutionID)?.trim();
                 const email = (row.email || row.Email || row.EmailAddress || row['email address'])?.trim();
+                const csvDept = (row.department || row.Department || row['serving department'] || row['servingDepartment'] || row.ServingDepartment || row.Serving_Department || row.Dept || row.dept || row.serving_department)?.trim();
+                const csvCoreDept = (row.coreDepartment || row.core_department || row.coredepartment || row.CoreDepartment || row['parent department'] || row['parentDepartment'] || row.ParentDepartment || row.Parent_Department || row.parent_department)?.trim();
 
                 if (!institutionId) {
                     errors.push({ id: "Unknown", error: "Missing institutionId or id in CSV" });
@@ -756,6 +619,16 @@ const bulkRegisterUser = async (req, res) => {
                 // Validate email format
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                     errors.push({ id: institutionId, error: "Invalid email format" });
+                    continue;
+                }
+
+                if (!csvDept) {
+                    errors.push({ id: institutionId, error: "Missing Serving Department in CSV" });
+                    continue;
+                }
+
+                if (!csvCoreDept) {
+                    errors.push({ id: institutionId, error: "Missing Parent Department in CSV" });
                     continue;
                 }
 
@@ -781,27 +654,46 @@ const bulkRegisterUser = async (req, res) => {
                 }
 
                 const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
-                const ecapDept = (identityData.departmentname || identityData.DepartmentName)?.trim();
                 const ecapDesig = (identityData.designation || identityData.Designation)?.trim() || "Employee";
                 const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim() || "0000000000";
 
-                if (!ecapName || !ecapDept) {
-                    errors.push({ id: institutionId, error: "Missing Name or Department in ECAP Data" });
+                if (!ecapName) {
+                    errors.push({ id: institutionId, error: "Missing Name in ECAP Data" });
                     continue;
                 }
 
-                // Match Department
-                const escapedEcapDept = escapeRegex(ecapDept);
-                const deptRecord = await Department.findOne({
+                // Match Serving Department
+                const escapedDept = escapeRegex(csvDept);
+                let deptRecord = await Department.findOne({
                     $or: [
-                        { name: new RegExp(`^${escapedEcapDept}$`, 'i') },
-                        { code: new RegExp(`^${escapedEcapDept}$`, 'i') }
+                        { name: new RegExp(`^${escapedDept}$`, 'i') },
+                        { code: new RegExp(`^${escapedDept}$`, 'i') }
                     ]
                 });
-
                 if (!deptRecord) {
-                    errors.push({ id: institutionId, error: `Department '${ecapDept}' from ECAP not found in our system.` });
-                    continue;
+                    const deptCode = csvDept.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "DEPT";
+                    deptRecord = await Department.create({
+                        name: csvDept,
+                        code: deptCode,
+                        type: 'Academic'
+                    });
+                }
+
+                // Match Parent Department
+                const escapedCoreDept = escapeRegex(csvCoreDept);
+                let coreDeptRecord = await Department.findOne({
+                    $or: [
+                        { name: new RegExp(`^${escapedCoreDept}$`, 'i') },
+                        { code: new RegExp(`^${escapedCoreDept}$`, 'i') }
+                    ]
+                });
+                if (!coreDeptRecord) {
+                    const coreDeptCode = csvCoreDept.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "CDEPT";
+                    coreDeptRecord = await Department.create({
+                        name: csvCoreDept,
+                        code: coreDeptCode,
+                        type: 'Academic'
+                    });
                 }
 
                 const password = "Aditya@123"; // Default password
@@ -810,7 +702,7 @@ const bulkRegisterUser = async (req, res) => {
                     name: ecapName,
                     institutionId,
                     department: deptRecord._id,
-                    coreDepartment: deptRecord._id,
+                    coreDepartment: coreDeptRecord._id,
                     designation: ecapDesig,
                     email,
                     phone: ecapPhone,
@@ -1213,7 +1105,7 @@ const addHODStaff = async (req, res) => {
         }
 
         if (!isCoreDeptValid || !hodCoreDept) {
-            return res.status(400).json({ message: "HOD does not have a valid core department assigned" });
+            return res.status(400).json({ message: "HOD does not have a valid parent department assigned" });
         }
 
         // 2. Find the target employee

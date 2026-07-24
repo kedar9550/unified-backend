@@ -24,6 +24,8 @@ const app = express();
 // 1. Helmet: Secure HTTP headers
 app.use(helmet({
     crossOriginResourcePolicy: false,
+    contentSecurityPolicy: false,
+    frameguard: false,
 }));
 
 // 2. CORS: Cross-Origin Resource Sharing
