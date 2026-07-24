@@ -334,7 +334,7 @@ exports.uploadStudentCSV = async (req, res) => {
     };
 
     const rollNoPrefixes = ["Roll No", "rollNo", "RollNo", "Roll_No", "Student ID", "ID", "Roll Number"];
-    const deptPrefixes = ["Dept", "department", "Dept Name", "Department Name"];
+    const deptPrefixes = ["Dept", "department", "Dept Name", "Department Name", "Serving Department"];
 
     let successCount = 0;
     let skipCount = 0;

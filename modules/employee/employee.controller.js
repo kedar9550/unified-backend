@@ -1074,7 +1074,7 @@ const addHODStaff = async (req, res) => {
         }
 
         if (!isCoreDeptValid || !hodCoreDept) {
-            return res.status(400).json({ message: "HOD does not have a valid core department assigned" });
+            return res.status(400).json({ message: "HOD does not have a valid parent department assigned" });
         }
 
         // 2. Find the target employee
