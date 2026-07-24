@@ -603,6 +603,8 @@ const bulkRegisterUser = async (req, res) => {
             try {
                 const institutionId = (row.institutionId || row.id || row.institution || row.institutionID)?.trim();
                 const email = (row.email || row.Email || row.EmailAddress || row['email address'])?.trim();
+                const csvDept = (row.department || row.Department || row['serving department'] || row['servingDepartment'] || row.ServingDepartment || row.Serving_Department || row.Dept || row.dept || row.serving_department)?.trim();
+                const csvCoreDept = (row.coreDepartment || row.core_department || row.coredepartment || row.CoreDepartment || row['parent department'] || row['parentDepartment'] || row.ParentDepartment || row.Parent_Department || row.parent_department)?.trim();
 
                 if (!institutionId) {
                     errors.push({ id: "Unknown", error: "Missing institutionId or id in CSV" });
@@ -617,6 +619,16 @@ const bulkRegisterUser = async (req, res) => {
                 // Validate email format
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                     errors.push({ id: institutionId, error: "Invalid email format" });
+                    continue;
+                }
+
+                if (!csvDept) {
+                    errors.push({ id: institutionId, error: "Missing Serving Department in CSV" });
+                    continue;
+                }
+
+                if (!csvCoreDept) {
+                    errors.push({ id: institutionId, error: "Missing Parent Department in CSV" });
                     continue;
                 }
 
@@ -642,27 +654,46 @@ const bulkRegisterUser = async (req, res) => {
                 }
 
                 const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
-                const ecapDept = (identityData.departmentname || identityData.DepartmentName)?.trim();
                 const ecapDesig = (identityData.designation || identityData.Designation)?.trim() || "Employee";
                 const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim() || "0000000000";
 
-                if (!ecapName || !ecapDept) {
-                    errors.push({ id: institutionId, error: "Missing Name or Department in ECAP Data" });
+                if (!ecapName) {
+                    errors.push({ id: institutionId, error: "Missing Name in ECAP Data" });
                     continue;
                 }
 
-                // Match Department
-                const escapedEcapDept = escapeRegex(ecapDept);
-                const deptRecord = await Department.findOne({
+                // Match Serving Department
+                const escapedDept = escapeRegex(csvDept);
+                let deptRecord = await Department.findOne({
                     $or: [
-                        { name: new RegExp(`^${escapedEcapDept}$`, 'i') },
-                        { code: new RegExp(`^${escapedEcapDept}$`, 'i') }
+                        { name: new RegExp(`^${escapedDept}$`, 'i') },
+                        { code: new RegExp(`^${escapedDept}$`, 'i') }
                     ]
                 });
-
                 if (!deptRecord) {
-                    errors.push({ id: institutionId, error: `Department '${ecapDept}' from ECAP not found in our system.` });
-                    continue;
+                    const deptCode = csvDept.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "DEPT";
+                    deptRecord = await Department.create({
+                        name: csvDept,
+                        code: deptCode,
+                        type: 'Academic'
+                    });
+                }
+
+                // Match Parent Department
+                const escapedCoreDept = escapeRegex(csvCoreDept);
+                let coreDeptRecord = await Department.findOne({
+                    $or: [
+                        { name: new RegExp(`^${escapedCoreDept}$`, 'i') },
+                        { code: new RegExp(`^${escapedCoreDept}$`, 'i') }
+                    ]
+                });
+                if (!coreDeptRecord) {
+                    const coreDeptCode = csvCoreDept.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "CDEPT";
+                    coreDeptRecord = await Department.create({
+                        name: csvCoreDept,
+                        code: coreDeptCode,
+                        type: 'Academic'
+                    });
                 }
 
                 const password = "Aditya@123"; // Default password
@@ -671,7 +702,7 @@ const bulkRegisterUser = async (req, res) => {
                     name: ecapName,
                     institutionId,
                     department: deptRecord._id,
-                    coreDepartment: deptRecord._id,
+                    coreDepartment: coreDeptRecord._id,
                     designation: ecapDesig,
                     email,
                     phone: ecapPhone,
