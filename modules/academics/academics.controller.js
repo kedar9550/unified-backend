@@ -61,7 +61,7 @@ exports.deleteSchool = async (req, res, next) => {
             schoolIds: school._id
         });
         if (deptCount > 0) {
-            return res.status(400).json({ success: false, message: 'Cannot delete school with existing departments' });
+            return res.status(400).json({ success: false, message: 'Cannot delete school with existing serving departments' });
         }
         await school.deleteOne();
         res.status(200).json({ success: true, message: 'School deleted' });
@@ -134,7 +134,7 @@ exports.updateDepartment = async (req, res, next) => {
     try {
         const department = await Department.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
         if (!department) {
-            return res.status(404).json({ success: false, message: 'Department not found' });
+            return res.status(404).json({ success: false, message: 'Serving department not found' });
         }
         res.status(200).json({ success: true, data: department });
     } catch (error) {
@@ -149,15 +149,15 @@ exports.deleteDepartment = async (req, res, next) => {
     try {
         const department = await Department.findById(req.params.id);
         if (!department) {
-            return res.status(404).json({ success: false, message: 'Department not found' });
+            return res.status(404).json({ success: false, message: 'Serving department not found' });
         }
         // Check if department has branches
         const branchesCount = await Branch.countDocuments({ departmentId: department._id });
         if (branchesCount > 0) {
-            return res.status(400).json({ success: false, message: 'Cannot delete department with existing branches' });
+            return res.status(400).json({ success: false, message: 'Cannot delete serving department with existing branches' });
         }
         await department.deleteOne();
-        res.status(200).json({ success: true, message: 'Department deleted' });
+        res.status(200).json({ success: true, message: 'Serving department deleted' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -280,7 +280,7 @@ exports.createBranch = async (req, res, next) => {
 
         const dept = await Department.findById(departmentId);
         if (!dept) {
-            return res.status(404).json({ success: false, message: 'Department not found' });
+            return res.status(404).json({ success: false, message: 'Serving department not found' });
         }
 
         const branch = new Branch({ programIds, departmentId, name, code, status, schoolId });
