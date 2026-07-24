@@ -154,10 +154,11 @@ const registerUser = async (req, res) => {
             }
         }
 
-        let defaultRole = await Role.findOne({ name: roleName, app: appName });
+        let defaultRole = await Role.findOne({ key: roleName, app: appName });
         if (!defaultRole) {
             defaultRole = await Role.create({
                 name: roleName,
+                key: roleName,
                 app: appName,
                 defaultRole: true,
                 description: `Default role for ${roleName}`

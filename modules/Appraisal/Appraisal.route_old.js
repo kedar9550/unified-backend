@@ -66,8 +66,8 @@ router.post("/submit", protect, authorize("FACULTY"), submitAppraisal);
 router.post("/proctoring-duties", protect, authorize("FACULTY"), updateProctoringDuties);
 
 // HOD Appraisal actions
-router.get("/pending-hod", protect, authorize("DEPARTMENT HOD", "HOD"), getPendingHODAppraisals);
-router.put("/hod-evaluate/:id", protect, authorize("DEPARTMENT HOD", "HOD"), evaluateHODAppraisal);
+router.get("/pending-hod", protect, authorize("DEPARTMENT_HOD", "HOD"), getPendingHODAppraisals);
+router.put("/hod-evaluate/:id", protect, authorize("DEPARTMENT_HOD", "HOD"), evaluateHODAppraisal);
 
 // R&D Admin Appraisal actions
 router.get("/pending-rnd", protect, authorize("ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR"), getPendingRNDAppraisals);

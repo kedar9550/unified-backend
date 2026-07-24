@@ -22,10 +22,10 @@ exports.getRoles = async (req, res, next) => {
 // @access  Private (Admin/UniPrime)
 exports.createRole = async (req, res, next) => {
     try {
-        const { name, description } = req.body;
+        const { name, key, description, defaultRole } = req.body;
         
         // Check if role already exists
-        const existingRole = await Role.findOne({ name: name.toUpperCase() });
+        const existingRole = await Role.findOne({ key: key.toUpperCase() });
         if (existingRole) {
             return res.status(400).json({
                 success: false,
@@ -35,7 +35,9 @@ exports.createRole = async (req, res, next) => {
 
         const role = await Role.create({
             name,
-            description
+            key: key.toUpperCase(),
+            description,
+            defaultRole: Boolean(defaultRole)
         });
 
         res.status(201).json({
@@ -229,7 +231,7 @@ exports.syncEmployeeRoles = async (req, res, next) => {
         // 2. Identify default roles and HOD in the final selection
         const selectedRoles = await Role.find({ _id: { $in: roleIds } });
         const selectedDefaultRoles = selectedRoles.filter(r => r.defaultRole);
-        const hodRole = selectedRoles.find(r => r.name === 'HOD');
+        const hodRole = selectedRoles.find(r => r.key === 'HOD' || r.name === 'HOD');
 
         // 3. Enforcement: Exactly one default role
         if (selectedDefaultRoles.length !== 1) {
@@ -294,9 +296,9 @@ exports.reconcileAllEmployeeRoles = async (req, res, next) => {
             const identityRoleName = getIdentityBasedRoleName(user.userType, user.designation);
             
             // Find appropriate role
-            let idRole = await Role.findOne({ name: identityRoleName, app });
+            let idRole = await Role.findOne({ key: identityRoleName, app });
             if (!idRole) {
-                idRole = await Role.create({ name: identityRoleName, app, defaultRole: true, description: `System Role` });
+                idRole = await Role.create({ name: identityRoleName, key: identityRoleName, app, defaultRole: true, description: `System Role` });
             } else if (!idRole.defaultRole) {
                 idRole.defaultRole = true;
                 await idRole.save();
@@ -307,7 +309,7 @@ exports.reconcileAllEmployeeRoles = async (req, res, next) => {
             
             // Check if user has other default roles
             const otherMappings = await EmployeeAppRole.find({ userId: user._id, app }).populate('role');
-            const otherDefaultRoles = otherMappings.filter(m => m.role?.defaultRole && m.role?.name !== identityRoleName);
+            const otherDefaultRoles = otherMappings.filter(m => m.role?.defaultRole && (m.role?.key !== identityRoleName && m.role?.name !== identityRoleName));
 
             if (!existingMapping || otherDefaultRoles.length > 0) {
                 // Fix: Remove extra default roles, ensure identity-based one exists

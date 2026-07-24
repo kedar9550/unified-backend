@@ -35,7 +35,7 @@ const upload = multer({
 router.post(
     "/upload",
     protect,
-    authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
+    authorize("ADMIN", "FEEDBACK_COORDINATOR", "UNIVERSITY"),
     upload.single("file"),
     uploadCSV
 );
@@ -48,7 +48,7 @@ router.post(
 router.post(
     "/",
     protect,
-    authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
+    authorize("ADMIN", "FEEDBACK_COORDINATOR", "UNIVERSITY"),
     createResult
 );
 
@@ -60,7 +60,7 @@ router.post(
 router.delete(
     "/semester",
     protect,
-    authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
+    authorize("ADMIN", "FEEDBACK_COORDINATOR", "UNIVERSITY"),
     deleteSemesterData
 );
 
@@ -83,7 +83,7 @@ router.get(
 router.put(
     "/:id",
     protect,
-    authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
+    authorize("ADMIN", "FEEDBACK_COORDINATOR", "UNIVERSITY"),
     updateResult
 );
 
@@ -95,7 +95,7 @@ router.put(
 router.delete(
     "/:id",
     protect,
-    authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
+    authorize("ADMIN", "FEEDBACK_COORDINATOR", "UNIVERSITY"),
     deleteResult
 );
 
@@ -107,7 +107,7 @@ router.delete(
 router.post(
     "/bulk-delete",
     protect,
-    authorize("ADMIN", "FEEDBACK COORDINATOR", "UNIVERSITY"),
+    authorize("ADMIN", "FEEDBACK_COORDINATOR", "UNIVERSITY"),
     deleteBulk
 );
 

@@ -3,7 +3,7 @@ const router = express.Router();
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 const controller = require('./MajorEvent.controller');
 
-router.use(protect, authorize('MAJOR EVENT ADMIN'));
+router.use(protect, authorize('MAJOR_EVENT_ADMIN'));
 router.get('/groups', controller.getMyGroups);
 router.get('/groups/:groupId/events', controller.getGroupEvents);
 router.post('/events', controller.createEvent);

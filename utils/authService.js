@@ -38,7 +38,9 @@ const loginUser = async (institutionId, password, appName) => {
     
     // Map them out nicely
     const roles = userAppRoles.map(uar => ({
-        role: uar.role.name,
+        role: uar.role.key || uar.role.name,
+        key: uar.role.key,
+        name: uar.role.name,
         app: uar.app,
         departments: uar.departments || [],
         permissions: [] 

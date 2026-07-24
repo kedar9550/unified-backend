@@ -36,10 +36,10 @@ const upload = multer({
 });
 
 // --- Routes ---
-router.post('/', protect, authorize('STUDENT EVENT ADMIN'), upload.single('logo'), clubController.createClub);
+router.post('/', protect, authorize('STUDENT_EVENT_ADMIN'), upload.single('logo'), clubController.createClub);
 router.get('/', protect, clubController.getAllClubs);
 router.get('/:id', protect, clubController.getClubById);
-router.put('/:id', protect, authorize('STUDENT EVENT ADMIN'), upload.single('logo'), clubController.updateClub);
-router.delete('/:id', protect, authorize('STUDENT EVENT ADMIN'), clubController.deleteClub);
+router.put('/:id', protect, authorize('STUDENT_EVENT_ADMIN'), upload.single('logo'), clubController.updateClub);
+router.delete('/:id', protect, authorize('STUDENT_EVENT_ADMIN'), clubController.deleteClub);
 
 module.exports = router;

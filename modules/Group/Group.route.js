@@ -51,7 +51,7 @@ const uploadGroupImages = upload.fields([
 router.post(
     '/',
     protect,
-    authorize('STUDENT EVENT ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN'),
     uploadGroupImages,
     groupController.createGroup
 );
@@ -63,7 +63,7 @@ router.get('/:id', protect, groupController.getGroupById);
 router.put(
     '/:id',
     protect,
-    authorize('STUDENT EVENT ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN'),
     uploadGroupImages,
     groupController.updateGroup
 );
@@ -71,7 +71,7 @@ router.put(
 router.delete(
     '/:id',
     protect,
-    authorize('STUDENT EVENT ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN'),
     groupController.deleteGroup
 );
 

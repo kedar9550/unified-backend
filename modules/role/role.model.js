@@ -6,6 +6,12 @@ const RoleSchema = new mongoose.Schema({
         required: true,
         uppercase: true, // E.g., SUPER ADMIN, EXAM CELL, FACULTY, USER
     },
+    key: {
+        type: String,
+        required: true,
+        uppercase: true,
+        unique: true, // E.g., SUPER_ADMIN, EXAM_CELL, FACULTY, USER
+    },
     defaultRole: {
         type: Boolean,
         required: true,
