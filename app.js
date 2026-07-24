@@ -118,6 +118,8 @@ app.use('/api/service-desk/services', require('./modules/serviceDesk/service.rou
 app.use('/api/service-desk/tickets', require('./modules/serviceDesk/ticket.route'));
 app.use('/api/events', require('./modules/Events/Events.route'));
 app.use('/api/clubs', require('./modules/Club/Club.route'));
+app.use('/api/groups', require('./modules/Group/Group.route'));
+app.use('/api/event-departments', require('./modules/EventDepartment/EventDepartment.route'));
 app.use('/api/event-assignments', require('./modules/EventAssignment/EventAssignment.route'));
 app.use('/api/event-groups', require('./modules/EventAssignment/EventGroup.route'));
 app.use('/api/major-events', require('./modules/EventAssignment/MajorEvent.route'));
