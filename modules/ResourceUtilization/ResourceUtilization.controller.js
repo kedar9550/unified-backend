@@ -196,6 +196,22 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
         }
 
+        // Auto-calculate duration in days
+        const start = new Date(data.fromDate);
+        const end = new Date(data.toDate);
+        const diffTime = Math.abs(end - start);
+        const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+
+        if (data.activityCategory === "STTP" || data.activityCategory === "Refresher Course") {
+            if (calcDuration < 10) {
+                return res.status(400).json({ success: false, message: `${data.activityCategory} must have a minimum duration of 10 days.` });
+            }
+        } else if (data.activityCategory === "FDP" || data.activityCategory === "SYMPOSIUM") {
+            if (calcDuration < 5) {
+                return res.status(400).json({ success: false, message: `${data.activityCategory} must have a minimum duration of 5 days.` });
+            }
+        }
+
         const ayRecord = await AcademicYear.findById(data.academicYear);
         if (!ayRecord) {
             return res.status(400).json({ success: false, message: "Invalid Academic Year selected." });
@@ -209,11 +225,12 @@ exports.createResourceUtilization = async (req, res) => {
             });
         }
 
-        // Auto-calculate duration in days
-        const start = new Date(data.fromDate);
-        const end = new Date(data.toDate);
-        const diffTime = Math.abs(end - start);
-        const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+        const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+        const filename = `${req.file.fieldname}-${unique}${path.extname(req.file.originalname)}`;
+        const uploadDir = path.join(__dirname, '../../uploads/resource-utilization');
+        if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+        const filepath = path.join(uploadDir, filename);
+        fs.writeFileSync(filepath, req.file.buffer);
 
         const resourceUtilization = new ResourceUtilization({
             facultyId: req.user.userId,
@@ -227,7 +244,7 @@ exports.createResourceUtilization = async (req, res) => {
             remarks: data.remarks || "",
             sessionsConducted: data.sessionsConducted ? parseInt(data.sessionsConducted) : undefined,
             daysParticipated: data.daysParticipated ? parseInt(data.daysParticipated) : undefined,
-            proof: `/uploads/resource-utilization/${req.file.filename}`,
+            proof: `/uploads/resource-utilization/${filename}`,
             status: 'Draft', // Always save as Draft first
             certificateNumber: data.certificateNumber || undefined,
 
@@ -324,6 +341,16 @@ exports.updateResourceUtilization = async (req, res) => {
             const end = new Date(to);
             const diffTime = Math.abs(end - start);
             calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
+        }
+
+        if (category === "STTP" || category === "Refresher Course") {
+            if (calcDuration < 10) {
+                return res.status(400).json({ success: false, message: `${category} must have a minimum duration of 10 days.` });
+            }
+        } else if (category === "FDP" || category === "SYMPOSIUM") {
+            if (calcDuration < 5) {
+                return res.status(400).json({ success: false, message: `${category} must have a minimum duration of 5 days.` });
+            }
         }
 
         const academicYearId = data.academicYear || record.academicYear;
@@ -542,7 +569,15 @@ exports.updateResourceUtilization = async (req, res) => {
                     }
                 }
             }
-            record.proof = `/uploads/resource-utilization/${req.file.filename}`;
+            
+            const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+            const filename = `${req.file.fieldname}-${unique}${path.extname(req.file.originalname)}`;
+            const uploadDir = path.join(__dirname, '../../uploads/resource-utilization');
+            if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+            const filepath = path.join(uploadDir, filename);
+            fs.writeFileSync(filepath, req.file.buffer);
+
+            record.proof = `/uploads/resource-utilization/${filename}`;
         }
 
         // If the faculty edited a Rejected record, transition it back to Draft so it can be re-submitted.
