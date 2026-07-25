@@ -2528,7 +2528,7 @@ exports.getAppraisalById = async (req, res) => {
         // Security check for FACULTY role
         const userRoles = req.user.roles.map(r => r.role?.toUpperCase());
         const isFaculty = userRoles.includes("FACULTY");
-        const isHigherRole = userRoles.some(r => ["UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD"].includes(r));
+        const isHigherRole = userRoles.some(r => ["UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD", "SCHOOL DEAN", "SCHOOL_DEAN"].includes(r));
 
         if (isFaculty && !isHigherRole) {
             const facultyIdStr = appraisal.facultyId?._id?.toString() || appraisal.facultyId?.toString();

@@ -25,6 +25,10 @@ const UserAppRoleSchema = new mongoose.Schema({
     departments: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Department'
+    }],
+    schools: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'School'
     }]
 }, { timestamps: true });
 

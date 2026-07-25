@@ -26,9 +26,9 @@ const upload = multer({
 // --- Routes ---
 
 // HOD Routes
-router.get('/pending-hod', protect, authorize('HOD'), controller.getPendingAtHOD);
-router.put('/hod-action/:id', protect, authorize('HOD'), controller.hodAction);
-router.post('/hod-bulk-action', protect, authorize('HOD'), controller.bulkHODAction);
+router.get('/pending-hod', protect, authorize('HOD', 'SCHOOL_DEAN'), controller.getPendingAtHOD);
+router.put('/hod-action/:id', protect, authorize('HOD', 'SCHOOL_DEAN'), controller.hodAction);
+router.post('/hod-bulk-action', protect, authorize('HOD', 'SCHOOL_DEAN'), controller.bulkHODAction);
 
 // Faculty Routes
 router.post('/', protect, upload.single('proof'), controller.createResourceUtilization);
