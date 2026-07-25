@@ -27,9 +27,9 @@ async function processCSV() {
     }
 
     const headers = [
-        'empId', 'facultyName', 'academicYear', 'college', 'applicantName', 'area',
-        'filingNo', 'dateOfFiling', 'patentFiledCountry', 'patentStatus', 'year', 'month',
-        'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
+        'empId', 'facultyName', 'academicYear', 'college', 'panNumber', 'title',
+        'patentName', 'area', 'filingNo', 'dateOfFiling', 'patentFiledCountry', 'patentStatus',
+        'year', 'month', 'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
     fs.createReadStream(csvFilePath)
@@ -70,27 +70,37 @@ async function processCSV() {
 
                     // 3. Process Co-inventors
                     const coInventors = [];
+                    const appraisalClaimants = [faculty._id.toString()];
                     for (let pos = 1; pos <= 8; pos++) {
                         const coInventorEmpId = row[`co${pos}`] ? row[`co${pos}`].trim() : null;
                         if (coInventorEmpId) {
                             let empName = `Employee ${coInventorEmpId}`;
                             let affiliation = 'Aditya University';
+                            let validEmployeeId = null;
                             
-                            try {
-                                const axios = require('axios');
-                                const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/staffdata/${coInventorEmpId}`);
-                                if (response.data && response.data.length > 0 && response.data[0].employeename) {
-                                    empName = response.data[0].employeename;
-                                    affiliation = response.data[0].college || 'Aditya University';
+                            const coEmp = await Employee.findOne({ institutionId: coInventorEmpId });
+                            if (coEmp) {
+                                empName = coEmp.name;
+                                affiliation = coEmp.college || 'Aditya University';
+                                validEmployeeId = coEmp._id;
+                                appraisalClaimants.push(coEmp._id.toString());
+                            } else {
+                                try {
+                                    const axios = require('axios');
+                                    const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/staffdata/${coInventorEmpId}`);
+                                    if (response.data && response.data.length > 0 && response.data[0].employeename) {
+                                        empName = response.data[0].employeename;
+                                        affiliation = response.data[0].college || 'Aditya University';
+                                    }
+                                } catch (apiErr) {
+                                    console.log(`API lookup failed for ${coInventorEmpId}`);
                                 }
-                            } catch (apiErr) {
-                                console.log(`API lookup failed for ${coInventorEmpId}`);
                             }
 
                             coInventors.push({
                                 name: empName,
                                 affiliation: affiliation,
-                                employeeId: coInventorEmpId
+                                employeeId: validEmployeeId || null
                             });
                         }
                     }
@@ -112,9 +122,10 @@ async function processCSV() {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
                         college: row['college'] || '',
-                        title: `Patent ${row['filingNo'] || 'Unknown'}`,
-                        applicantName: row['applicantName'] || 'Unknown Applicant',
-                        patentName: `Patent ${row['filingNo'] || 'Unknown'}`,
+                        panNumber: row['panNumber'] || '',
+                        title: row['title'] || `Patent ${row['filingNo'] || 'Unknown'}`,
+                        applicantName: 'Aditya University',
+                        patentName: row['patentName'] || `Patent ${row['filingNo'] || 'Unknown'}`,
                         area: row['area'] || 'Unknown Area',
                         filingNo: row['filingNo'] || 'N/A',
                         dateOfFiling: isNaN(dof) ? new Date() : dof,
@@ -129,7 +140,8 @@ async function processCSV() {
                         applyingSeedGrant: 'No',
                         eFilingReceipt: 'placeholder.pdf',
                         form1: 'placeholder.pdf',
-                        status: 'Approved'
+                        status: 'Approved',
+                        appraisalClaimants: appraisalClaimants
                     };
 
                     // 5. Save to DB

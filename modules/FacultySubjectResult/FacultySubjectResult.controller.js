@@ -164,7 +164,7 @@ const uploadUnifiedResults = async (req, res) => {
                             { name: { $regex: new RegExp(`^${escapedBranchName}$`, "i") } },
                             { code: branchName.toUpperCase() }
                         ],
-                        programId: programDoc._id
+                        programIds: programDoc._id
                     });
                     if (!branchDoc) throw new Error(`Branch '${branchName}' not found for program '${programName}'`);
                     branchCache[branchCacheKey] = branchDoc;
@@ -685,7 +685,7 @@ const createResult = async (req, res) => {
             });
             if (branchDoc) {
                 resolvedBranchId = branchDoc._id;
-                resolvedProgramId = branchDoc.programId;
+                resolvedProgramId = programId || (branchDoc.programIds && branchDoc.programIds.length > 0 ? branchDoc.programIds[0] : undefined);
             } else {
                 return res.status(400).json({ message: `Branch '${branch}' was not found in the system.` });
             }

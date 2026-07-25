@@ -73,11 +73,11 @@ router.post("/submit", protect, authorize("FACULTY"), submitAppraisal);
 router.post("/proctoring-duties", protect, authorize("FACULTY"), updateProctoringDuties);
 
 // Scopus citation & h-index fetch (calls Scopus API from backend, saves to appraisal)
-router.get("/scopus-data/:academicYearId", protect, authorize("FACULTY", "ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT_HOD", "HOD"), getScopusData);
+router.get("/scopus-data/:academicYearId", protect, authorize("FACULTY", "ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN"), getScopusData);
 
-// HOD Appraisal actions
-router.get("/pending-hod", protect, authorize("DEPARTMENT_HOD", "HOD"), getPendingHODAppraisals);
-router.put("/hod-evaluate/:id", protect, authorize("DEPARTMENT_HOD", "HOD"), evaluateHODAppraisal);
+// HOD and Dean Appraisal actions
+router.get("/pending-hod", protect, authorize("DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN"), getPendingHODAppraisals);
+router.put("/hod-evaluate/:id", protect, authorize("DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN"), evaluateHODAppraisal);
 
 // R&D Admin Appraisal actions
 router.get("/pending-rnd", protect, authorize("ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR"), getPendingRNDAppraisals);
@@ -85,6 +85,6 @@ router.put("/rnd-evaluate/:id", protect, authorize("ADMIN", "RESEARCH_DEAN", "RE
 
 // All Appraisals (UNIPRIME)
 router.get("/all/:academicYearId", protect, authorize("UNIPRIME"), getAllAppraisals);
-router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "FACULTY"), getAppraisalById);
+router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY"), getAppraisalById);
 
 module.exports = router;

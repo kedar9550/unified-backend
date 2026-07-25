@@ -150,7 +150,7 @@ const uploadCSV = async (req, res) => {
                 if (!branchDoc) {
                     const escapedBranchName = escapeRegex(branchName.trim());
                     branchDoc = await Branch.findOne({
-                        programId: programDoc._id,
+                        programIds: programDoc._id,
                         $or: [
                             { code: branchName.toUpperCase().trim() },
                             { name: { $regex: new RegExp(`^${escapedBranchName}$`, "i") } }
@@ -160,7 +160,6 @@ const uploadCSV = async (req, res) => {
                     branchCache[branchCacheKey] = branchDoc;
                 }
 
-                const programIdFromBranch = branchDoc.programId;
 
                 // Resolve Academic Year (AcademicYear docs are now year-string unique)
                 let ayId = ayCache[`${academicyear}`];
@@ -244,7 +243,7 @@ const uploadCSV = async (req, res) => {
                 results.push({
                     facultyId: faculty.institutionId,
                     facultyName: faculty.name,
-                    programId: programIdFromBranch,
+                    programId: programDoc._id,
                     branchId: branchDoc._id,
                     academicYearId: ayId,
                     semesterTypeId,
