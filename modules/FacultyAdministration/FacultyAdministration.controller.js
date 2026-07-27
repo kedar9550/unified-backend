@@ -44,11 +44,8 @@ exports.createOrUpdateEntry = async (req, res) => {
 
         // Validate role entries
         for (const r of roles) {
-            if (!VALID_ADMIN_ROLES.includes(r.roleName)) {
+            if (!VALID_ADMIN_ROLES.includes(r.roleName) && !r.roleName.startsWith("Any other remarkable event")) {
                 return res.status(400).json({ success: false, message: `Invalid administrative role name: "${r.roleName}".` });
-            }
-            if (r.roleName === "Any other remarkable event / activity coordinator" && r.isResponsible && (!r.details || !r.details.trim())) {
-                return res.status(400).json({ success: false, message: "Please specify details for the other remarkable event/activity." });
             }
         }
 
