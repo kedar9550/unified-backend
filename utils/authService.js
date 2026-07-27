@@ -61,7 +61,7 @@ const loginUser = async (institutionId, password, appName) => {
 const normalizeUser = (user, userType) => {
     const toTitleCase = (str) => {
         if (!str) return str;
-        return str.toLowerCase().split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        return str.toLowerCase().replace(/(?:^|[\s.-])\w/g, match => match.toUpperCase());
     };
 
     return {

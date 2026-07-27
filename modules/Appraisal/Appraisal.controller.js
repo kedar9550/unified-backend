@@ -390,16 +390,16 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             academicYearId: { $in: matchingYearIds }
         }).populate("branchId", "code");
 
-        // 1.1 THEORY Courses Pass Percentage Points
+        // 1.1 THEORY & INTEGRATED Courses Pass Percentage Points
         const theoryPP = [];
         let totalPPClaimed = 0;
 
-        // 1.4 THEORY Courses CO Attainment Points
+        // 1.4 THEORY & INTEGRATED Courses CO Attainment Points
         const theoryCO = [];
         let totalCOClaimed = 0;
 
         subjectResults.forEach(res => {
-            if (res.courseType === "THEORY") {
+            if (["THEORY", "INTEGRATED", "Integrated"].includes(res.courseType)) {
                 const semDisplay = res.yearNumber ? `YEAR-${res.yearNumber}` : res.semesterNumber ? `SEM-${res.semesterNumber}` : "";
                 const branchDisplay = res.branchId?.code || res.branch || "";
                 const secDisplay = res.section ? `- SEC ${res.section}` : "";
@@ -440,7 +440,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
             academicYearId: { $in: matchingYearIds },
-            subjectType: { $in: ["Theory", "THEORY"] },
+            subjectType: { $in: ["Theory", "THEORY", "Integrated", "INTEGRATED"] },
             phase: 2
         }).populate("branchId", "code");
 

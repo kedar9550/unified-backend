@@ -66,7 +66,7 @@ exports.createOrUpdateEntry = async (req, res) => {
 
         // Check if an entry already exists for this faculty and academic year
         let entry = await FacultyAdministration.findOne({ facultyId, academicYear });
- 
+
         if (entry) {
             // Create a map of existing roles by name to check against
             const existingRolesMap = {};
@@ -91,10 +91,10 @@ exports.createOrUpdateEntry = async (req, res) => {
                             remarks: existing.remarks || ""
                         };
                     } else if (existing.isResponsible) {
-                        const isSame = 
+                        const isSame =
                             existing.level === newRole.level &&
                             existing.details === newRole.details;
-                        
+
                         if (isSame) {
                             return {
                                 roleName: newRole.roleName,
@@ -197,11 +197,11 @@ exports.getPendingAtHOD = async (req, res) => {
         const entries = await FacultyAdministration.find({
             facultyId: { $in: facultyIds }
         })
-        .populate("facultyId", "name institutionId department coreDepartment")
-        .populate("academicYear", "year")
-        .populate("approvedBy", "name")
-        .populate("roles.approvedBy", "name")
-        .sort({ createdAt: -1 });
+        ulate("facultyId", "name institutionId department coreDepartment")
+        ulate("academicYear", "year")
+        ulate("approvedBy", "name")
+        ulate("roles.approvedBy", "name")
+        t({ createdAt: -1 });
 
         res.json({ success: true, data: entries });
     } catch (err) {
@@ -238,7 +238,7 @@ exports.hodActionRole = async (req, res) => {
             return res.status(404).json({ success: false, message: "Faculty member associated with this entry not found." });
         }
 
-        const hasAccess = deptIds.some(deptId => 
+        const hasAccess = deptIds.some(deptId =>
             (targetFaculty.department && targetFaculty.department.toString() === deptId.toString()) ||
             (targetFaculty.coreDepartment && targetFaculty.coreDepartment.toString() === deptId.toString())
         );
