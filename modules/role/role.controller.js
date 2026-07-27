@@ -8,6 +8,7 @@ const Employee = require('../employee/employee.model');
 exports.getRoles = async (req, res, next) => {
     try {
         const roles = await Role.find().sort({ createdAt: -1 });
+        console.log("SENDING ROLES TO FRONTEND:", roles.map(r => r.name));
         res.status(200).json({
             success: true,
             data: roles
@@ -221,17 +222,18 @@ const getIdentityBasedRoleName = (userType, designation) => {
 // @access  Private (Admin/UniPrime)
 exports.syncEmployeeRoles = async (req, res, next) => {
     try {
-        const { userId, roleIds, hodDepartments } = req.body;
+        const { userId, roleIds, hodDepartments, deanSchools } = req.body;
         const app = process.env.APP_NAME || 'UNIFIED_SYSTEM';
 
         // 1. Fetch user to check identity
         const user = await Employee.findById(userId);
         if (!user) return res.status(404).json({ success: false, message: 'Employee not found' });
 
-        // 2. Identify default roles and HOD in the final selection
+        // 2. Identify default roles and HOD/Dean in the final selection
         const selectedRoles = await Role.find({ _id: { $in: roleIds } });
         const selectedDefaultRoles = selectedRoles.filter(r => r.defaultRole);
         const hodRole = selectedRoles.find(r => r.key === 'HOD' || r.name === 'HOD');
+        const deanRole = selectedRoles.find(r => r.key === 'SCHOOL_DEAN' || r.name === 'SCHOOL_DEAN');
 
         // 3. Enforcement: Exactly one default role
         if (selectedDefaultRoles.length !== 1) {
@@ -254,6 +256,10 @@ exports.syncEmployeeRoles = async (req, res, next) => {
             if (hodRole && roleId === hodRole._id.toString()) {
                 mapping.departments = hodDepartments || [];
             }
+            // Apply schools context if it's the SCHOOL_DEAN role
+            if (deanRole && roleId === deanRole._id.toString()) {
+                mapping.schools = deanSchools || [];
+            }
             return mapping;
         });
         
@@ -269,6 +275,21 @@ exports.syncEmployeeRoles = async (req, res, next) => {
                 role: hodRole._id,
                 userId: { $ne: userId },
                 departments: { $size: 0 }
+            });
+        }
+
+        // Ensure no other user remains SCHOOL_DEAN for these schools
+        if (deanRole && deanSchools && deanSchools.length > 0) {
+            await EmployeeAppRole.updateMany(
+                { role: deanRole._id, userId: { $ne: userId } },
+                { $pullAll: { schools: deanSchools } }
+            );
+            
+            // Clean up: if any user now has an empty schools array for SCHOOL_DEAN role, remove that role mapping entirely
+            await EmployeeAppRole.deleteMany({
+                role: deanRole._id,
+                userId: { $ne: userId },
+                schools: { $size: 0 }
             });
         }
         
