@@ -203,7 +203,7 @@ const validateUser = async (req, res) => {
 
         const data = await authService.loginUser(id, password, app);
 
-        generateToken({
+        const token = generateToken({
             userId: data.user._id,
             institutionId: data.user.institutionId,
             userType: data.user.userType,
@@ -219,7 +219,7 @@ const validateUser = async (req, res) => {
             }
         }
 
-        res.json({ message: "Login success", user: { ...data.user, roles: data.roles } });
+        res.json({ message: "Login success", token, user: { ...data.user, roles: data.roles } });
     } catch (e) {
         res.status(401).json({ message: e.message });
     }

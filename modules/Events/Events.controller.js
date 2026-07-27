@@ -124,9 +124,13 @@ exports.createEvent = async (req, res, next) => {
             bannerImageUrl = `/uploads/events/${bannerImage.filename}`;
         }
 
+        const departmentNames = Array.isArray(group.department)
+            ? group.department.map((dept) => dept?.name || '').filter(Boolean).join(', ')
+            : group.department?.name || '';
+
         const newEvent = new Events({
             group: group._id,
-            department: group.department?.name || '',
+            department: departmentNames,
             eventName,
             price: Number(price) || 0,
             maxTeamSize: Number(maxTeamSize),
@@ -238,9 +242,13 @@ exports.updateEvent = async (req, res, next) => {
         const parsedRules = Array.isArray(rules) ? rules.filter((rule) => rule && rule.trim()) : [];
         const parsedFacultyCoordinators = normalizeCoordinators(req.body.facultyCoordinators || req.body.facultyCoordinator);
 
+        const departmentNames = Array.isArray(group.department)
+            ? group.department.map((dept) => dept?.name || '').filter(Boolean).join(', ')
+            : group.department?.name || '';
+
         const updatedFields = {
             group: group._id,
-            department: group.department?.name || '',
+            department: departmentNames,
             eventName,
             price: Number(price) || 0,
             maxTeamSize: Number(maxTeamSize),

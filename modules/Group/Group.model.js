@@ -8,9 +8,15 @@ const GroupSchema = new mongoose.Schema({
         maxlength: [200, 'Group name cannot exceed 200 characters']
     },
     department: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'EventDepartment',
-        required: [true, 'Department is required']
+        type: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'EventDepartment',
+            required: [true, 'Department is required']
+        }],
+        validate: {
+            validator: (value) => Array.isArray(value) && value.length > 0,
+            message: 'At least one department is required.'
+        }
     },
     content: {
         type: String,
