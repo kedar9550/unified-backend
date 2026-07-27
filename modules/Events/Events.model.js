@@ -23,6 +23,25 @@ const ConvenerSchema = new mongoose.Schema({
     }
 }, { _id: false });
 
+const FacultyCoordinatorSchema = new mongoose.Schema({
+    employeeId: {
+        type: String,
+        trim: true,
+    },
+    employeeName: {
+        type: String,
+        trim: true,
+    },
+    department: {
+        type: String,
+        trim: true,
+    },
+    designation: {
+        type: String,
+        trim: true,
+    },
+}, { _id: false });
+
 const EventsSchema = new mongoose.Schema({
     eventName: {
         type: String,
@@ -30,13 +49,81 @@ const EventsSchema = new mongoose.Schema({
         trim: true,
         maxlength: 200
     },
+    department: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 200
+    },
+    price: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    maxTeamSize: {
+        type: Number,
+        required: true,
+        min: 1
+    },
+    venue: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 300
+    },
+    extraTeamSize: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    extraAmountPerHead: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
+    group: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Group',
+        required: true
+    },
+    overview: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 5000
+    },
+    rules: {
+        type: [String],
+        default: []
+    },
     bannerImage: {
         type: String,
-        required: true
     },
     conveners: {
         type: [ConvenerSchema],
-        validate: [v => Array.isArray(v) && v.length > 0, 'At least one convener is required']
+        default: []
+    },
+    facultyCoordinator: {
+        employeeId: {
+            type: String,
+            trim: true,
+        },
+        employeeName: {
+            type: String,
+            trim: true,
+        },
+        department: {
+            type: String,
+            trim: true,
+        },
+        designation: {
+            type: String,
+            trim: true,
+        },
+    },
+    facultyCoordinators: {
+        type: [FacultyCoordinatorSchema],
+        default: []
     },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,

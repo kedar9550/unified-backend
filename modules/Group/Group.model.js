@@ -26,6 +26,24 @@ const GroupSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Banner image is required']
     },
+    eventCoordinator: {
+        employeeId: {
+            type: String,
+            trim: true,
+        },
+        employeeName: {
+            type: String,
+            trim: true,
+        },
+        department: {
+            type: String,
+            trim: true,
+        },
+        designation: {
+            type: String,
+            trim: true,
+        }
+    },
     status: {
         type: String,
         enum: ['Active', 'Inactive'],
