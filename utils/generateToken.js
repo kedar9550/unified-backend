@@ -9,8 +9,9 @@ const generateToken = (payload, res) => {
 
     res.cookie('token', token, {
         httpOnly: true,
-        secure: isProd, // True in production, prevents the cookie from being sent over plain HTTP
-        sameSite: isProd ? 'none' : 'lax', // 'none' needed for cross-domain in prod, 'lax' is fine for local
+        secure: isProd, // secure cookies only in production
+        sameSite: 'none', // required for cross-site requests from the frontend dev server
+        path: '/',
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     });
 

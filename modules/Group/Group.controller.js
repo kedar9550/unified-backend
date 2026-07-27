@@ -79,7 +79,19 @@ exports.createGroup = async (req, res, next) => {
         const { name, department, content, status, eventCoordinator } = req.body;
         const normalizedCoordinator = normalizeCoordinator(eventCoordinator);
 
-        if (!name || !department || !content || !logoFile || !bannerFile) {
+        let departments = department;
+        if (typeof departments === 'string') {
+            try {
+                departments = JSON.parse(department);
+            } catch (err) {
+                departments = department ? [department] : [];
+            }
+        }
+        if (!Array.isArray(departments)) {
+            departments = departments ? [departments] : [];
+        }
+
+        if (!name || !departments.length || !content || !logoFile || !bannerFile) {
             cleanupFiles([logoFile, bannerFile]);
             return res.status(400).json({
                 success: false,
@@ -95,7 +107,7 @@ exports.createGroup = async (req, res, next) => {
 
         const group = await Group.create({
             name:      name.trim(),
-            department,
+            department: departments,
             content:   content.trim(),
             logo:      `/uploads/groups/${logoFile.filename}`,
             banner:    `/uploads/groups/${bannerFile.filename}`,
@@ -160,8 +172,22 @@ exports.updateGroup = async (req, res, next) => {
         const { name, department, content, status, eventCoordinator } = req.body;
         const normalizedCoordinator = normalizeCoordinator(eventCoordinator);
 
+        let departments = department;
+        if (department) {
+            if (typeof departments === 'string') {
+                try {
+                    departments = JSON.parse(department);
+                } catch (err) {
+                    departments = [department];
+                }
+            }
+            if (!Array.isArray(departments)) {
+                departments = departments ? [departments] : [];
+            }
+        }
+
         if (name)       group.name       = name.trim();
-        if (department) group.department = department;
+        if (department) group.department = departments;
         if (content)    group.content    = content.trim();
         if (status)     group.status     = status;
         if (normalizedCoordinator) group.eventCoordinator = normalizedCoordinator;
