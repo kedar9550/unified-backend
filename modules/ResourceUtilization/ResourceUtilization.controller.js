@@ -81,7 +81,8 @@ exports.createResourceUtilization = async (req, res) => {
                 "ICMR",
                 "Govt. University",
                 "NIRF Ranked Institute (Below 200)",
-                "NPTEL"
+                "NPTEL",
+                "Other / Host Institute"
             ];
             if (!allowedCategories.includes(data.organizingInstitutionCategory)) {
                 return res.status(400).json({ success: false, message: "Invalid Organizing Institution Category." });
@@ -254,7 +255,7 @@ exports.createResourceUtilization = async (req, res) => {
             location: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.location : undefined,
             labName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "MHRD R&D Lab" ? data.labName : undefined,
             universityName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "Govt. University" ? data.universityName : undefined,
-            instituteName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" ? data.instituteName : undefined,
+            instituteName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && (data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" || data.organizingInstitutionCategory === "Other / Host Institute") ? data.instituteName : undefined,
             nirfRank: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" ? parseInt(data.nirfRank) : undefined
         });
 
@@ -418,7 +419,8 @@ exports.updateResourceUtilization = async (req, res) => {
                 "ICMR",
                 "Govt. University",
                 "NIRF Ranked Institute (Below 200)",
-                "NPTEL"
+                "NPTEL",
+                "Other / Host Institute"
             ];
             if (!allowedCategories.includes(organizingInstitutionCategory)) {
                 return res.status(400).json({ success: false, message: "Invalid Organizing Institution Category." });
@@ -538,6 +540,9 @@ exports.updateResourceUtilization = async (req, res) => {
                 record.instituteName = data.instituteName !== undefined ? data.instituteName : record.instituteName;
                 const finalNirfRank = data.nirfRank !== undefined ? data.nirfRank : record.nirfRank;
                 record.nirfRank = finalNirfRank ? parseInt(finalNirfRank) : undefined;
+            } else if (finalOrgCategory === "Other / Host Institute") {
+                record.instituteName = data.instituteName !== undefined ? data.instituteName : record.instituteName;
+                record.nirfRank = undefined;
             } else {
                 record.instituteName = undefined;
                 record.nirfRank = undefined;
