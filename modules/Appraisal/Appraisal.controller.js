@@ -1582,7 +1582,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
 exports.evaluateHODAppraisal = async (req, res) => {
     try {
         const { id } = req.params;
-        const { interpersonalRatings, comments, action } = req.body; // action can be 'Approve' or 'Reject'
+        const { interpersonalRatings, comments, action, awardedResUtilPoints } = req.body; // action can be 'Approve' or 'Reject'
 
         const appraisal = await Appraisal.findById(id);
         if (!appraisal) {
@@ -1639,6 +1639,13 @@ exports.evaluateHODAppraisal = async (req, res) => {
 
             if (hasRejectedProctoring || hasRejectedResourceUt || hasRejectedContribution || hasRejectedAdmin) {
                 return res.status(400).json({ success: false, message: "Cannot approve appraisal while there are rejected sections. Please reject the overall appraisal so the faculty can correct them." });
+            }
+
+            // Update manually awarded points for Resource Utilization Participated roles
+            if (awardedResUtilPoints && typeof awardedResUtilPoints === 'object') {
+                for (const [recordId, points] of Object.entries(awardedResUtilPoints)) {
+                    await ResourceUtilization.findByIdAndUpdate(recordId, { awardedPoints: points });
+                }
             }
 
             // Auto-approve any remaining Pending entries

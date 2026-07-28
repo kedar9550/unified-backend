@@ -576,6 +576,7 @@ exports.updateResourceUtilization = async (req, res) => {
         // This is the ONLY place where Rejected → Draft should ever happen.
         if (wasRejected) {
             record.status = 'Draft';
+            record.awardedPoints = null;
         }
 
         await record.save();
