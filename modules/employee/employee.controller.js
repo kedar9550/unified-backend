@@ -142,7 +142,7 @@ const registerUser = async (req, res) => {
 
         const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
         let roleName = "STAFF";
-        
+
         if (userType) {
             roleName = userType.toUpperCase();
         } else {
@@ -470,6 +470,7 @@ const searchUser = async (req, res) => {
                     department: 1,
                     coreDepartment: 1,
                     designation: 1,
+                    leadership: 1,
                     userType: { $literal: 'Employee' },
                     roles: 1
                 }
@@ -836,8 +837,8 @@ const bulkUpdateEmployees = async (req, res) => {
 const adminUpdateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, coreDepartment, name, department, designation } = req.body;
-        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation });
+        const { email, coreDepartment, name, department, designation, leadership } = req.body;
+        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership });
 
         const employee = await Employee.findById(id);
         if (!employee) {
@@ -865,7 +866,8 @@ const adminUpdateEmployee = async (req, res) => {
         if (name) employee.name = name;
         if (department) employee.department = department;
         if (designation) employee.designation = designation;
-
+        if (leadership) employee.leadership = leadership;
+        
         await employee.save();
 
         const updatedEmployee = await Employee.findById(id)
@@ -1020,6 +1022,7 @@ const getAllEmployees = async (req, res) => {
                     department: 1,
                     coreDepartment: 1,
                     designation: 1,
+                    leadership: 1,
                     userType: { $literal: 'Employee' },
                     roles: 1
                 }
@@ -1045,11 +1048,11 @@ const getHODStaff = async (req, res) => {
             coreDepartment: { $in: deptIds },
             isActive: true
         })
-        .select('-password -otp -otpExpiry')
-        .populate('department', 'name code')
-        .populate('coreDepartment', 'name code')
-        .sort({ name: 1 })
-        .lean();
+            .select('-password -otp -otpExpiry')
+            .populate('department', 'name code')
+            .populate('coreDepartment', 'name code')
+            .sort({ name: 1 })
+            .lean();
 
         res.status(200).json(staff);
     } catch (error) {
@@ -1094,7 +1097,7 @@ const addHODStaff = async (req, res) => {
                     isCoreDeptValid = true;
                 }
             }
-            
+
             // Fallback 2: Try HOD's first managed department ID from role mapping
             if (!isCoreDeptValid) {
                 const deptIds = await getHODDepartments(req.user);
@@ -1139,7 +1142,7 @@ const sendSignupOtp = async (req, res) => {
         if (!institutionId) {
             return res.status(400).json({ message: "Institution ID is required" });
         }
- 
+
         const cleanId = institutionId.trim();
 
         // 1. Check if already registered
@@ -1261,7 +1264,7 @@ const saveFcmToken = async (req, res) => {
         }
 
         // Sometimes req.user uses _id and sometimes userId depending on the middleware
-        const userId = req.user.userId || req.user._id; 
+        const userId = req.user.userId || req.user._id;
         const userType = req.user.userType || (/^\d+$/.test(req.user.institutionId) ? 'Employee' : 'Student');
 
         if (userType === 'Student') {
