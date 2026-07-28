@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const Appraisal = require("./Appraisal.model");
+const Appraisal = require("./Appraisal.model.js");
 const AppraisalConfig = require("./AppraisalConfig.model");
 const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
 
@@ -482,6 +482,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 courseName: targetRecord.subjectName,
                 secBranchSem: secBranchSem,
                 noOfStudents: targetRecord.totalStudents || 0,
+                totalStudents: targetRecord.totalStudents || 0,
+                givenStudents: targetRecord.givenStudents || 0,
                 feedbackPercentage: selectedPercentage,
                 pointsClaimed: feedPoints
             });
@@ -1073,9 +1075,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
                     pts = (r.sessionsConducted || 1) * (resourceUtConf.resourcePerson ?? 2);
                 } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
-                    // Use server-auto-calculated duration (from fromDate/toDate) as authoritative day count.
-                    // daysParticipated is manually entered and may differ; duration is always correct.
-                    const participantDays = r.duration || r.daysParticipated || 1;
+                    // Use daysParticipated as authoritative day count for points calculation.
+                    // If daysParticipated is missing, fallback to duration.
+                    const participantDays = r.daysParticipated || r.duration || 1;
                     pts = participantDays * (resourceUtConf.participated ?? 1);
                 } else if (activityRole.includes('guest lecture') || activityRole.includes('workshop') || activityRole.includes('event')) {
                     pts = resourceUtConf.guestLecture ?? 2;

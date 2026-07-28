@@ -37,27 +37,39 @@ exports.createResourceUtilization = async (req, res) => {
         }
 
         // Validate mandatory text fields
-        if (!data.academicYear || !data.activityCategory || !data.activityType || !data.organizationName || !data.fromDate || !data.toDate) {
+        if (!data.academicYear || !data.activityCategory || !data.activityType || !data.organizationName || !data.eventStartDate || !data.eventEndDate) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
-        // Validate role-specific mandatory fields
-        if (data.activityType && data.activityType.includes("Resource Person")) {
-            if (!data.sessionsConducted) {
+        const role = (data.activityType || '').toLowerCase();
+        const isResourcePerson = role.includes("resource person") || role.includes("resourceperson");
+        const isParticipant = role.includes("participant") || role.includes("participated");
+        const isOrganized = !isResourcePerson && !isParticipant;
+
+        // CREATE: Validate role-specific mandatory fields
+        if (isResourcePerson) {
+            if (!data.numberOfSessions) {
                 return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
             }
-            const sessions = parseInt(data.sessionsConducted);
+            const sessions = parseInt(data.numberOfSessions);
             if (isNaN(sessions) || sessions <= 0) {
                 return res.status(400).json({ success: false, message: "Number of Sessions Conducted must be a positive integer greater than 0." });
             }
-        }
-        if (data.activityType && data.activityType.includes("Participant")) {
-            if (!data.daysParticipated) {
+        } else if (isParticipant) {
+            if (!data.numberOfDaysParticipated) {
                 return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
             }
-            const days = parseInt(data.daysParticipated);
+            const days = parseInt(data.numberOfDaysParticipated);
             if (isNaN(days) || days <= 0) {
                 return res.status(400).json({ success: false, message: "Number of Days Participated must be a positive integer greater than 0." });
+            }
+        } else if (isOrganized) {
+            if (!data.numberOfDaysOrganized) {
+                return res.status(400).json({ success: false, message: "Number of Days Organized is required." });
+            }
+            const days = parseInt(data.numberOfDaysOrganized);
+            if (isNaN(days) || days <= 0) {
+                return res.status(400).json({ success: false, message: "Number of Days Organized must be a positive integer greater than 0." });
             }
         }
 
@@ -138,12 +150,6 @@ exports.createResourceUtilization = async (req, res) => {
                 removedFromAppraisal: { $ne: true }
             });
 
-            // Auto-calculate duration in days for FDP comparison
-            const start = new Date(data.fromDate);
-            const end = new Date(data.toDate);
-            const diffTime = Math.abs(end - start);
-            const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-
             const certNoInput = data.certificateNumber ? data.certificateNumber.trim().toLowerCase() : "";
             const courseNameInput = data.courseFdpName ? data.courseFdpName.trim().toLowerCase() : "";
 
@@ -157,10 +163,8 @@ exports.createResourceUtilization = async (req, res) => {
                         conflictFound = true;
                         break;
                     }
-                } else {
-                    const nameMatch = courseNameInput === courseNameExist;
-                    const durationMatch = normalizeDurationToWeeks(calcDuration) === normalizeDurationToWeeks(c.duration);
-                    if (nameMatch && durationMatch) {
+                } else if (courseNameInput && courseNameExist) {
+                    if (courseNameInput === courseNameExist) {
                         conflictFound = true;
                         break;
                     }
@@ -189,28 +193,12 @@ exports.createResourceUtilization = async (req, res) => {
         }
 
         // Validate dates (not in future)
-        if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
+        if (isFutureDate(data.eventStartDate) || isFutureDate(data.eventEndDate)) {
             return res.status(400).json({ success: false, message: "Activity dates cannot be in the future." });
         }
 
-        if (new Date(data.fromDate) >= new Date(data.toDate)) {
-            return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
-        }
-
-        // Auto-calculate duration in days
-        const start = new Date(data.fromDate);
-        const end = new Date(data.toDate);
-        const diffTime = Math.abs(end - start);
-        const calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-
-        if (data.activityCategory === "STTP" || data.activityCategory === "Refresher Course") {
-            if (calcDuration < 10) {
-                return res.status(400).json({ success: false, message: `${data.activityCategory} must have a minimum duration of 10 days.` });
-            }
-        } else if (data.activityCategory === "FDP" || data.activityCategory === "SYMPOSIUM") {
-            if (calcDuration < 5) {
-                return res.status(400).json({ success: false, message: `${data.activityCategory} must have a minimum duration of 5 days.` });
-            }
+        if (new Date(data.eventStartDate) >= new Date(data.eventEndDate)) {
+            return res.status(400).json({ success: false, message: "Event End Date must be greater than Event Start Date." });
         }
 
         const ayRecord = await AcademicYear.findById(data.academicYear);
@@ -219,7 +207,7 @@ exports.createResourceUtilization = async (req, res) => {
         }
         const academicYearStr = ayRecord.year;
 
-        if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
+        if (!isDateWithinAcademicYear(data.eventStartDate, academicYearStr) || !isDateWithinAcademicYear(data.eventEndDate, academicYearStr)) {
             return res.status(400).json({
                 success: false,
                 message: `Activity dates must fall within the selected Academic Year (${academicYearStr}).`
@@ -239,12 +227,12 @@ exports.createResourceUtilization = async (req, res) => {
             activityCategory: data.activityCategory,
             activityType: data.activityType,
             organizationName: data.organizationName,
-            fromDate: data.fromDate,
-            toDate: data.toDate,
-            duration: calcDuration,
+            eventStartDate: data.eventStartDate,
+            eventEndDate: data.eventEndDate,
             remarks: data.remarks || "",
-            sessionsConducted: data.sessionsConducted ? parseInt(data.sessionsConducted) : undefined,
-            daysParticipated: data.daysParticipated ? parseInt(data.daysParticipated) : undefined,
+            numberOfSessions: isResourcePerson && data.numberOfSessions ? parseInt(data.numberOfSessions) : undefined,
+            numberOfDaysParticipated: isParticipant && data.numberOfDaysParticipated ? parseInt(data.numberOfDaysParticipated) : undefined,
+            numberOfDaysOrganized: isOrganized && data.numberOfDaysOrganized ? parseInt(data.numberOfDaysOrganized) : undefined,
             proof: `/uploads/resource-utilization/${filename}`,
             status: 'Draft', // Always save as Draft first
             certificateNumber: data.certificateNumber || undefined,
@@ -280,7 +268,7 @@ exports.getMyResourceUtilizations = async (req, res) => {
         const list = await ResourceUtilization.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 }).lean();
         res.json({ success: true, data: list });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -324,35 +312,19 @@ exports.updateResourceUtilization = async (req, res) => {
         }
 
         // Validate dates if sent
-        if (data.fromDate && isFutureDate(data.fromDate)) {
-            return res.status(400).json({ success: false, message: "From Date cannot be in the future." });
+        if (data.eventStartDate && isFutureDate(data.eventStartDate)) {
+            return res.status(400).json({ success: false, message: "Event Start Date cannot be in the future." });
         }
-        if (data.toDate && isFutureDate(data.toDate)) {
-            return res.status(400).json({ success: false, message: "To Date cannot be in the future." });
+        if (data.eventEndDate && isFutureDate(data.eventEndDate)) {
+            return res.status(400).json({ success: false, message: "Event End Date cannot be in the future." });
         }
-        const from = data.fromDate || record.fromDate;
-        const to = data.toDate || record.toDate;
+        const from = data.eventStartDate || record.eventStartDate;
+        const to = data.eventEndDate || record.eventEndDate;
         if (from && to && new Date(from) >= new Date(to)) {
             return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
         }
 
-        let calcDuration = record.duration;
-        if (from && to) {
-            const start = new Date(from);
-            const end = new Date(to);
-            const diffTime = Math.abs(end - start);
-            calcDuration = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1);
-        }
-
-        if (category === "STTP" || category === "Refresher Course") {
-            if (calcDuration < 10) {
-                return res.status(400).json({ success: false, message: `${category} must have a minimum duration of 10 days.` });
-            }
-        } else if (category === "FDP" || category === "SYMPOSIUM") {
-            if (calcDuration < 5) {
-                return res.status(400).json({ success: false, message: `${category} must have a minimum duration of 5 days.` });
-            }
-        }
+        
 
         const academicYearId = data.academicYear || record.academicYear;
         const ayRecord = await AcademicYear.findById(academicYearId);
@@ -369,10 +341,16 @@ exports.updateResourceUtilization = async (req, res) => {
         }
 
         // Validate role-specific mandatory fields
-        const days = data.daysParticipated !== undefined ? data.daysParticipated : record.daysParticipated;
-        const sessions = data.sessionsConducted !== undefined ? data.sessionsConducted : record.sessionsConducted;
+        const role = (type || '').toLowerCase();
+        const isResourcePerson = role.includes("resource person") || role.includes("resourceperson");
+        const isParticipant = role.includes("participant") || role.includes("participated");
+        const isOrganized = !isResourcePerson && !isParticipant;
 
-        if (type && type.includes("Resource Person")) {
+        const sessions = data.numberOfSessions !== undefined ? data.numberOfSessions : record.numberOfSessions;
+        const daysPart = data.numberOfDaysParticipated !== undefined ? data.numberOfDaysParticipated : record.numberOfDaysParticipated;
+        const daysOrg = data.numberOfDaysOrganized !== undefined ? data.numberOfDaysOrganized : record.numberOfDaysOrganized;
+
+        if (isResourcePerson) {
             if (!sessions) {
                 return res.status(400).json({ success: false, message: "Number of Sessions Conducted is required for Resource Person role." });
             }
@@ -381,13 +359,22 @@ exports.updateResourceUtilization = async (req, res) => {
                 return res.status(400).json({ success: false, message: "Number of Sessions Conducted must be a positive integer greater than 0." });
             }
         }
-        if (type && type.includes("Participant")) {
-            if (!days) {
+        if (isParticipant) {
+            if (!daysPart) {
                 return res.status(400).json({ success: false, message: "Number of Days Participated is required for Participant role." });
             }
-            const dVal = parseInt(days);
+            const dVal = parseInt(daysPart);
             if (isNaN(dVal) || dVal <= 0) {
                 return res.status(400).json({ success: false, message: "Number of Days Participated must be a positive integer greater than 0." });
+            }
+        }
+        if (isOrganized) {
+            if (!daysOrg) {
+                return res.status(400).json({ success: false, message: "Number of Days Organized is required." });
+            }
+            const dVal = parseInt(daysOrg);
+            if (isNaN(dVal) || dVal <= 0) {
+                return res.status(400).json({ success: false, message: "Number of Days Organized must be a positive integer greater than 0." });
             }
         }
 
@@ -497,8 +484,7 @@ exports.updateResourceUtilization = async (req, res) => {
                     }
                 } else {
                     const nameMatch = courseNameInput === courseNameExist;
-                    const durationMatch = normalizeDurationToWeeks(calcDuration) === normalizeDurationToWeeks(c.duration);
-                    if (nameMatch && durationMatch) {
+                    if (nameMatch) {
                         conflictFound = true;
                         break;
                     }
@@ -518,12 +504,12 @@ exports.updateResourceUtilization = async (req, res) => {
         record.activityCategory = data.activityCategory || record.activityCategory;
         record.activityType = data.activityType || record.activityType;
         record.organizationName = data.organizationName || record.organizationName;
-        record.fromDate = from;
-        record.toDate = to;
-        record.duration = calcDuration;
+        record.eventStartDate = from;
+        record.eventEndDate = to;
         record.remarks = data.remarks !== undefined ? data.remarks : record.remarks;
-        record.sessionsConducted = data.sessionsConducted !== undefined ? (data.sessionsConducted ? parseInt(data.sessionsConducted) : undefined) : record.sessionsConducted;
-        record.daysParticipated = data.daysParticipated !== undefined ? (data.daysParticipated ? parseInt(data.daysParticipated) : undefined) : record.daysParticipated;
+        record.numberOfSessions = isResourcePerson ? (data.numberOfSessions !== undefined ? (data.numberOfSessions ? parseInt(data.numberOfSessions) : undefined) : record.numberOfSessions) : undefined;
+        record.numberOfDaysParticipated = isParticipant ? (data.numberOfDaysParticipated !== undefined ? (data.numberOfDaysParticipated ? parseInt(data.numberOfDaysParticipated) : undefined) : record.numberOfDaysParticipated) : undefined;
+        record.numberOfDaysOrganized = isOrganized ? (data.numberOfDaysOrganized !== undefined ? (data.numberOfDaysOrganized ? parseInt(data.numberOfDaysOrganized) : undefined) : record.numberOfDaysOrganized) : undefined;
         record.certificateNumber = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
 
         if (category === "FDP" && type === "FDP Participant") {
@@ -686,7 +672,7 @@ exports.getPendingAtHOD = async (req, res) => {
         const list = await ResourceUtilization.find(query)
             .populate('facultyId', 'name institutionId department coreDepartment profileImage')
             .populate('academicYear', 'year')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 }).lean();
 
         res.json({ success: true, data: list });
     } catch (err) {
