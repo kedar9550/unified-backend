@@ -292,10 +292,8 @@ exports.createContribution = async (req, res) => {
                         conflictFound = true;
                         break;
                     }
-                } else {
-                    const nameMatch = courseNameInput === courseNameExist;
-                    const durationMatch = normalizeDurationToWeeks(data.duration) === normalizeDurationToWeeks(r.duration);
-                    if (nameMatch && durationMatch) {
+                } else if (courseNameInput && courseNameExist) {
+                    if (courseNameInput === courseNameExist) {
                         conflictFound = true;
                         break;
                     }
@@ -471,10 +469,8 @@ exports.updateContribution = async (req, res) => {
                         conflictFound = true;
                         break;
                     }
-                } else {
-                    const nameMatch = courseNameInput === courseNameExist;
-                    const durationMatch = normalizeDurationToWeeks(durationVal) === normalizeDurationToWeeks(r.duration);
-                    if (nameMatch && durationMatch) {
+                } else if (courseNameInput && courseNameExist) {
+                    if (courseNameInput === courseNameExist) {
                         conflictFound = true;
                         break;
                     }

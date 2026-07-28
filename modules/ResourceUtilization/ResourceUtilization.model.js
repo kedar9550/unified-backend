@@ -23,16 +23,12 @@ const ResourceUtilizationSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    fromDate: {
+    eventStartDate: {
         type: Date,
         required: true
     },
-    toDate: {
+    eventEndDate: {
         type: Date,
-        required: true
-    },
-    duration: {
-        type: Number,
         required: true
     },
     proof: {
@@ -42,10 +38,13 @@ const ResourceUtilizationSchema = new mongoose.Schema({
     remarks: {
         type: String
     },
-    sessionsConducted: {
+    numberOfSessions: {
         type: Number
     },
-    daysParticipated: {
+    numberOfDaysParticipated: {
+        type: Number
+    },
+    numberOfDaysOrganized: {
         type: Number
     },
     courseFdpName: {
