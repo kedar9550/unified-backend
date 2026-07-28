@@ -1475,7 +1475,7 @@ exports.submitAppraisal = async (req, res) => {
             const cat = (r.activityCategory || '').toLowerCase().trim();
             const type = (r.activityType || '').toLowerCase().trim();
             const org = (r.organizingInstitutionCategory || '').toLowerCase().trim();
-            const days = Number(r.daysParticipated) || Number(r.duration) || 0;
+            const days = Number(r.numberOfDaysParticipated) || Number(r.daysParticipated) || Number(r.duration) || 0;
             if (cat === 'fdp' && type === 'fdp participant' && days >= 5 && allowedOrg.includes(org)) {
                 if (org.includes("nirf")) {
                     const rank = Number(r.nirfRank);
