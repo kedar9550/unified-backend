@@ -47,7 +47,7 @@ exports.isFutureDate = (dateInput) => {
 
 /**
  * Checks if a given date string or Date object lies within the bounds of a YYYY-YYYY academic year.
- * Spans from June 1st of the start year to June 30th of the end year.
+ * Spans from May 1st of the start year to August 31st of the end year.
  * @param {string|Date} dateInput - The input date.
  * @param {string} academicYearStr - The academic year string (e.g. "2025-2026").
  * @returns {boolean} - True if date is within bounds, false otherwise.
@@ -64,9 +64,9 @@ exports.isDateWithinAcademicYear = (dateInput, academicYearStr) => {
     const endYear = parseInt(parts[1]);
     if (isNaN(startYear) || isNaN(endYear)) return true;
 
-    // June 1st of startYear to June 30th of endYear
-    const startDate = new Date(`${startYear}-06-01T00:00:00`);
-    const endDate = new Date(`${endYear}-06-30T23:59:59`);
+    // May 1st of startYear to August 31st of endYear
+    const startDate = new Date(`${startYear}-05-01T00:00:00`);
+    const endDate = new Date(`${endYear}-08-31T23:59:59`);
 
     return d >= startDate && d <= endDate;
 };

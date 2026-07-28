@@ -55,6 +55,8 @@ const AppraisalSchema = new mongoose.Schema({
                 courseName: String,
                 secBranchSem: String,
                 noOfStudents: Number,
+                totalStudents: Number,
+                givenStudents: Number,
                 feedbackPercentage: Number,
                 pointsClaimed: Number
             }],
