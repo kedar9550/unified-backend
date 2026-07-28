@@ -128,6 +128,9 @@ app.use('/api/event-assignments', require('./modules/EventAssignment/EventAssign
 app.use('/api/event-groups', require('./modules/EventAssignment/EventGroup.route'));
 app.use('/api/major-events', require('./modules/EventAssignment/MajorEvent.route'));
 
+// payments
+app.use('/api/razorpay', require('./modules/Payments/Payments.route'));
+
 // --- Error Handling ---
 
 // 404 Handler
