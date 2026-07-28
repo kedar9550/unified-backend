@@ -1641,10 +1641,14 @@ exports.evaluateHODAppraisal = async (req, res) => {
                 return res.status(400).json({ success: false, message: "Cannot approve appraisal while there are rejected sections. Please reject the overall appraisal so the faculty can correct them." });
             }
 
-            // Update manually awarded points for Resource Utilization Participated roles
+            // Update manually awarded points for Resource Utilization Participated roles in Appraisal document
             if (awardedResUtilPoints && typeof awardedResUtilPoints === 'object') {
-                for (const [recordId, points] of Object.entries(awardedResUtilPoints)) {
-                    await ResourceUtilization.findByIdAndUpdate(recordId, { awardedPoints: points });
+                if (appraisal.valueAddition && appraisal.valueAddition.resourceUtilization && appraisal.valueAddition.resourceUtilization.items) {
+                    appraisal.valueAddition.resourceUtilization.items.forEach(item => {
+                        if (item.eventId && awardedResUtilPoints[item.eventId.toString()] !== undefined) {
+                            item.awardedPoints = awardedResUtilPoints[item.eventId.toString()];
+                        }
+                    });
                 }
             }
 

@@ -186,7 +186,8 @@ const AppraisalSchema = new mongoose.Schema({
                 eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'ResourceUtilization' },
                 event: String,
                 role: String, // Organized, Resource Person, Participated
-                pointsClaimed: Number
+                pointsClaimed: Number,
+                awardedPoints: Number
             }],
             totalClaimed: { type: Number, default: 0 }
         },

@@ -83,10 +83,6 @@ const ResourceUtilizationSchema = new mongoose.Schema({
     hodComment: {
         type: String
     },
-    awardedPoints: {
-        type: Number,
-        default: null
-    },
     createdAt: {
         type: Date,
         default: Date.now
