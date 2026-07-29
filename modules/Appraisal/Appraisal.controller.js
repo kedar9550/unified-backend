@@ -5,6 +5,17 @@ const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
 
 // Import all related models
 const Employee = require("../employee/employee.model");
+
+const getFacultyCategoryHelper = (fac) => {
+    if (!fac) return "Non-Doctorate Faculty";
+    const lead = (fac.leadership || "").toLowerCase().trim();
+    const qual = (fac.qualification || "").toLowerCase().trim();
+    const doct = (fac.doctorate || "").toLowerCase().trim();
+    
+    if (lead === "yes" || lead === "true") return "Leadership Team";
+    if (qual.includes("phd") || qual.includes("ph.d") || doct === "yes" || doct === "true") return "Doctorate Faculty";
+    return "Non-Doctorate Faculty";
+};
 const AcademicYear = require("../academicYear/academicYear.model");
 const Department = require("../academics/department.model");
 const Program = require("../academics/program.model");
@@ -1293,10 +1304,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const cappedAdminPoints = Math.min(config.administration?.maxPoints ?? 20, totalAdminPoints);
 
         // Compile updated dynamic snapshot details
+        const evaluatedCategory = getFacultyCategoryHelper(faculty);
         const updatedAppraisalData = {
             facultyId,
             academicYearId,
             status: "Draft",
+            facultyCategory: evaluatedCategory,
             personalInfoSnapshot: {
                 name: faculty.name,
                 institutionId: faculty.institutionId,
