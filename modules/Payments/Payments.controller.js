@@ -27,6 +27,7 @@ exports.getRegistrations = async (req, res) => {
 };
 
 exports.verifyPayment = async (req, res) => {
+  console.log(req.body);
   try {
     const {
       eventId,
@@ -34,6 +35,9 @@ exports.verifyPayment = async (req, res) => {
       category,
       eventName,
       amount,
+      amountInPaisa,
+      amountInRupees,
+      amountRupees,
       currency = 'INR',
       teamSize,
       participants,
@@ -51,7 +55,14 @@ exports.verifyPayment = async (req, res) => {
     const valid = paymentsService.verifySignature({ order_id, payment_id, signature });
     if (!valid) return res.status(400).json({ error: 'Invalid signature' });
 
-    const amountValue = Number(amount);
+    const parsedAmountInPaisa = Number(amountInPaisa ?? amount ?? 0);
+    const parsedAmountInRupees = Number(
+      amountRupees ?? amountInRupees ?? (parsedAmountInPaisa > 0 ? parsedAmountInPaisa / 100 : amount ?? 0)
+    );
+    const amountValue = Number.isFinite(parsedAmountInRupees) && parsedAmountInRupees > 0
+      ? parsedAmountInRupees
+      : Number(parsedAmountInPaisa > 0 ? parsedAmountInPaisa / 100 : amount ?? 0);
+
     if (Number.isNaN(amountValue) || amountValue <= 0) {
       return res.status(400).json({ error: 'Invalid amount value' });
     }
@@ -62,6 +73,7 @@ exports.verifyPayment = async (req, res) => {
       category: category || '',
       eventName: eventName || '',
       amount: amountValue,
+      amountRupees: amountValue,
       currency,
       teamSize: Number(teamSize) || 1,
       participants: Array.isArray(participants) ? participants : [],
