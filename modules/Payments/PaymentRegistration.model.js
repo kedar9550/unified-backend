@@ -20,6 +20,7 @@ const PaymentRegistrationSchema = new mongoose.Schema({
   category: { type: String, trim: true },
   eventName: { type: String, trim: true },
   amount: { type: Number, default: 0 },
+  amountRupees: { type: Number, default: 0 },
   currency: { type: String, default: 'INR', trim: true },
   teamSize: { type: Number, default: 1 },
   participants: { type: [ParticipantSchema], default: [] },
