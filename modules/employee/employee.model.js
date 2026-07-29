@@ -142,6 +142,11 @@ const isLeadershipDesignation = (designation) => {
 
 function handleEmployeeUpdate(update) {
     if (!update) return;
+
+    // If leadership is explicitly provided in the update, DO NOT auto-overwrite it
+    if (update.$set && update.$set.leadership !== undefined) return;
+    if (update.leadership !== undefined) return;
+
     if (update.$set && update.$set.designation !== undefined) {
         update.$set.leadership = isLeadershipDesignation(update.$set.designation) ? "yes" : "no";
     } else if (update.designation !== undefined) {
@@ -151,7 +156,7 @@ function handleEmployeeUpdate(update) {
 
 // hash password
 EmployeeSchema.pre("save", async function () {
-    if (this.isModified("designation") || this.isNew) {
+    if ((this.isModified("designation") || this.isNew) && !this.isModified("leadership")) {
         this.leadership = isLeadershipDesignation(this.designation) ? "yes" : "no";
     }
 

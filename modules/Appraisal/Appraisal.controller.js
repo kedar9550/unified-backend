@@ -5,6 +5,17 @@ const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
 
 // Import all related models
 const Employee = require("../employee/employee.model");
+
+const getFacultyCategoryHelper = (fac) => {
+    if (!fac) return "Non-Doctorate Faculty";
+    const lead = (fac.leadership || "").toLowerCase().trim();
+    const qual = (fac.qualification || "").toLowerCase().trim();
+    const doct = (fac.doctorate || "").toLowerCase().trim();
+    
+    if (lead === "yes" || lead === "true") return "Leadership Team";
+    if (qual.includes("phd") || qual.includes("ph.d") || doct === "yes" || doct === "true") return "Doctorate Faculty";
+    return "Non-Doctorate Faculty";
+};
 const AcademicYear = require("../academicYear/academicYear.model");
 const Department = require("../academics/department.model");
 const Program = require("../academics/program.model");
@@ -1293,10 +1304,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const cappedAdminPoints = Math.min(config.administration?.maxPoints ?? 20, totalAdminPoints);
 
         // Compile updated dynamic snapshot details
+        const evaluatedCategory = getFacultyCategoryHelper(faculty);
         const updatedAppraisalData = {
             facultyId,
             academicYearId,
             status: "Draft",
+            facultyCategory: evaluatedCategory,
             personalInfoSnapshot: {
                 name: faculty.name,
                 institutionId: faculty.institutionId,
@@ -1475,7 +1488,7 @@ exports.submitAppraisal = async (req, res) => {
             const cat = (r.activityCategory || '').toLowerCase().trim();
             const type = (r.activityType || '').toLowerCase().trim();
             const org = (r.organizingInstitutionCategory || '').toLowerCase().trim();
-            const days = Number(r.daysParticipated) || Number(r.duration) || 0;
+            const days = Number(r.numberOfDaysParticipated) || Number(r.daysParticipated) || Number(r.duration) || 0;
             if (cat === 'fdp' && type === 'fdp participant' && days >= 5 && allowedOrg.includes(org)) {
                 if (org.includes("nirf")) {
                     const rank = Number(r.nirfRank);
@@ -1582,7 +1595,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
 exports.evaluateHODAppraisal = async (req, res) => {
     try {
         const { id } = req.params;
-        const { interpersonalRatings, comments, action } = req.body; // action can be 'Approve' or 'Reject'
+        const { interpersonalRatings, comments, action, awardedResUtilPoints } = req.body; // action can be 'Approve' or 'Reject'
 
         const appraisal = await Appraisal.findById(id);
         if (!appraisal) {
@@ -1639,6 +1652,17 @@ exports.evaluateHODAppraisal = async (req, res) => {
 
             if (hasRejectedProctoring || hasRejectedResourceUt || hasRejectedContribution || hasRejectedAdmin) {
                 return res.status(400).json({ success: false, message: "Cannot approve appraisal while there are rejected sections. Please reject the overall appraisal so the faculty can correct them." });
+            }
+
+            // Update manually awarded points for Resource Utilization Participated roles in Appraisal document
+            if (awardedResUtilPoints && typeof awardedResUtilPoints === 'object') {
+                if (appraisal.valueAddition && appraisal.valueAddition.resourceUtilization && appraisal.valueAddition.resourceUtilization.items) {
+                    appraisal.valueAddition.resourceUtilization.items.forEach(item => {
+                        if (item.eventId && awardedResUtilPoints[item.eventId.toString()] !== undefined) {
+                            item.awardedPoints = awardedResUtilPoints[item.eventId.toString()];
+                        }
+                    });
+                }
             }
 
             // Auto-approve any remaining Pending entries

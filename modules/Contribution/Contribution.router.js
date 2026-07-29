@@ -20,12 +20,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 1024 * 1024 }, // 1MB limit for safety, checked at 500KB in controller
+    limits: { fileSize: 1024 * 1024 }, // 1MB limit for safety, checked at 200KB in controller
     fileFilter: (req, file, cb) => {
         const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowed.includes(ext)) return cb(null, true);
-        cb(new Error('Only PDF and image files (JPG, JPEG, PNG) are allowed. Max size 500KB.'));
+        cb(new Error('Only PDF and image files (JPG, JPEG, PNG) are allowed. Max size 200KB.'));
     }
 });
 

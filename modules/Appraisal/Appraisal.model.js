@@ -23,6 +23,12 @@ const AppraisalSchema = new mongoose.Schema({
         default: "Draft"
     },
     
+    facultyCategory: {
+        type: String,
+        enum: ["Leadership Team", "Doctorate Faculty", "Non-Doctorate Faculty"],
+        default: "Non-Doctorate Faculty"
+    },
+    
     // PART-A: Personal Information
     personalInfoSnapshot: {
         name: String,
@@ -186,7 +192,8 @@ const AppraisalSchema = new mongoose.Schema({
                 eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'ResourceUtilization' },
                 event: String,
                 role: String, // Organized, Resource Person, Participated
-                pointsClaimed: Number
+                pointsClaimed: Number,
+                awardedPoints: Number
             }],
             totalClaimed: { type: Number, default: 0 }
         },
