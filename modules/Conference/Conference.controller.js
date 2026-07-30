@@ -162,6 +162,11 @@ exports.createConference = async (req, res) => {
         res.status(201).json({ success: true, data: conference });
     } catch (err) {
         console.error("Create Conference Error:", err);
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyValue)[0];
+            const message = `A conference with this ${field === 'title' ? 'title' : 'DOI'} already exists.`;
+            return res.status(400).json({ success: false, message });
+        }
         res.status(500).json({ success: false, message: err.message });
     }
 };

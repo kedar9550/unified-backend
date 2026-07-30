@@ -20,7 +20,6 @@ const ConferenceSchema = new mongoose.Schema({
     },
 
     // ── NEW: DOI & Scopus tracking fields ──────────────────────────────────────
-    doi: { type: String, default: null },
     scopusSubtype: { type: String, default: "cp" }, // 'cp' = confirmed conference paper
     // ────────────────────────────────────────────────────────────────────────────
 
@@ -31,7 +30,7 @@ const ConferenceSchema = new mongoose.Schema({
     year: { type: String },
     
     // Conference details
-    doi: { type: String, trim: true },
+    doi: { type: String, trim: true, default: null, unique: true, sparse: true },
     issnIsbn: { type: String },
     publisher: { type: String },
     indexing: { type: String },
