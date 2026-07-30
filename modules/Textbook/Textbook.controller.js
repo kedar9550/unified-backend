@@ -137,6 +137,11 @@ exports.createTextbook = async (req, res) => {
         res.status(201).json({ success: true, data: textbook });
     } catch (err) {
         console.error("Create Textbook Error:", err);
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyValue)[0];
+            const message = `A textbook with this ${field === 'title' ? 'Title' : 'ISBN'} already exists.`;
+            return res.status(400).json({ success: false, message });
+        }
         res.status(500).json({ success: false, message: err.message });
     }
 };

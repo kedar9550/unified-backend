@@ -111,6 +111,9 @@ exports.createProject = async (req, res) => {
         res.status(201).json({ success: true, data: project });
     } catch (err) {
         console.error("Create Funded Project Error:", err);
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, message: "A funded project with this title already exists." });
+        }
         res.status(500).json({ success: false, message: err.message });
     }
 };
