@@ -68,7 +68,7 @@ exports.createBookChapter = async (req, res) => {
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
 
-        
+
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
         const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
@@ -78,9 +78,9 @@ exports.createBookChapter = async (req, res) => {
             facultyId: req.user.userId,
             coAuthors: resolvedAuthors,
             appraisalClaimant,
-            status: 'Pending at HOD'
-        ,
-            incentiveClaimant: computedIncentiveClaimant});
+            status: 'Pending at HOD',
+            incentiveClaimant: computedIncentiveClaimant
+        });
 
         if (req.files) {
             if (req.files.coverPage) bookChapter.coverPage = `/uploads/book-chapters/${req.files.coverPage[0].filename}`;
@@ -93,6 +93,11 @@ exports.createBookChapter = async (req, res) => {
         res.status(201).json({ success: true, data: bookChapter });
     } catch (err) {
         console.error("Create Book Chapter Error:", err);
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyValue)[0];
+            const message = `A book chapter with this ${field === 'chapterTitle' ? 'title' : 'DOI'} already exists.`;
+            return res.status(400).json({ success: false, message });
+        }
         res.status(500).json({ success: false, message: err.message });
     }
 };

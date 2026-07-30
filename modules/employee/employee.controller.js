@@ -1165,7 +1165,7 @@ const sendSignupOtp = async (req, res) => {
         }
 
         const name = (identityData.employeename || identityData.EmployeeName)?.trim();
-        const phone = "8309356102"; // (identityData.mobileno || identityData.MobileNo)?.trim();
+        const phone = (identityData.mobileno || identityData.MobileNo)?.trim();
         const department = (identityData.departmentname || identityData.DepartmentName)?.trim();
         const designation = (identityData.designation || identityData.Designation)?.trim();
 

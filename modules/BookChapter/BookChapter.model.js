@@ -21,10 +21,10 @@ const BookChapterSchema = new mongoose.Schema({
     },
     college: { type: String },
     panNumber: { type: String },
-    
+
     textBookName: { type: String, required: true },
-    chapterTitle: { type: String, required: true },
-    doi: { type: String },
+    chapterTitle: { type: String, required: true, unique: true },
+    doi: { type: String, unique: true, sparse: true },
     isbnNumber: { type: String },
     yearOfPublication: { type: String, required: true },
 
@@ -38,13 +38,13 @@ const BookChapterSchema = new mongoose.Schema({
     year: { type: String, required: true },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
-    
+
     // Files
     coverPage: { type: String },
     authorAffiliation: { type: String, required: true },
     index: { type: String },
     softCopy: { type: String },
-    
+
     status: {
         type: String,
         enum: ['Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
@@ -53,7 +53,7 @@ const BookChapterSchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
-    
+
     appraisalClaimant: {
         type: String,
         default: null
@@ -62,7 +62,7 @@ const BookChapterSchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    
+
     createdAt: {
         type: Date,
         default: Date.now

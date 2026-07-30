@@ -8,7 +8,7 @@ const Employee = require('../employee/employee.model');
 exports.getRoles = async (req, res, next) => {
     try {
         const roles = await Role.find().sort({ createdAt: -1 });
-        console.log("SENDING ROLES TO FRONTEND:", roles.map(r => r.name));
+        //console.log("SENDING ROLES TO FRONTEND:", roles.map(r => r.name));
         res.status(200).json({
             success: true,
             data: roles
@@ -24,7 +24,7 @@ exports.getRoles = async (req, res, next) => {
 exports.createRole = async (req, res, next) => {
     try {
         const { name, key, description, defaultRole } = req.body;
-        
+
         // Check if role already exists
         const existingRole = await Role.findOne({ key: key.toUpperCase() });
         if (existingRole) {
@@ -141,7 +141,7 @@ exports.getRoleEmployees = async (req, res, next) => {
     try {
         const mappings = await EmployeeAppRole.find({ role: req.params.id })
             .populate('userId', 'name institutionId email userType');
-        
+
         const users = mappings.map(m => m.userId).filter(u => u !== null);
 
         res.status(200).json({
@@ -197,7 +197,7 @@ exports.getEmployeeRoles = async (req, res, next) => {
     try {
         const mappings = await EmployeeAppRole.find({ userId: req.params.userId })
             .populate('role', 'name description');
-        
+
         const roles = mappings.map(m => m.role).filter(r => r !== null);
 
         res.status(200).json({
@@ -262,14 +262,14 @@ exports.syncEmployeeRoles = async (req, res, next) => {
             }
             return mapping;
         });
-        
+
         // Ensure no other user remains HOD for these departments
         if (hodRole && hodDepartments && hodDepartments.length > 0) {
             await EmployeeAppRole.updateMany(
                 { role: hodRole._id, userId: { $ne: userId } },
                 { $pullAll: { departments: hodDepartments } }
             );
-            
+
             // Clean up: if any user now has an empty departments array for HOD role, remove that role mapping entirely
             await EmployeeAppRole.deleteMany({
                 role: hodRole._id,
@@ -284,7 +284,7 @@ exports.syncEmployeeRoles = async (req, res, next) => {
                 { role: deanRole._id, userId: { $ne: userId } },
                 { $pullAll: { schools: deanSchools } }
             );
-            
+
             // Clean up: if any user now has an empty schools array for SCHOOL_DEAN role, remove that role mapping entirely
             await EmployeeAppRole.deleteMany({
                 role: deanRole._id,
@@ -292,7 +292,7 @@ exports.syncEmployeeRoles = async (req, res, next) => {
                 schools: { $size: 0 }
             });
         }
-        
+
         await EmployeeAppRole.insertMany(mappings);
 
         res.status(200).json({
@@ -315,7 +315,7 @@ exports.reconcileAllEmployeeRoles = async (req, res, next) => {
 
         for (const user of users) {
             const identityRoleName = getIdentityBasedRoleName(user.userType, user.designation);
-            
+
             // Find appropriate role
             let idRole = await Role.findOne({ key: identityRoleName, app });
             if (!idRole) {
@@ -327,7 +327,7 @@ exports.reconcileAllEmployeeRoles = async (req, res, next) => {
 
             // Check if user has this role
             const existingMapping = await EmployeeAppRole.findOne({ userId: user._id, role: idRole._id, app });
-            
+
             // Check if user has other default roles
             const otherMappings = await EmployeeAppRole.find({ userId: user._id, app }).populate('role');
             const otherDefaultRoles = otherMappings.filter(m => m.role?.defaultRole && (m.role?.key !== identityRoleName && m.role?.name !== identityRoleName));
