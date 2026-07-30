@@ -18,7 +18,36 @@ exports.createOrder = async (req, res) => {
 
 exports.getRegistrations = async (req, res) => {
   try {
-    const payments = await PaymentRegistration.find().sort({ createdAt: -1 }).lean();
+    const { email, roll } = req.query;
+
+    const query = {};
+
+    if (email && email.trim()) {
+      const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (roll && roll.trim()) {
+        const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        query.$and = [
+          { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
+          { 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } }
+        ];
+      } else {
+        query['participants.email'] = { $regex: new RegExp(`^${cleanEmail}$`, 'i') };
+      }
+    } else if (roll && roll.trim()) {
+      const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query['participants.roll'] = { $regex: new RegExp(`^${cleanRoll}$`, 'i') };
+    }
+
+    let payments = await PaymentRegistration.find(query).sort({ createdAt: -1 }).lean();
+
+    if (payments.length === 0 && email && email.trim() && roll && roll.trim()) {
+      const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const fallbackQuery = {
+        'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') }
+      };
+      payments = await PaymentRegistration.find(fallbackQuery).sort({ createdAt: -1 }).lean();
+    }
+
     return res.json({ payments });
   } catch (err) {
     console.error('Payments.getRegistrations error', err);
@@ -55,10 +84,18 @@ exports.verifyPayment = async (req, res) => {
     const valid = paymentsService.verifySignature({ order_id, payment_id, signature });
     if (!valid) return res.status(400).json({ error: 'Invalid signature' });
 
-    const parsedAmountInPaisa = Number(amountInPaisa ?? amount ?? 0);
-    const parsedAmountInRupees = Number(
+    let fetchedPayment = null;
+    try {
+      fetchedPayment = await paymentsService.fetchPayment(payment_id);
+    } catch (err) {
+      console.error('Error fetching complete payment details from Razorpay:', err);
+    }
+
+    const parsedAmountInPaisa = fetchedPayment ? fetchedPayment.amount : Number(amountInPaisa ?? amount ?? 0);
+    const parsedAmountInRupees = fetchedPayment ? fetchedPayment.amount / 100 : Number(
       amountRupees ?? amountInRupees ?? (parsedAmountInPaisa > 0 ? parsedAmountInPaisa / 100 : amount ?? 0)
     );
+    
     const amountValue = Number.isFinite(parsedAmountInRupees) && parsedAmountInRupees > 0
       ? parsedAmountInRupees
       : Number(parsedAmountInPaisa > 0 ? parsedAmountInPaisa / 100 : amount ?? 0);
@@ -83,7 +120,9 @@ exports.verifyPayment = async (req, res) => {
       razorpaySignature: signature,
       paymentStatus: 'PAID',
       verified: true,
-      rawPaymentData: rawPaymentData || req.body,
+      rawPaymentData: fetchedPayment 
+        ? { ...(rawPaymentData || req.body), razorpayCompleteResponse: fetchedPayment } 
+        : (rawPaymentData || req.body),
     });
 
     await registration.save();

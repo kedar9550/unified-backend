@@ -23,3 +23,7 @@ exports.verifySignature = ({ order_id, payment_id, signature }) => {
     .digest('hex');
   return generated === signature;
 };
+
+exports.fetchPayment = async (payment_id) => {
+  return await instance.payments.fetch(payment_id);
+};
