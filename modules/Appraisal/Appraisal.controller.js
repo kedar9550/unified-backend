@@ -1660,7 +1660,10 @@ exports.evaluateHODAppraisal = async (req, res) => {
                 if (appraisal.valueAddition && appraisal.valueAddition.resourceUtilization && appraisal.valueAddition.resourceUtilization.items) {
                     appraisal.valueAddition.resourceUtilization.items.forEach(item => {
                         if (item.eventId && awardedResUtilPoints[item.eventId.toString()] !== undefined) {
-                            item.awardedPoints = awardedResUtilPoints[item.eventId.toString()];
+                            let pts = Number(awardedResUtilPoints[item.eventId.toString()]);
+                            if (pts < 0) pts = 0;
+                            if (pts > 10) pts = 10;
+                            item.awardedPoints = pts;
                         }
                     });
                 }
