@@ -197,7 +197,39 @@ exports.createEvent = async (req, res, next) => {
 
 exports.getAllEvents = async (req, res, next) => {
     try {
-        const events = await Events.find()
+        let filterQuery = {};
+        const activeRole = req.headers['active-role'];
+        
+        if (activeRole === 'EVENT_COORDINATOR') {
+            const jwt = require('jsonwebtoken');
+            const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+            
+            if (token) {
+                try {
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                    const empId = decoded.institutionId;
+                    
+                    if (empId) {
+                        const Group = require('../Group/Group.model');
+                        const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('_id');
+                        const myGroupIds = myGroups.map(g => g._id);
+
+                        filterQuery = {
+                            $or: [
+                                { group: { $in: myGroupIds } },
+                                { 'conveners.employeeId': empId },
+                                { 'facultyCoordinators.employeeId': empId },
+                                { 'facultyCoordinator.employeeId': empId }
+                            ]
+                        };
+                    }
+                } catch (err) {
+                    console.error('Error decoding token for EVENT_COORDINATOR filter', err);
+                }
+            }
+        }
+
+        const events = await Events.find(filterQuery)
             .populate('group', 'name department')
             .sort({ createdAt: -1 });
         res.status(200).json({ success: true, events });

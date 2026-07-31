@@ -1,0 +1,104 @@
+[
+  {
+    "_id": "6a6ae4e22c9fb9b19f28c849",
+    "eventId": "paper-presentation",
+    "schoolId": "krishi",
+    "category": "Agriculture",
+    "eventName": "Paper Presentation",
+    "amount": 1.02,
+    "amountRupees": 1.02,
+    "currency": "INR",
+    "teamSize": 2,
+    "participants": [
+      {
+        "name": "kedar1",
+        "college": "Aditya University",
+        "otherCollege": "",
+        "roll": "1234546",
+        "gender": "Male",
+        "mobile": "9553451345",
+        "email": "kedar1@gmail.com",
+        "year": "1",
+        "accommodation": "Yes",
+        "department": "IOT",
+        "location": "kakinda"
+      },
+      {
+        "name": "kedar2",
+        "college": "Aditya University",
+        "otherCollege": "",
+        "roll": "1234546",
+        "gender": "Male",
+        "mobile": "9553451345",
+        "email": "kedar2@gmail.com",
+        "year": "1",
+        "accommodation": "Yes",
+        "department": "IOT",
+        "location": "samalkot"
+      }
+    ],
+    "receipt": "event-paper-presentation-1785390305896",
+    "razorpayOrderId": "order_TJbRoF8dIVHKfm",
+    "razorpayPaymentId": "pay_TJbSLciMosRs8r",
+    "razorpaySignature": "a7d9fe741a1126ec2a58bf2fcda703ba097b365befc26e004adbc7546c5860fd",
+    "paymentStatus": "PAID",
+    "verified": true,
+    "rawPaymentData": {
+      "paymentId": "pay_TJbSLciMosRs8r",
+      "orderId": "order_TJbRoF8dIVHKfm",
+      "signature": "a7d9fe741a1126ec2a58bf2fcda703ba097b365befc26e004adbc7546c5860fd",
+      "amountInPaisa": 100,
+      "amountInRupees": 1,
+      "razorpayResponse": {
+        "razorpay_order_id": "order_TJbRoF8dIVHKfm",
+        "razorpay_payment_id": "pay_TJbSLciMosRs8r",
+        "razorpay_signature": "a7d9fe741a1126ec2a58bf2fcda703ba097b365befc26e004adbc7546c5860fd"
+      },
+      "razorpayCompleteResponse": {
+        "acquirer_data": {
+          "rrn": "070390921942"
+        },
+        "amount": 102,
+        "amount_captured": null,
+        "amount_refunded": 0,
+        "bank": null,
+        "captured": true,
+        "card_id": null,
+        "contact": "+919553451345",
+        "created_at": 1785390281,
+        "currency": "INR",
+        "description": "Paper Presentation",
+        "email": "kedar1@gmail.com",
+        "entity": "payment",
+        "error_code": null,
+        "error_description": null,
+        "error_reason": null,
+        "error_source": null,
+        "error_step": null,
+        "fee": 2,
+        "id": "pay_TJbSLciMosRs8r",
+        "international": false,
+        "invoice_id": null,
+        "method": "upi",
+        "notes": [],
+        "order_id": "order_TJbRoF8dIVHKfm",
+        "provider": null,
+        "refund_status": null,
+        "reward": null,
+        "status": "captured",
+        "tax": 0,
+        "upi": {
+          "flow": "intent",
+          "payer_account_type": "bank_account",
+          "vpa": "9553451345@axl"
+        },
+        "vpa": "9553451345@axl",
+        "wallet": null
+      }
+    },
+    "paidAt": "2026-07-30T05:45:06.132Z",
+    "createdAt": "2026-07-30T05:45:06.135Z",
+    "updatedAt": "2026-07-30T05:45:06.135Z",
+    "__v": 0
+  }
+]
