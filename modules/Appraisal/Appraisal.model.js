@@ -14,21 +14,20 @@ const AppraisalSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: [
-            "Draft", 
-            "Submitted to HOD", 
-            "Pending Research Admin", 
-            "Completed", 
+            "Draft",
+            "Submitted to HOD",
+            "Completed",
             "Rejected by HOD"
         ],
         default: "Draft"
     },
-    
+
     facultyCategory: {
         type: String,
         enum: ["Leadership Team", "Doctorate Faculty", "Non-Doctorate Faculty"],
         default: "Non-Doctorate Faculty"
     },
-    
+
     // PART-A: Personal Information
     personalInfoSnapshot: {
         name: String,

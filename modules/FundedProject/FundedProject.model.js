@@ -26,7 +26,7 @@ const FundedProjectSchema = new mongoose.Schema({
     college: { type: String },
     panNumber: { type: String },
     
-    title: { type: String, required: true },
+    title: { type: String, required: true, unique: true },
     duration: { type: String },
     fundingAgency: { type: String },
     fundingAgencyAditya: { type: String, enum: ['Yes', 'No'], default: 'No' },

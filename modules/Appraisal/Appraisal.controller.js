@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const puppeteer = require("puppeteer");
 const Appraisal = require("./Appraisal.model.js");
 const AppraisalConfig = require("./AppraisalConfig.model");
 const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
@@ -1659,7 +1660,10 @@ exports.evaluateHODAppraisal = async (req, res) => {
                 if (appraisal.valueAddition && appraisal.valueAddition.resourceUtilization && appraisal.valueAddition.resourceUtilization.items) {
                     appraisal.valueAddition.resourceUtilization.items.forEach(item => {
                         if (item.eventId && awardedResUtilPoints[item.eventId.toString()] !== undefined) {
-                            item.awardedPoints = awardedResUtilPoints[item.eventId.toString()];
+                            let pts = Number(awardedResUtilPoints[item.eventId.toString()]);
+                            if (pts < 0) pts = 0;
+                            if (pts > 10) pts = 10;
+                            item.awardedPoints = pts;
                         }
                     });
                 }
@@ -2665,5 +2669,47 @@ exports.getMyAppraisals = async (req, res) => {
     } catch (err) {
         console.error("Get My Appraisals Error:", err);
         res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+exports.generateAppraisalPDF = async (req, res) => {
+    try {
+        const { html } = req.body;
+        if (!html) {
+            return res.status(400).json({ success: false, message: "HTML content is required" });
+        }
+
+        const browser = await puppeteer.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        const page = await browser.newPage();
+        
+        // Ensure background colors are printed by default
+        await page.setContent(html, { waitUntil: 'networkidle0' });
+        
+        const pdfBuffer = await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            margin: {
+                top: '15mm',
+                bottom: '15mm',
+                left: '15mm',
+                right: '15mm'
+            }
+        });
+
+        await browser.close();
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': 'attachment; filename="appraisal_report.pdf"',
+            'Content-Length': pdfBuffer.length
+        });
+        
+        res.send(pdfBuffer);
+    } catch (err) {
+        console.error("Generate PDF Error:", err);
+        res.status(500).json({ success: false, message: "Failed to generate PDF" });
     }
 };

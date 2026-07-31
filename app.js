@@ -55,8 +55,21 @@ app.use('/api/employees/login', authLimiter);
 
 // --- General Middlewares ---
 app.use(logger('dev'));
-app.use(express.json({ limit: '10kb' }));
-app.use(express.urlencoded({ extended: false, limit: '10kb' }));
+// Conditionally apply body parser limits: 50mb for PDF generation, 10kb for everything else
+app.use((req, res, next) => {
+    if (req.path === '/api/appraisal/generate-pdf') {
+        express.json({ limit: '50mb' })(req, res, next);
+    } else {
+        express.json({ limit: '10kb' })(req, res, next);
+    }
+});
+app.use((req, res, next) => {
+    if (req.path === '/api/appraisal/generate-pdf') {
+        express.urlencoded({ extended: false, limit: '50mb' })(req, res, next);
+    } else {
+        express.urlencoded({ extended: false, limit: '10kb' })(req, res, next);
+    }
+});
 app.use(cookieParser());
 
 // NoSQL injection protection middleware

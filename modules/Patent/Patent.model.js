@@ -20,11 +20,11 @@ const PatentSchema = new mongoose.Schema({
     college: { type: String },
     panNumber: { type: String },
     
-    title: { type: String, required: true },
+    title: { type: String, required: true, unique: true },
     applicantName: { type: String, required: true },
     patentName: { type: String, required: true },
     area: { type: String, required: true },
-    filingNo: { type: String, required: true },
+    filingNo: { type: String, required: true, unique: true },
     dateOfFiling: { type: Date, required: true },
     patentFiledCountry: { type: String, required: true, default: 'India' },
     patentStatus: { type: String, required: true }, // 'Filed', 'Published', etc.

@@ -85,6 +85,9 @@ exports.createConsultancy = async (req, res) => {
         res.status(201).json({ success: true, data: consultancy });
     } catch (err) {
         console.error("Create Consultancy Error:", err);
+        if (err.code === 11000) {
+            return res.status(400).json({ success: false, message: "A consultancy entry with this title already exists." });
+        }
         res.status(500).json({ success: false, message: err.message });
     }
 };

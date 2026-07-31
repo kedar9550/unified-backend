@@ -92,6 +92,11 @@ exports.createPatent = async (req, res) => {
         res.status(201).json({ success: true, data: patent });
     } catch (err) {
         console.error("Create Patent Error:", err);
+        if (err.code === 11000) {
+            const field = Object.keys(err.keyValue)[0];
+            const message = `A patent with this ${field === 'title' ? 'TITLE OF THE PATENT' : 'PATENT FILING NO'} already exists.`;
+            return res.status(400).json({ success: false, message });
+        }
         res.status(500).json({ success: false, message: err.message });
     }
 };
