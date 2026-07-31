@@ -135,7 +135,28 @@ exports.createGroup = async (req, res, next) => {
 // ─── READ ALL ─────────────────────────────────────────────────────────────────
 exports.getAllGroups = async (req, res, next) => {
     try {
-        const groups = await Group.find()
+        let filterQuery = {};
+        const activeRole = req.headers['active-role'];
+        
+        if (activeRole === 'EVENT_COORDINATOR') {
+            const jwt = require('jsonwebtoken');
+            const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+            
+            if (token) {
+                try {
+                    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+                    const empId = decoded.institutionId;
+                    
+                    if (empId) {
+                        filterQuery = { 'eventCoordinator.employeeId': empId };
+                    }
+                } catch (err) {
+                    console.error('Error decoding token for EVENT_COORDINATOR filter', err);
+                }
+            }
+        }
+
+        const groups = await Group.find(filterQuery)
             .populate('department', 'name status')
             .sort({ createdAt: -1 });
         return res.status(200).json({ success: true, groups });

@@ -19,14 +19,49 @@ exports.createOrder = async (req, res) => {
 exports.getRegistrations = async (req, res) => {
   try {
     const { email, roll } = req.query;
+    let query = {};
 
-    const query = {};
+    const activeRole = req.headers['active-role'];
+    if (activeRole === 'EVENT_COORDINATOR') {
+      const jwt = require('jsonwebtoken');
+      const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          const empId = decoded.institutionId;
+          if (empId) {
+            const Group = require('../Group/Group.model');
+            const Events = require('../Events/Events.model');
+            
+            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
+
+            const myEvents = await Events.find({
+                $or: [
+                    { 'conveners.employeeId': empId },
+                    { 'facultyCoordinators.employeeId': empId },
+                    { 'facultyCoordinator.employeeId': empId }
+                ]
+            }).select('eventName');
+            const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
+
+            query.$or = [
+                { schoolId: { $in: myGroupNames } },
+                { eventName: { $in: myEventNames } }
+            ];
+        }
+        } catch (err) {
+          console.error('Error decoding token for EVENT_COORDINATOR filter', err);
+        }
+      }
+    }
 
     if (email && email.trim()) {
       const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (roll && roll.trim()) {
         const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         query.$and = [
+          ...(query.$and || []),
           { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
           { 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } }
         ];
@@ -42,9 +77,9 @@ exports.getRegistrations = async (req, res) => {
 
     if (payments.length === 0 && email && email.trim() && roll && roll.trim()) {
       const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const fallbackQuery = {
-        'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') }
-      };
+      const fallbackQuery = { ...query };
+      delete fallbackQuery.$and;
+      fallbackQuery['participants.email'] = { $regex: new RegExp(`^${cleanEmail}$`, 'i') };
       payments = await PaymentRegistration.find(fallbackQuery).sort({ createdAt: -1 }).lean();
     }
 
@@ -113,7 +148,10 @@ exports.verifyPayment = async (req, res) => {
       amountRupees: amountValue,
       currency,
       teamSize: Number(teamSize) || 1,
-      participants: Array.isArray(participants) ? participants : [],
+      participants: (Array.isArray(participants) ? participants : []).map(p => ({
+        ...p,
+        barcode: require('crypto').randomBytes(4).toString('hex').toUpperCase()
+      })),
       receipt: receipt || '',
       razorpayOrderId: order_id,
       razorpayPaymentId: payment_id,
@@ -131,5 +169,328 @@ exports.verifyPayment = async (req, res) => {
   } catch (err) {
     console.error('Payments.verifyPayment error', err);
     return res.status(500).json({ error: 'Unable to verify payment', details: err.message });
+  }
+};
+
+// ─── Campus classification helper ────────────────────────────────────────────
+const classifyCampus = (college = '') => {
+  const lower = college.toLowerCase();
+  if (
+    lower.includes('aditya university') ||
+    lower.includes('aus') ||
+    lower.includes('aditya engineering college')
+  ) return 'AUS';
+  if (lower.includes('acet') || lower.includes('aditya college')) return 'ACET';
+  return 'Others';
+};
+
+// ─── Dashboard Statistics ─────────────────────────────────────────────────────
+exports.getDashboardStats = async (req, res) => {
+  try {
+    let query = {};
+    const activeRole = req.headers['active-role'];
+    
+    if (activeRole === 'EVENT_COORDINATOR') {
+      const jwt = require('jsonwebtoken');
+      const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+      
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          const empId = decoded.institutionId;
+          
+          if (empId) {
+            const Group = require('../Group/Group.model');
+            const Events = require('../Events/Events.model');
+            
+            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
+
+            const myEvents = await Events.find({
+                $or: [
+                    { 'conveners.employeeId': empId },
+                    { 'facultyCoordinators.employeeId': empId },
+                    { 'facultyCoordinator.employeeId': empId }
+                ]
+            }).select('eventName');
+            const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
+
+            query.$or = [
+                { schoolId: { $in: myGroupNames } },
+                { eventName: { $in: myEventNames } }
+            ];
+          }
+        } catch (err) {
+          console.error('Error decoding token for EVENT_COORDINATOR filter in stats', err);
+        }
+      }
+    }
+
+    const allPayments = await PaymentRegistration.find(query).lean();
+
+    // Flatten all participants with their parent payment context
+    const participants = [];
+    allPayments.forEach((p) => {
+      (p.participants || []).forEach((part) => {
+        participants.push({
+          ...part,
+          eventName: p.eventName || '',
+          category: p.category || '',
+          schoolId: p.schoolId || '',
+          teamId: p._id,
+        });
+      });
+    });
+
+    const totalTeams = allPayments.length;
+    const totalStudents = participants.length;
+
+    // ─── Year-wise counts ─────────────────────────────────
+    const yearCounts = { '1': 0, '2': 0, '3': 0, '4': 0, other: 0 };
+    participants.forEach((p) => {
+      const y = String(p.year || '').trim();
+      if (yearCounts[y] !== undefined) yearCounts[y]++;
+      else yearCounts.other++;
+    });
+
+    // ─── Campus-wise counts ───────────────────────────────
+    const campusMap = {};
+    participants.forEach((p) => {
+      const campus = classifyCampus(p.college || p.otherCollege || '');
+      if (!campusMap[campus]) campusMap[campus] = { I: 0, II: 0, III: 0, IV: 0, total: 0 };
+      const y = String(p.year || '').trim();
+      const key = y === '1' ? 'I' : y === '2' ? 'II' : y === '3' ? 'III' : y === '4' ? 'IV' : 'I';
+      campusMap[campus][key]++;
+      campusMap[campus].total++;
+    });
+
+    // ─── Department-wise stats (including revenue) ────────
+    const deptMap = {};
+    allPayments.forEach((p) => {
+      const dept = (p.schoolId || 'Unknown').toUpperCase();
+      if (!deptMap[dept]) {
+        deptMap[dept] = {
+          dept,
+          eventNames: new Set(),
+          teamCount: 0,
+          studentCount: 0,
+          aus: 0,
+          acet: 0,
+          other: 0,
+          participatedStudents: 0,
+          revenue: 0,
+        };
+      }
+      deptMap[dept].eventNames.add(p.eventName || '');
+      deptMap[dept].teamCount++;
+      deptMap[dept].studentCount += (p.participants || []).length;
+      deptMap[dept].revenue += Number(p.amountRupees || p.amount || 0);
+
+      (p.participants || []).forEach((part) => {
+        const campus = classifyCampus(part.college || part.otherCollege || '');
+        if (campus === 'AUS') deptMap[dept].aus++;
+        else if (campus === 'ACET') deptMap[dept].acet++;
+        else deptMap[dept].other++;
+        deptMap[dept].participatedStudents++;
+      });
+    });
+
+    const departmentStats = Object.values(deptMap).map((d) => ({
+      dept: d.dept,
+      eventCount: d.eventNames.size,
+      teamCount: d.teamCount,
+      studentCount: d.studentCount,
+      aus: d.aus,
+      acet: d.acet,
+      other: d.other,
+      participatedStudents: d.participatedStudents,
+      revenue: Math.round(d.revenue * 100) / 100,
+    }));
+
+    // ─── Gender stats ─────────────────────────────────────
+    const genderMap = { male: 0, female: 0, others: 0 };
+    participants.forEach((p) => {
+      const g = (p.gender || '').toLowerCase();
+      if (g === 'male') genderMap.male++;
+      else if (g === 'female') genderMap.female++;
+      else genderMap.others++;
+    });
+
+    // ─── Campus-wise gender ───────────────────────────────
+    const campusGenderMap = {};
+    participants.forEach((p) => {
+      const campus = classifyCampus(p.college || p.otherCollege || '');
+      if (!campusGenderMap[campus]) campusGenderMap[campus] = { male: 0, female: 0, others: 0 };
+      const g = (p.gender || '').toLowerCase();
+      if (g === 'male') campusGenderMap[campus].male++;
+      else if (g === 'female') campusGenderMap[campus].female++;
+      else campusGenderMap[campus].others++;
+    });
+
+    // ─── Accommodation stats ──────────────────────────────
+    let accommodationYes = 0;
+    let accommodationNo = 0;
+    const accommGender = { male: 0, female: 0, others: 0 };
+    participants.forEach((p) => {
+      if ((p.accommodation || '').toLowerCase() === 'yes') {
+        accommodationYes++;
+        const g = (p.gender || '').toLowerCase();
+        if (g === 'male') accommGender.male++;
+        else if (g === 'female') accommGender.female++;
+        else accommGender.others++;
+      } else {
+        accommodationNo++;
+      }
+    });
+
+    // ─── Revenue stats ────────────────────────────────────
+    let totalRevenue = 0;
+    const eventRevenueMap = {};
+    const dailyRevenueMap = {};
+
+    allPayments.forEach((p) => {
+      const amount = Number(p.amountRupees || p.amount || 0);
+      totalRevenue += amount;
+
+      // Per-event revenue
+      const evtKey = p.eventName || 'Unknown';
+      if (!eventRevenueMap[evtKey]) eventRevenueMap[evtKey] = { teams: 0, revenue: 0 };
+      eventRevenueMap[evtKey].revenue += amount;
+      eventRevenueMap[evtKey].teams++;
+
+      // Daily revenue trend
+      const dateKey = p.paidAt
+        ? new Date(p.paidAt).toISOString().slice(0, 10)
+        : p.createdAt
+        ? new Date(p.createdAt).toISOString().slice(0, 10)
+        : null;
+      if (dateKey) {
+        if (!dailyRevenueMap[dateKey]) dailyRevenueMap[dateKey] = 0;
+        dailyRevenueMap[dateKey] += amount;
+      }
+    });
+
+    const revenueByEvent = Object.entries(eventRevenueMap)
+      .map(([event, data]) => ({
+        event,
+        revenue: Math.round(data.revenue * 100) / 100,
+        teams: data.teams,
+      }))
+      .sort((a, b) => b.revenue - a.revenue);
+
+    const revenueByDate = Object.entries(dailyRevenueMap)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, revenue]) => ({
+        date,
+        revenue: Math.round(revenue * 100) / 100,
+      }));
+
+    return res.json({
+      totalTeams,
+      totalStudents,
+      yearCounts,
+      campusWise: campusMap,
+      departmentStats,
+      genderStats: genderMap,
+      campusGenderStats: campusGenderMap,
+      accommodation: {
+        yes: accommodationYes,
+        no: accommodationNo,
+        genderBreakdown: accommGender,
+      },
+      revenue: {
+        total: Math.round(totalRevenue * 100) / 100,
+        byEvent: revenueByEvent,
+        byDate: revenueByDate,
+      },
+    });
+  } catch (err) {
+    console.error('Payments.getDashboardStats error', err);
+    return res.status(500).json({ error: 'Unable to fetch dashboard stats', details: err.message });
+  }
+};
+
+exports.scanBarcode = async (req, res) => {
+  try {
+    const { barcode } = req.body;
+    if (!barcode) return res.status(400).json({ error: 'Barcode is required' });
+
+    // Find the registration containing this barcode
+    const registration = await PaymentRegistration.findOne({ 'participants.barcode': barcode });
+    
+    if (!registration) {
+      return res.status(404).json({ error: 'Pass not found or invalid barcode.' });
+    }
+
+    // Verify EVENT_COORDINATOR access (optional logic based on how events are secured, similar to getRegistrations)
+    const activeRole = req.headers['active-role'];
+    if (activeRole === 'EVENT_COORDINATOR') {
+      const jwt = require('jsonwebtoken');
+      const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+      let authorized = false;
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          const empId = decoded.institutionId;
+          if (empId) {
+            const Group = require('../Group/Group.model');
+            const Events = require('../Events/Events.model');
+            
+            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroupNames = myGroups.map(g => g.name.toLowerCase());
+
+            const myEvents = await Events.find({
+                $or: [
+                    { 'conveners.employeeId': empId },
+                    { 'facultyCoordinators.employeeId': empId },
+                    { 'facultyCoordinator.employeeId': empId }
+                ]
+            }).select('eventName');
+            const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
+
+            if (
+              myGroupNames.includes((registration.schoolId || '').toLowerCase()) ||
+              myEventNames.includes((registration.eventName || '').toLowerCase())
+            ) {
+              authorized = true;
+            }
+          }
+        } catch (err) {
+          console.error('Error decoding token for scanBarcode', err);
+        }
+      }
+      
+      if (!authorized) {
+        return res.status(403).json({ error: 'You are not authorized to scan passes for this event.' });
+      }
+    }
+
+    // Find the specific participant
+    const participantIndex = registration.participants.findIndex(p => p.barcode === barcode);
+    if (participantIndex === -1) {
+      return res.status(404).json({ error: 'Participant not found in registration.' });
+    }
+    
+    const participant = registration.participants[participantIndex];
+    
+    if (participant.attended) {
+      return res.status(400).json({ error: 'Participant has already been marked as attended.', participant, eventName: registration.eventName });
+    }
+
+    // Mark as attended
+    registration.participants[participantIndex].attended = true;
+    registration.markModified('participants');
+    await registration.save();
+
+    return res.json({
+      message: 'Participant marked as attended successfully.',
+      participant: registration.participants[participantIndex],
+      eventName: registration.eventName,
+      teamSize: registration.teamSize
+    });
+
+  } catch (err) {
+    console.error('Payments.scanBarcode error', err);
+    return res.status(500).json({ error: 'Unable to scan barcode', details: err.message });
   }
 };
