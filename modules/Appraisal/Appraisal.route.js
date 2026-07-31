@@ -21,7 +21,8 @@ const {
     getAllAppraisals,
     getAppraisalById,
     getActiveAppraisalYear,
-    getMyAppraisals
+    getMyAppraisals,
+    generateAppraisalPDF
 } = require("./Appraisal.controller");
 
 const { protect, authorize } = require("../../middlewares/authMiddleware");
@@ -86,5 +87,8 @@ router.put("/rnd-evaluate/:id", protect, authorize("ADMIN", "RESEARCH_DEAN", "RE
 // All Appraisals (UNIPRIME)
 router.get("/all/:academicYearId", protect, authorize("UNIPRIME"), getAllAppraisals);
 router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY"), getAppraisalById);
+
+// PDF Generation
+router.post("/generate-pdf", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY"), generateAppraisalPDF);
 
 module.exports = router;
