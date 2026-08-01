@@ -11,9 +11,9 @@ router.post(
     eventDepartmentController.createDepartment
 );
 
-router.get('/', protect, eventDepartmentController.getAllDepartments);
+router.get('/', eventDepartmentController.getAllDepartments);
 
-router.get('/:id', protect, eventDepartmentController.getDepartmentById);
+router.get('/:id', eventDepartmentController.getDepartmentById);
 
 router.put(
     '/:id',
