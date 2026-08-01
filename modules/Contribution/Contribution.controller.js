@@ -33,7 +33,7 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (!data.organizationName || !data.fromDate || !data.toDate) {
                 return "Organization Name, From Date, and To Date are mandatory for Category 1.";
             }
-            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
             }
             if (isFutureDate(data.fromDate)) {
@@ -47,7 +47,7 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (!data.journalName || !data.fromDate || !data.toDate) {
                 return "Journal Name, From Date, and To Date are mandatory for Category 2.";
             }
-            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
             }
             if (isFutureDate(data.fromDate)) {
@@ -61,7 +61,7 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (!data.journalConferenceName || !data.fromDate || !data.toDate) {
                 return "Journal/Conference Name, From Date, and To Date are mandatory for Category 3.";
             }
-            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
             }
             if (isFutureDate(data.fromDate)) {
@@ -95,7 +95,7 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (!data.certificationName || !data.fromDate || !data.toDate) {
                 return "Certification Name, From Date, and To Date are mandatory.";
             }
-            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
             }
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
@@ -131,7 +131,7 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (!data.facilityName || !data.fromDate || !data.toDate) {
                 return "Facility Name, From Date, and To Date are mandatory.";
             }
-            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
             }
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
@@ -153,7 +153,7 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (!data.courseName || !data.fromDate || !data.toDate) {
                 return "Course Name, From Date, and To Date are mandatory.";
             }
-            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
             }
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
@@ -173,7 +173,7 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (!data.grantName || !data.fromDate || !data.toDate) {
                 return "Grant Name, From Date, and To Date are mandatory.";
             }
-            if (new Date(data.fromDate) >= new Date(data.toDate)) {
+            if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
             }
             if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
