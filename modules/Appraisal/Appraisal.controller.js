@@ -364,7 +364,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 .populate("programId", "name code programPattern")
                 .populate("branchId", "name code");
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
-            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
             return res.json({
@@ -1116,7 +1116,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         });
 
         // 3.2 Faculty Expertise/Recognition/Contribution
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
         const contItems = [];
         let totalContPoints = 0;
 
@@ -1143,7 +1143,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 let pts = 5; // default fallback
                 let activityName = "Expertise / Recognition Activity";
 
-                switch (c.category) {
+                const catCode = c.category?.code || parseInt(c.category);
+                switch (catCode) {
                     case 1:
                         pts = expPointsConf.memberBOS ?? 5;
                         activityName = "Member of BOG/GB/AC/BOS (Outside AUS)";
@@ -1499,9 +1500,9 @@ exports.submitAppraisal = async (req, res) => {
         });
 
         // 2. Check Coursera (>= 40 Hours) in Contributions
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" }, removedFromAppraisal: { $ne: true } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" }, removedFromAppraisal: { $ne: true } }).populate("category");
         const hasValidCoursera40Hours = contributions.some(c => {
-            const cat = parseInt(c.category);
+            const cat = c.category?.code || parseInt(c.category);
             return cat === 12 && Number(c.courseHours) >= 40;
         });
 
@@ -1571,7 +1572,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
                 .populate("programId", "name code programPattern")
                 .populate("branchId", "name code");
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
-            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
             const appObj = app.toObject();
@@ -2574,7 +2575,7 @@ exports.getAppraisalById = async (req, res) => {
             .populate("programId", "name code programPattern")
             .populate("branchId", "name code");
         const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
         const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
         const appObj = appraisal.toObject();
