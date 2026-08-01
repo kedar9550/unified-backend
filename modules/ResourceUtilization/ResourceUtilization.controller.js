@@ -197,7 +197,7 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Activity dates cannot be in the future." });
         }
 
-        if (new Date(data.eventStartDate) >= new Date(data.eventEndDate)) {
+        if (new Date(data.eventStartDate) > new Date(data.eventEndDate)) {
             return res.status(400).json({ success: false, message: "Event End Date must be greater than Event Start Date." });
         }
 
@@ -320,7 +320,7 @@ exports.updateResourceUtilization = async (req, res) => {
         }
         const from = data.eventStartDate || record.eventStartDate;
         const to = data.eventEndDate || record.eventEndDate;
-        if (from && to && new Date(from) >= new Date(to)) {
+        if (from && to && new Date(from) > new Date(to)) {
             return res.status(400).json({ success: false, message: "To Date must be greater than From Date." });
         }
 

@@ -12,7 +12,7 @@ const getFacultyCategoryHelper = (fac) => {
     const lead = (fac.leadership || "").toLowerCase().trim();
     const qual = (fac.qualification || "").toLowerCase().trim();
     const doct = (fac.doctorate || "").toLowerCase().trim();
-    
+
     if (lead === "yes" || lead === "true") return "Leadership Team";
     if (qual.includes("phd") || qual.includes("ph.d") || doct === "yes" || doct === "true") return "Doctorate Faculty";
     return "Non-Doctorate Faculty";
@@ -1258,36 +1258,34 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     const level = (r.level || '').toLowerCase();
                     const isCentral = level.includes('central') || level.includes('institute');
 
-                    if (name.includes('dean') || name.includes('coe')) {
+                    if (name === 'deans / assoc deans / coe') {
                         pts = adminConf.deanCentral ?? 20;
-                    } else if (name.includes('hod')) {
-                        if (name.includes('dy') || name.includes('vice')) {
-                            pts = adminConf.dyHodDept ?? 10;
-                        } else {
-                            pts = isCentral ? (adminConf.hodCentral ?? 15) : (adminConf.hodDept ?? 15);
-                        }
-                    } else if (name.includes('exam cell') || name.includes('exam incharge')) {
+                    } else if (name === 'hod / dy. coe / coordinator (univ. office)') {
+                        pts = isCentral ? (adminConf.hodCentral ?? 15) : (adminConf.hodDept ?? 15);
+                    } else if (name === 'dy. hod / dept. exam cell incharge') {
                         pts = adminConf.dyHodDept ?? 10;
-                    } else if (name.includes('timetable') || name.includes('time table') || name.includes('project') || name.includes('curriculum')) {
+                    } else if (name === 'time table / project coordinator / curriculum coordinator') {
                         pts = adminConf.timetableDept ?? 10;
-                    } else if (name.includes('placement') || name.includes('internship') || name.includes('alumni')) {
+                    } else if (name === 'placement / internship / alumni coordinator') {
                         pts = isCentral ? (adminConf.placementCentral ?? 10) : (adminConf.placementDept ?? 10);
-                    } else if (name.includes('coursera') || name.includes('linkedin') || name.includes('ala')) {
+                    } else if (name === 'coursera / linkedin coordinator / ala') {
                         pts = isCentral ? (adminConf.courseraCentral ?? 10) : (adminConf.courseraDept ?? 5);
-                    } else if (name.includes('edc') || name.includes('iic') || name.includes('iqac')) {
+                    } else if (name === 'edc / iic / iqac coordinator') {
                         pts = isCentral ? (adminConf.edcCentral ?? 10) : (adminConf.edcDept ?? 5);
-                    } else if (name.includes('course coordinator')) {
+                    } else if (name === 'course coordinator') {
                         pts = adminConf.courseDept ?? 5;
-                    } else if (name.includes('website')) {
+                    } else if (name === 'website coordinator') {
                         pts = isCentral ? (adminConf.websiteCentral ?? 10) : 0; // Website Coordinator: Central only (no dept level per form)
-                    } else if (name.includes('nss') || name.includes('club') || name.includes('professional chapter')) {
+                    } else if (name === 'nss / any clubs / professional chapters coordinator') {
                         pts = isCentral ? (adminConf.nssCentral ?? 10) : (adminConf.nssDept ?? 5);
-                    } else if (name.includes('training')) {
+                    } else if (name === 'any training program coordinator (smart interviews / gpp / etc.)') {
                         pts = isCentral ? (adminConf.trainingCentral ?? 10) : (adminConf.trainingDept ?? 5);
-                    } else if (name.includes('drc') || name.includes('research')) {
+                    } else if (name === 'drc / research coordinator') {
                         pts = adminConf.drcDept ?? 5;
-                    } else if (name.includes('anti-ragging') || name.includes('antiragging')) {
+                    } else if (name === 'anti-ragging committee coordinator') {
                         pts = isCentral ? (adminConf.antiRaggingCentral ?? 5) : (adminConf.antiRaggingDept ?? 3);
+                    } else if (name.startsWith('any other remarkable event')) {
+                        pts = isCentral ? (adminConf.otherCentral ?? 10) : (adminConf.otherDept ?? 5);
                     } else {
                         pts = isCentral ? (adminConf.otherCentral ?? 10) : (adminConf.otherDept ?? 5);
                     }
@@ -2684,10 +2682,10 @@ exports.generateAppraisalPDF = async (req, res) => {
             args: ['--no-sandbox', '--disable-setuid-sandbox']
         });
         const page = await browser.newPage();
-        
+
         // Ensure background colors are printed by default
         await page.setContent(html, { waitUntil: 'networkidle0' });
-        
+
         const pdfBuffer = await page.pdf({
             format: 'A4',
             printBackground: true,
@@ -2706,7 +2704,7 @@ exports.generateAppraisalPDF = async (req, res) => {
             'Content-Disposition': 'attachment; filename="appraisal_report.pdf"',
             'Content-Length': pdfBuffer.length
         });
-        
+
         res.send(pdfBuffer);
     } catch (err) {
         console.error("Generate PDF Error:", err);
