@@ -123,17 +123,18 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             }
             break;
         case 10:
-            if (!data.facilityName || !data.fromDate || !data.toDate) {
-                return "Facility Name, From Date, and To Date are mandatory.";
+            if (!data.facilityName || !data.contributionType) {
+                return "Facility Name and Contribution Type are mandatory.";
             }
-            if (new Date(data.fromDate) > new Date(data.toDate)) {
-                return "To Date must be greater than From Date.";
-            }
-            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
-                return "Dates cannot be in the future.";
-            }
-            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
-                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            if (data.contributionType === "Maintenance") {
+                if (!data.fromDate || !data.toDate) return "From Date and To Date are mandatory for Maintenance.";
+                if (new Date(data.fromDate) > new Date(data.toDate)) return "To Date must be greater than From Date.";
+                if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) return "Dates cannot be in the future.";
+                if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            } else if (data.contributionType === "Establishment") {
+                if (!data.fromDate) return "Establishment Date is mandatory.";
+                if (isFutureDate(data.fromDate)) return "Date cannot be in the future.";
+                if (!isDateWithinAcademicYear(data.fromDate, academicYearStr)) return `Date must fall within the selected Academic Year (${academicYearStr}).`;
             }
             break;
         case 11:
@@ -165,17 +166,14 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             }
             break;
         case 13:
-            if (!data.grantName || !data.fromDate || !data.toDate) {
-                return "Grant Name, From Date, and To Date are mandatory.";
+            if (!data.grantType || !data.grantTitle || !data.fundingAgency || !data.grantAmount || !data.sanctionDate) {
+                return "Grant Type, Title, Funding Agency, Grant Amount, and Sanction Date are mandatory.";
             }
-            if (new Date(data.fromDate) > new Date(data.toDate)) {
-                return "To Date must be greater than From Date.";
+            if (isFutureDate(data.sanctionDate)) {
+                return "Sanction Date cannot be in the future.";
             }
-            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
-                return "Dates cannot be in the future.";
-            }
-            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
-                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            if (!isDateWithinAcademicYear(data.sanctionDate, academicYearStr)) {
+                return `Sanction Date must fall within the selected Academic Year (${academicYearStr}).`;
             }
             break;
         default:
@@ -342,10 +340,16 @@ exports.createContribution = async (req, res) => {
             publicationDate: categoryNum === 9 ? data.publicationDate : undefined,
             
             facilityName: categoryNum === 10 ? data.facilityName : undefined,
+            contributionType: categoryNum === 10 ? data.contributionType : undefined,
             
             grantName: categoryNum === 13 ? data.grantName : undefined,
+            grantType: categoryNum === 13 ? data.grantType : undefined,
+            grantTitle: categoryNum === 13 ? data.grantTitle : undefined,
+            fundingAgency: categoryNum === 13 ? data.fundingAgency : undefined,
+            grantAmount: categoryNum === 13 ? Number(data.grantAmount) : undefined,
+            sanctionDate: categoryNum === 13 ? data.sanctionDate : undefined,
             
-            courseHours: categoryNum === 12 ? Number(data.courseHours) : undefined,
+            courseHours: (categoryNum === 12 || categoryNum === 7) ? Number(data.courseHours) : undefined,
             certificateNumber: data.certificateNumber || undefined,
             
             proof: `/uploads/contributions/${req.file.filename}`,
@@ -529,10 +533,16 @@ exports.updateContribution = async (req, res) => {
         record.publicationDate = categoryNum === 9 ? (data.publicationDate || record.publicationDate) : undefined;
         
         record.facilityName = categoryNum === 10 ? (data.facilityName || record.facilityName) : undefined;
+        record.contributionType = categoryNum === 10 ? (data.contributionType || record.contributionType) : undefined;
         
         record.grantName = categoryNum === 13 ? (data.grantName || record.grantName) : undefined;
+        record.grantType = categoryNum === 13 ? (data.grantType || record.grantType) : undefined;
+        record.grantTitle = categoryNum === 13 ? (data.grantTitle || record.grantTitle) : undefined;
+        record.fundingAgency = categoryNum === 13 ? (data.fundingAgency || record.fundingAgency) : undefined;
+        record.grantAmount = categoryNum === 13 ? (data.grantAmount !== undefined ? Number(data.grantAmount) : record.grantAmount) : undefined;
+        record.sanctionDate = categoryNum === 13 ? (data.sanctionDate || record.sanctionDate) : undefined;
 
-        record.courseHours = categoryNum === 12 ? (data.courseHours !== undefined ? Number(data.courseHours) : record.courseHours) : undefined;
+        record.courseHours = (categoryNum === 12 || categoryNum === 7) ? (data.courseHours !== undefined ? Number(data.courseHours) : record.courseHours) : undefined;
         record.certificateNumber = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
 
         if (req.file) {

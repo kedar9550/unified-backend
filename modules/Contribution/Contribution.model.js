@@ -48,9 +48,14 @@ const ContributionSchema = new mongoose.Schema({
     publicationDate: { type: Date }, // Cat 9
     
     facilityName: { type: String }, // Cat 10
+    contributionType: { type: String }, // Cat 10 (Establishment/Maintenance)
     facilityDate: { type: Date }, // Cat 10
     
-    grantName: { type: String }, // Cat 13
+    grantName: { type: String }, // Cat 13 (deprecated, use grantTitle)
+    grantType: { type: String }, // Cat 13
+    grantTitle: { type: String }, // Cat 13
+    fundingAgency: { type: String }, // Cat 13
+    grantAmount: { type: Number }, // Cat 13
     sanctionDate: { type: Date }, // Cat 13
 
     courseHours: { type: Number }, // Cat 12
