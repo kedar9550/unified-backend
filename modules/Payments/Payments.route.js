@@ -16,5 +16,6 @@ router.post('/verify-payment', paymentsController.verifyPayment);
 
 // Scan participant barcode
 router.post('/scan-barcode', paymentsController.scanBarcode);
+router.put('/update-attendance', paymentsController.updateAttendance);
 
 module.exports = router;

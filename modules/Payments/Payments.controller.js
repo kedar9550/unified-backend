@@ -422,9 +422,9 @@ exports.scanBarcode = async (req, res) => {
       return res.status(404).json({ error: 'Pass not found or invalid barcode.' });
     }
 
-    // Verify EVENT_COORDINATOR access (optional logic based on how events are secured, similar to getRegistrations)
+    // Verify EVENT_COORDINATOR and FACULTY_COORDINATOR access
     const activeRole = req.headers['active-role'];
-    if (activeRole === 'EVENT_COORDINATOR') {
+    if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
       const jwt = require('jsonwebtoken');
       const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
       let authorized = false;
@@ -492,5 +492,104 @@ exports.scanBarcode = async (req, res) => {
   } catch (err) {
     console.error('Payments.scanBarcode error', err);
     return res.status(500).json({ error: 'Unable to scan barcode', details: err.message });
+  }
+};
+
+exports.updateAttendance = async (req, res) => {
+  try {
+    const { receipt, roll, barcode, attended } = req.body;
+    
+    if (typeof attended !== 'boolean') {
+      return res.status(400).json({ error: 'Attended status must be a boolean.' });
+    }
+    
+    // Find registration using receipt and matching either roll or barcode
+    let query = {};
+    if (receipt) query.receipt = receipt;
+    
+    // Fallback if receipt is missing, we must have roll or barcode
+    if (!receipt && !roll && !barcode) {
+      return res.status(400).json({ error: 'Missing identification fields.' });
+    }
+
+    // We can also match the exact participant within the array
+    let elemMatch = {};
+    if (barcode) elemMatch.barcode = barcode;
+    else if (roll) elemMatch.roll = roll;
+
+    if (Object.keys(elemMatch).length > 0) {
+      query.participants = { $elemMatch: elemMatch };
+    }
+
+    const registration = await PaymentRegistration.findOne(query);
+
+    if (!registration) {
+      return res.status(404).json({ error: 'Registration or participant not found.' });
+    }
+
+    const activeRole = req.headers['active-role'];
+    if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
+      const jwt = require('jsonwebtoken');
+      const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+      let authorized = false;
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, process.env.JWT_SECRET);
+          const empId = decoded.institutionId;
+          if (empId) {
+            const Group = require('../Group/Group.model');
+            const Events = require('../Events/Events.model');
+            
+            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroupNames = myGroups.map(g => g.name.toLowerCase());
+
+            const myEvents = await Events.find({
+                $or: [
+                    { 'conveners.employeeId': empId },
+                    { 'facultyCoordinators.employeeId': empId },
+                    { 'facultyCoordinator.employeeId': empId }
+                ]
+            }).select('eventName');
+            const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
+
+            if (
+              myGroupNames.includes((registration.schoolId || '').toLowerCase()) ||
+              myEventNames.includes((registration.eventName || '').toLowerCase())
+            ) {
+              authorized = true;
+            }
+          }
+        } catch (err) {
+          console.error('Error decoding token for updateAttendance', err);
+        }
+      }
+      
+      if (!authorized) {
+        return res.status(403).json({ error: 'You are not authorized to update passes for this event.' });
+      }
+    }
+
+    const participantIndex = registration.participants.findIndex(p => {
+      if (barcode && p.barcode === barcode) return true;
+      if (roll && p.roll === roll) return true;
+      return false;
+    });
+
+    if (participantIndex === -1) {
+      return res.status(404).json({ error: 'Participant not found in registration.' });
+    }
+
+    registration.participants[participantIndex].attended = attended;
+    registration.markModified('participants');
+    await registration.save();
+
+    return res.json({
+      message: 'Participant attendance updated successfully.',
+      participant: registration.participants[participantIndex],
+    });
+
+  } catch (err) {
+    console.error('Payments.updateAttendance error', err);
+    return res.status(500).json({ error: 'Unable to update attendance', details: err.message });
   }
 };
