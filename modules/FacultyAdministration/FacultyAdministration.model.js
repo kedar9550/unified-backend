@@ -1,7 +1,11 @@
 const mongoose = require("mongoose");
 
 const AdministrativeRoleSchema = new mongoose.Schema({
-    roleName: {
+    roleId: {
+        type: String,
+        required: true
+    },
+    roleLabel: {
         type: String,
         required: true
     },
@@ -11,8 +15,18 @@ const AdministrativeRoleSchema = new mongoose.Schema({
     },
     level: {
         type: String,
-        enum: ["Institute level", "Department level", ""],
+        enum: ["Institute level", "Department level", "Central", "Department", ""],
         default: ""
+    },
+    assignedBy: {
+        type: {
+            type: String,
+            enum: ["Registrar", "HOD", "Others", ""]
+        },
+        otherText: {
+            type: String,
+            default: ""
+        }
     },
     details: {
         type: String,

@@ -70,16 +70,16 @@ async function syncAppraisalOnResourceUtilizationRejection(rejectedRecordIds) {
  * @param {string|ObjectId} academicYearId - The academic year's ID
  * @param {Array<string>} rejectedRoleNames - The roleName(s) that were rejected
  */
-async function syncAppraisalOnAdministrationRejection(facultyId, academicYearId, rejectedRoleNames) {
+async function syncAppraisalOnAdministrationRejection(facultyId, academicYearId, rejectedRoleIds) {
     try {
-        if (!facultyId || !academicYearId || !rejectedRoleNames || rejectedRoleNames.length === 0) return;
+        if (!facultyId || !academicYearId || !rejectedRoleIds || rejectedRoleIds.length === 0) return;
 
         const result = await Appraisal.updateMany(
             {
                 facultyId: facultyId,
                 academicYearId: academicYearId,
                 status: "Submitted to HOD",
-                "administration.items.activityName": { $in: rejectedRoleNames }
+                "administration.items.roleId": { $in: rejectedRoleIds }
             },
             { $set: { status: "Rejected by HOD" } }
         );

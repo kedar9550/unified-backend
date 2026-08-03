@@ -210,6 +210,7 @@ const AppraisalSchema = new mongoose.Schema({
     // 4. Administrative Responsibilities
     administration: {
         items: [{
+            roleId: String,
             activityName: String,
             level: String, // Central / Dept
             pointsClaimed: Number

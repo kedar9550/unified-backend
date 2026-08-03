@@ -1,17 +1,45 @@
 const AuthorCitations = require("./AuthorCitations.model");
 const Employee = require("../employee/employee.model");
-const AcademicYear = require("../academicYear/academicYear.model");
 const escapeRegex = require("../../utils/escapeRegex");
 const fs = require("fs");
-const path = require("path");
 const readline = require("readline");
 
-// Get all author citations with lookup
-exports.getAuthorCitations = async (req, res, next) => {
+const FIELD_MAP = {
+    citations: "citations",
+    hindex: "hIndex"
+};
+
+const currentYear = () => new Date().getFullYear();
+
+const toPlainMap = (mapOrObj) => {
+    if (!mapOrObj) return {};
+    if (mapOrObj instanceof Map) return Object.fromEntries(mapOrObj);
+    return mapOrObj;
+};
+
+const getMaxYearValue = (mapOrObj) => {
+    const plain = toPlainMap(mapOrObj);
+    const years = Object.keys(plain).map(Number).filter((y) => !Number.isNaN(y));
+    if (years.length === 0) return { year: null, value: null };
+    const maxYear = Math.max(...years);
+    return { year: maxYear, value: plain[String(maxYear)] };
+};
+
+const validateType = (type) => FIELD_MAP[type];
+
+// ---------------------------------------------------------------------------
+// GET /:type  -> list with latest-year value only (type = citations | hindex)
+// ---------------------------------------------------------------------------
+exports.getList = async (req, res, next) => {
     try {
+        const { type } = req.params;
+        const field = validateType(type);
+        if (!field) {
+            return res.status(400).json({ success: false, message: "Invalid type. Use 'citations' or 'hindex'." });
+        }
+
         const { search } = req.query;
         let matchStage = {};
-
         if (search) {
             const searchRegex = new RegExp(escapeRegex(search), 'i');
             matchStage = {
@@ -32,12 +60,7 @@ exports.getAuthorCitations = async (req, res, next) => {
                     as: 'employee'
                 }
             },
-            {
-                $unwind: {
-                    path: '$employee',
-                    preserveNullAndEmptyArrays: true
-                }
-            },
+            { $unwind: { path: '$employee', preserveNullAndEmptyArrays: true } },
             {
                 $lookup: {
                     from: 'departments',
@@ -46,172 +69,249 @@ exports.getAuthorCitations = async (req, res, next) => {
                     as: 'department'
                 }
             },
-            {
-                $unwind: {
-                    path: '$department',
-                    preserveNullAndEmptyArrays: true
-                }
-            },
-            {
-                $match: matchStage
-            },
+            { $unwind: { path: '$department', preserveNullAndEmptyArrays: true } },
+            { $match: matchStage },
             {
                 $project: {
                     _id: 1,
                     empid: 1,
-                    scopusId: 1,
                     citations: 1,
                     hIndex: 1,
                     employeeName: '$employee.name',
                     departmentName: '$department.name',
-                    designation: '$employee.designation'
+                    designation: '$employee.designation',
+                    scopusId: '$employee.scopusId'
                 }
             },
-            {
-                $sort: { employeeName: 1, empid: 1 }
-            }
+            { $sort: { employeeName: 1, empid: 1 } }
         ]);
 
-        // Get the active academic year to send in metadata
-        const activeYearDoc = await AcademicYear.findOne({ isGlobalActive: true });
-        const activeYear = activeYearDoc ? activeYearDoc.year : "2025-2026";
-        const startYear = parseInt(activeYear.split('-')[0], 10) || 2025;
+        const data = list.map((row) => {
+            const { year, value } = getMaxYearValue(row[field]);
+            return {
+                _id: row._id,
+                empid: row.empid,
+                employeeName: row.employeeName || "N/A",
+                designation: row.designation || "",
+                departmentName: row.departmentName || "N/A",
+                scopusId: row.scopusId || "",
+                latestYear: year,
+                latestValue: value
+            };
+        });
 
         res.status(200).json({
             success: true,
-            data: list,
-            meta: {
-                activeAcademicYear: activeYear,
-                citationYear: startYear,
-                hIndexYears: [startYear - 1, startYear]
-            }
+            data,
+            meta: { currentYear: currentYear() }
         });
     } catch (error) {
-        console.error('Get Author Citations Error:', error);
+        console.error('Get Author Citations List Error:', error);
         next(error);
     }
 };
 
-// Add or Update Author Citations
-exports.addOrUpdateAuthorCitations = async (req, res, next) => {
+// ---------------------------------------------------------------------------
+// GET /:type/:empid  -> full year-wise history for the detail page
+// ---------------------------------------------------------------------------
+exports.getHistory = async (req, res, next) => {
     try {
-        const { empid, scopusId, citations, hIndexPrev, hIndexCurr } = req.body;
-
-        if (!empid) {
-            return res.status(400).json({ success: false, message: "Employee ID (empid) is required." });
+        const { type, empid } = req.params;
+        const field = validateType(type);
+        if (!field) {
+            return res.status(400).json({ success: false, message: "Invalid type. Use 'citations' or 'hindex'." });
         }
 
-        // Validate employee exists locally
+        const employee = await Employee.findOne({ institutionId: empid });
+        if (!employee) {
+            return res.status(404).json({ success: false, message: `Employee with ID '${empid}' not found.` });
+        }
+
+        const doc = await AuthorCitations.findOne({ empid });
+        const plainMap = doc ? toPlainMap(doc[field]) : {};
+
+        const history = Object.entries(plainMap)
+            .map(([year, value]) => ({ year: Number(year), value }))
+            .sort((a, b) => a.year - b.year);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                empid,
+                employeeName: employee.name,
+                designation: employee.designation || "",
+                scopusId: employee.scopusId || "",
+                history
+            },
+            meta: { currentYear: currentYear() }
+        });
+    } catch (error) {
+        console.error('Get Author Citations History Error:', error);
+        next(error);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// GET /me/:type  -> full year-wise history for the logged-in user
+// ---------------------------------------------------------------------------
+exports.getMyHistory = async (req, res, next) => {
+    try {
+        const { type } = req.params;
+        const field = validateType(type);
+        if (!field) {
+            return res.status(400).json({ success: false, message: "Invalid type. Use 'citations' or 'hindex'." });
+        }
+
+        const employee = await Employee.findById(req.user.userId || req.user._id);
+        if (!employee) {
+            return res.status(404).json({ success: false, message: "Logged in user not found as employee." });
+        }
+
+        const empid = employee.institutionId;
+        const doc = await AuthorCitations.findOne({ empid });
+        const plainMap = doc ? toPlainMap(doc[field]) : {};
+
+        const history = Object.entries(plainMap)
+            .map(([year, value]) => ({ year: Number(year), value }))
+            .sort((a, b) => a.year - b.year);
+
+        const { year: latestYear, value: latestValue } = getMaxYearValue(doc ? doc[field] : {});
+
+        res.status(200).json({
+            success: true,
+            data: {
+                empid,
+                employeeName: employee.name,
+                designation: employee.designation || "",
+                scopusId: employee.scopusId || "",
+                history,
+                latestYear,
+                latestValue
+            },
+            meta: { currentYear: currentYear() }
+        });
+    } catch (error) {
+        console.error('Get My Author Citations History Error:', error);
+        next(error);
+    }
+};
+
+// ---------------------------------------------------------------------------
+// POST /:type  -> upsert a single year's value { empid, year, value }
+// Used both for "Add new record" and for adding/editing a year from the
+// detail page. Always operates on ONE year key, never touches other years.
+// ---------------------------------------------------------------------------
+exports.upsertYearValue = async (req, res, next) => {
+    try {
+        const { type } = req.params;
+        const field = validateType(type);
+        if (!field) {
+            return res.status(400).json({ success: false, message: "Invalid type. Use 'citations' or 'hindex'." });
+        }
+
+        const { empid, year, value } = req.body;
+
+        if (!empid) {
+            return res.status(400).json({ success: false, message: "Employee ID is required." });
+        }
+        if (year === undefined || year === null || year === "") {
+            return res.status(400).json({ success: false, message: "Year is required." });
+        }
+        if (value === undefined || value === null || value === "") {
+            return res.status(400).json({ success: false, message: "Value is required." });
+        }
+
+        const numericYear = Number(year);
+        if (!Number.isInteger(numericYear) || numericYear < 1900) {
+            return res.status(400).json({ success: false, message: "Invalid year." });
+        }
+        if (numericYear > currentYear()) {
+            return res.status(400).json({ success: false, message: `Future year (${numericYear}) is not allowed.` });
+        }
+
         const employee = await Employee.findOne({ institutionId: empid });
         if (!employee) {
             return res.status(404).json({ success: false, message: `Employee with ID '${empid}' not found in the database.` });
         }
-
-        // Get active academic year
-        const activeYearDoc = await AcademicYear.findOne({ isGlobalActive: true });
-        if (!activeYearDoc) {
-            return res.status(400).json({ success: false, message: "No active academic year is configured." });
-        }
-
-        const [startYearStr] = activeYearDoc.year.split('-');
-        const startYear = parseInt(startYearStr, 10);
-        const prevYear = startYear - 1;
 
         let doc = await AuthorCitations.findOne({ empid });
         if (!doc) {
             doc = new AuthorCitations({
                 empid,
                 facultyId: employee._id,
-                scopusId: scopusId || employee.scopusId || "",
                 citations: new Map(),
                 hIndex: new Map()
             });
         } else {
             doc.facultyId = employee._id;
-            if (scopusId !== undefined) {
-                doc.scopusId = scopusId;
-            }
         }
 
-        // Update the maps (appends or overrides for the specific year key)
-        if (citations !== undefined && citations !== null && citations !== "") {
-            doc.citations.set(String(startYear), Number(citations));
-        }
-        if (hIndexPrev !== undefined && hIndexPrev !== null && hIndexPrev !== "") {
-            doc.hIndex.set(String(prevYear), Number(hIndexPrev));
-        }
-        if (hIndexCurr !== undefined && hIndexCurr !== null && hIndexCurr !== "") {
-            doc.hIndex.set(String(startYear), Number(hIndexCurr));
-        }
-
+        doc[field].set(String(numericYear), Number(value));
         await doc.save();
-
-        // Keep Employee's scopusId in sync
-        if (scopusId) {
-            await Employee.updateOne({ institutionId: empid }, { $set: { scopusId } });
-        }
 
         res.status(200).json({
             success: true,
-            message: "Author citations updated successfully.",
+            message: `${type === 'citations' ? 'Citation' : 'H-Index'} value for ${numericYear} saved successfully.`,
             data: doc
         });
     } catch (error) {
-        console.error('Add/Update Author Citations Error:', error);
+        console.error('Upsert Author Citations Year Error:', error);
         next(error);
     }
 };
 
-// Delete Author Citations Record
-exports.deleteAuthorCitations = async (req, res, next) => {
+// ---------------------------------------------------------------------------
+// DELETE /:type/:empid/:year  -> remove a single year entry
+// ---------------------------------------------------------------------------
+exports.deleteYearValue = async (req, res, next) => {
     try {
-        const { id } = req.params;
-        const record = await AuthorCitations.findByIdAndDelete(id);
+        const { type, empid, year } = req.params;
+        const field = validateType(type);
+        if (!field) {
+            return res.status(400).json({ success: false, message: "Invalid type. Use 'citations' or 'hindex'." });
+        }
 
-        if (!record) {
+        const doc = await AuthorCitations.findOne({ empid });
+        if (!doc) {
             return res.status(404).json({ success: false, message: "Record not found." });
         }
 
-        res.status(200).json({
-            success: true,
-            message: "Author citations record deleted successfully."
-        });
+        doc[field].delete(String(year));
+        await doc.save();
+
+        res.status(200).json({ success: true, message: `Year ${year} entry deleted successfully.` });
     } catch (error) {
-        console.error('Delete Author Citations Error:', error);
+        console.error('Delete Author Citations Year Error:', error);
         next(error);
     }
 };
 
-// Bulk Upload Author Citations from CSV
-exports.bulkUploadAuthorCitations = async (req, res, next) => {
+// ---------------------------------------------------------------------------
+// POST /:type/bulk  -> bulk upload CSV (empid, year, value)
+// ---------------------------------------------------------------------------
+exports.bulkUpload = async (req, res, next) => {
     try {
+        const { type } = req.params;
+        const field = validateType(type);
+        if (!field) {
+            return res.status(400).json({ success: false, message: "Invalid type. Use 'citations' or 'hindex'." });
+        }
+
         if (!req.file) {
             return res.status(400).json({ success: false, message: 'No CSV file uploaded.' });
         }
 
-        // Get the active academic year
-        const activeYearDoc = await AcademicYear.findOne({ isGlobalActive: true });
-        const activeYear = activeYearDoc ? activeYearDoc.year : "2025-2026";
-        const startYear = parseInt(activeYear.split('-')[0], 10) || 2025;
-        
-        const citationYear = String(startYear);
-        const prevHIndexYear = String(startYear - 1);
-        const currHIndexYear = String(startYear);
-
         const results = [];
         const fileStream = fs.createReadStream(req.file.path);
-        const rl = readline.createInterface({
-            input: fileStream,
-            crlfDelay: Infinity
-        });
+        const rl = readline.createInterface({ input: fileStream, crlfDelay: Infinity });
 
         let isFirstRow = true;
+        const thisYear = currentYear();
 
         for await (let line of rl) {
             if (isFirstRow && line.startsWith('\ufeff')) {
                 line = line.replace(/^\ufeff/, '');
             }
-
             const trimmedLine = line.trim();
             if (!trimmedLine) continue;
 
@@ -223,68 +323,44 @@ exports.bulkUploadAuthorCitations = async (req, res, next) => {
             } else {
                 parts = trimmedLine.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
             }
-
             parts = parts.map(p => p.replace(/^["']|["']$/g, '').trim());
 
             const empid = parts[0] || '';
-            const scopusId = parts[1] || '';
-            const citations = parts[2] || '0';
-            const hIndexPrev = parts[3] || '0';
-            const hIndexCurr = parts[4] || '0';
+            const year = parts[1] || '';
+            const value = parts[2] || '';
 
-            // Detect and skip headers row
             if (isFirstRow) {
                 isFirstRow = false;
                 const lowerEmp = empid.toLowerCase();
-                if (lowerEmp.includes('emp') || lowerEmp.includes('id') || lowerEmp.includes('name')) {
+                if (lowerEmp.includes('emp') || lowerEmp.includes('id') || lowerEmp.includes('year')) {
                     continue;
                 }
             }
 
-            if (!empid) continue;
+            if (!empid || !year) continue;
 
-            results.push({
-                empid,
-                scopusId,
-                citations: Number(citations) || 0,
-                hIndexPrev: Number(hIndexPrev) || 0,
-                hIndexCurr: Number(hIndexCurr) || 0
-            });
+            const numericYear = Number(year);
+            if (!Number.isInteger(numericYear) || numericYear > thisYear) continue; // skip invalid/future years
+
+            results.push({ empid, year: numericYear, value: Number(value) || 0 });
         }
 
-        // Clean up uploaded file
-        fs.unlink(req.file.path, (err) => {
-            if (err) console.error("Error deleting temp file:", err);
-        });
+        fs.unlink(req.file.path, (err) => { if (err) console.error("Error deleting temp file:", err); });
 
         let successCount = 0;
         let failCount = 0;
 
         for (const item of results) {
             try {
+                const employee = await Employee.findOne({ institutionId: item.empid });
+                if (!employee) { failCount++; continue; }
+
                 let doc = await AuthorCitations.findOne({ empid: item.empid });
                 if (!doc) {
-                    doc = new AuthorCitations({
-                        empid: item.empid,
-                        citations: {},
-                        hIndex: {}
-                    });
+                    doc = new AuthorCitations({ empid: item.empid, facultyId: employee._id, citations: new Map(), hIndex: new Map() });
                 }
-
-                if (item.scopusId) {
-                    doc.scopusId = item.scopusId;
-                }
-                doc.citations.set(citationYear, item.citations);
-                doc.hIndex.set(prevHIndexYear, item.hIndexPrev);
-                doc.hIndex.set(currHIndexYear, item.hIndexCurr);
-
+                doc[field].set(String(item.year), item.value);
                 await doc.save();
-
-                // Sync to Employee profile too
-                if (item.scopusId) {
-                    await Employee.updateOne({ institutionId: item.empid }, { $set: { scopusId: item.scopusId } });
-                }
-
                 successCount++;
             } catch (err) {
                 failCount++;
@@ -293,7 +369,7 @@ exports.bulkUploadAuthorCitations = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            message: `Bulk upload completed. Successfully processed ${successCount} records, failed ${failCount} records.`
+            message: `Bulk upload completed. Successfully processed ${successCount} records, failed/skipped ${failCount} records.`
         });
     } catch (error) {
         console.error('Bulk Upload Author Citations Error:', error);

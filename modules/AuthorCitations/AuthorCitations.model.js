@@ -11,11 +11,9 @@ const AuthorCitationsSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: "Employee"
     },
-    scopusId: {
-        type: String,
-        trim: true,
-        default: ""
-    },
+    // NOTE: scopusId intentionally removed from this schema (Aug 2026).
+    // Scopus Author ID now lives only on the Employee profile (Employee.scopusId)
+    // and is looked up via $lookup wherever needed, to avoid duplicate data entry.
     citations: {
         type: Map,
         of: Number,

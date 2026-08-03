@@ -116,6 +116,7 @@ const AppraisalConfigSchema = new mongoose.Schema({
             drcDept: { type: Number, default: 5 },
             antiRaggingCentral: { type: Number, default: 5 },
             antiRaggingDept: { type: Number, default: 3 },
+            otherCentral: { type: Number, default: 10 },
             otherDept: { type: Number, default: 5 }
         }
     },

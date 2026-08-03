@@ -4,22 +4,7 @@ const AcademicYear = require("../academicYear/academicYear.model");
 const { getHODDepartments } = require("../../utils/hodHelper");
 const { syncAppraisalOnAdministrationRejection } = require("../../utils/appraisalSyncHelper");
 
-const VALID_ADMIN_ROLES = [
-    "Deans / Assoc Deans / CoE",
-    "HoD / Dy. CoE / Coordinator (Univ. Office)",
-    "Dy. HoD / Dept. Exam Cell Incharge",
-    "Time Table / Project Coordinator / Curriculum Coordinator",
-    "Placement / Internship / Alumni Coordinator",
-    "Coursera / LinkedIn Coordinator / ALA",
-    "EDC / IIC / IQAC Coordinator",
-    "Course Coordinator",
-    "Website Coordinator",
-    "NSS / Any Clubs / Professional Chapters Coordinator",
-    "Any Training Program Coordinator (Smart Interviews / GPP / Etc.)",
-    "DRC / Research Coordinator",
-    "Anti-Ragging Committee Coordinator",
-    "Any other remarkable event / activity coordinator"
-];
+const { ADMIN_ROLE_CATALOG, ASSIGNED_BY_OPTIONS } = require("./adminRoleCatalog");
 
 // @desc    Submit or update administrative roles
 // @route   POST /api/faculty-administration
@@ -44,16 +29,33 @@ exports.createOrUpdateEntry = async (req, res) => {
 
         // Validate role entries
         for (const r of roles) {
-            if (!VALID_ADMIN_ROLES.includes(r.roleName) && !r.roleName.startsWith("Any other remarkable event")) {
-                return res.status(400).json({ success: false, message: `Invalid administrative role name: "${r.roleName}".` });
+            if (!r.roleId) continue;
+            
+            const catalogEntry = ADMIN_ROLE_CATALOG.find(c => c.roleId === r.roleId);
+            if (!catalogEntry && r.roleId !== "other") {
+                return res.status(400).json({ success: false, message: `Invalid administrative role ID: "${r.roleId}".` });
+            }
+            
+            if (catalogEntry && r.level && !catalogEntry.allowedLevels.includes(r.level)) {
+                 return res.status(400).json({ success: false, message: `Invalid level "${r.level}" for role "${r.roleId}".` });
+            }
+            
+            if (r.assignedBy && r.assignedBy.type && !ASSIGNED_BY_OPTIONS.includes(r.assignedBy.type)) {
+                return res.status(400).json({ success: false, message: `Invalid assignedBy type.` });
+            }
+            
+            if (r.assignedBy && r.assignedBy.type === "Others" && !r.assignedBy.otherText) {
+                return res.status(400).json({ success: false, message: `Please provide 'Others' text for assignedBy.` });
             }
         }
 
         // Format roles to set defaults
         const formattedRoles = roles.map(r => ({
-            roleName: r.roleName,
+            roleId: r.roleId,
+            roleLabel: r.roleLabel,
             isResponsible: r.isResponsible,
             level: r.level || "",
+            assignedBy: r.assignedBy || { type: "", otherText: "" },
             details: r.details || "",
             status: "Pending",
             approvedBy: null,
@@ -68,19 +70,21 @@ exports.createOrUpdateEntry = async (req, res) => {
             // Create a map of existing roles by name to check against
             const existingRolesMap = {};
             (entry.roles || []).forEach(r => {
-                existingRolesMap[r.roleName] = r;
+                existingRolesMap[r.roleId] = r;
             });
 
             // Map through incoming roles and preserve approval status for unchanged or removed roles
             const updatedRoles = formattedRoles.map(newRole => {
-                const existing = existingRolesMap[newRole.roleName];
+                const existing = existingRolesMap[newRole.roleId];
                 if (existing) {
                     if (!newRole.isResponsible) {
                         // Role was removed from appraisal, preserve its audit details
                         return {
-                            roleName: newRole.roleName,
+                            roleId: newRole.roleId,
+                            roleLabel: newRole.roleLabel,
                             isResponsible: false,
                             level: existing.level || "",
+                            assignedBy: existing.assignedBy,
                             details: existing.details || "",
                             status: existing.status || "Pending",
                             approvedBy: existing.approvedBy || null,
@@ -90,13 +94,17 @@ exports.createOrUpdateEntry = async (req, res) => {
                     } else if (existing.isResponsible) {
                         const isSame =
                             existing.level === newRole.level &&
-                            existing.details === newRole.details;
+                            existing.details === newRole.details &&
+                            existing.assignedBy?.type === newRole.assignedBy?.type &&
+                            existing.assignedBy?.otherText === newRole.assignedBy?.otherText;
 
                         if (isSame) {
                             return {
-                                roleName: newRole.roleName,
+                                roleId: newRole.roleId,
+                                roleLabel: newRole.roleLabel,
                                 isResponsible: newRole.isResponsible,
                                 level: newRole.level,
+                                assignedBy: newRole.assignedBy,
                                 details: newRole.details,
                                 status: existing.status || "Pending",
                                 approvedBy: existing.approvedBy || null,
@@ -194,11 +202,11 @@ exports.getPendingAtHOD = async (req, res) => {
         const entries = await FacultyAdministration.find({
             facultyId: { $in: facultyIds }
         })
-        ulate("facultyId", "name institutionId department coreDepartment")
-        ulate("academicYear", "year")
-        ulate("approvedBy", "name")
-        ulate("roles.approvedBy", "name")
-        t({ createdAt: -1 });
+        .populate("facultyId", "name institutionId department coreDepartment")
+        .populate("academicYear", "year")
+        .populate("approvedBy", "name")
+        .populate("roles.approvedBy", "name")
+        .sort({ createdAt: -1 });
 
         res.json({ success: true, data: entries });
     } catch (err) {
@@ -213,10 +221,10 @@ exports.getPendingAtHOD = async (req, res) => {
 exports.hodActionRole = async (req, res) => {
     try {
         const { id } = req.params;
-        const { roleName, action, remarks } = req.body; // action: "Approve" or "Reject"
+        const { roleId, action, remarks } = req.body; // action: "Approve" or "Reject"
 
-        if (!roleName) {
-            return res.status(400).json({ success: false, message: "roleName is required." });
+        if (!roleId) {
+            return res.status(400).json({ success: false, message: "roleId is required." });
         }
 
         if (!action || !["Approve", "Reject"].includes(action)) {
@@ -245,9 +253,9 @@ exports.hodActionRole = async (req, res) => {
         }
 
         // Find and update the role in roles array
-        const role = entry.roles.find(r => r.roleName === roleName);
+        const role = entry.roles.find(r => r.roleId === roleId);
         if (!role) {
-            return res.status(404).json({ success: false, message: `Role '${roleName}' not found in this entry.` });
+            return res.status(404).json({ success: false, message: `Role ID '${roleId}' not found in this entry.` });
         }
 
         role.status = action === "Approve" ? "Approved" : "Rejected";
@@ -288,7 +296,7 @@ exports.hodActionRole = async (req, res) => {
 
         // Sync appraisal status if rejection (after response sent)
         if (action === "Reject") {
-            syncAppraisalOnAdministrationRejection(entry.facultyId, entry.academicYear, [roleName]);
+            syncAppraisalOnAdministrationRejection(entry.facultyId, entry.academicYear, [role.roleId]);
         }
     } catch (err) {
         console.error("HOD Administration Action Role Error:", err);

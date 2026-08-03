@@ -15,17 +15,22 @@ const csvStorage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: (req, file, cb) => {
-        cb(null, `citations-bulk-${Date.now()}-${file.originalname}`);
+        cb(null, `${req.params.type || 'citations'}-bulk-${Date.now()}-${file.originalname}`);
     }
 });
 const uploadCsv = multer({ storage: csvStorage });
 
+// My history (accessible to all logged-in users, e.g., faculty)
+router.get('/me/:type', protect, authorCitationsController.getMyHistory);
+
 // Secure all endpoints under research deans, coordinators, and admins
 router.use(protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR', 'ADMIN'));
 
-router.get('/', authorCitationsController.getAuthorCitations);
-router.post('/', authorCitationsController.addOrUpdateAuthorCitations);
-router.post('/bulk', uploadCsv.single('file'), authorCitationsController.bulkUploadAuthorCitations);
-router.delete('/:id', authorCitationsController.deleteAuthorCitations);
+// :type must be 'citations' or 'hindex'
+router.get('/:type', authorCitationsController.getList);
+router.get('/:type/:empid', authorCitationsController.getHistory);
+router.post('/:type', authorCitationsController.upsertYearValue);
+router.post('/:type/bulk', uploadCsv.single('file'), authorCitationsController.bulkUpload);
+router.delete('/:type/:empid/:year', authorCitationsController.deleteYearValue);
 
 module.exports = router;

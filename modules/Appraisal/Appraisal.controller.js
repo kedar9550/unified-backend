@@ -3,6 +3,7 @@ const puppeteer = require("puppeteer");
 const Appraisal = require("./Appraisal.model.js");
 const AppraisalConfig = require("./AppraisalConfig.model");
 const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
+const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
 
 // Import all related models
 const Employee = require("../employee/employee.model");
@@ -364,7 +365,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 .populate("programId", "name code programPattern")
                 .populate("branchId", "name code");
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
-            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
             return res.json({
@@ -1116,7 +1117,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         });
 
         // 3.2 Faculty Expertise/Recognition/Contribution
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
         const contItems = [];
         let totalContPoints = 0;
 
@@ -1143,7 +1144,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 let pts = 5; // default fallback
                 let activityName = "Expertise / Recognition Activity";
 
-                switch (c.category) {
+                const catCode = c.category?.code || parseInt(c.category);
+                switch (catCode) {
                     case 1:
                         pts = expPointsConf.memberBOS ?? 5;
                         activityName = "Member of BOG/GB/AC/BOS (Outside AUS)";
@@ -1254,44 +1256,25 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             adminRoles.roles.forEach(r => {
                 if (r.isResponsible && (r.status === "Approved" || r.status === "Pending")) {
                     let pts = 5; // default fallback
-                    const name = r.roleName.toLowerCase();
                     const level = (r.level || '').toLowerCase();
                     const isCentral = level.includes('central') || level.includes('institute');
 
-                    if (name === 'deans / assoc deans / coe') {
-                        pts = adminConf.deanCentral ?? 20;
-                    } else if (name === 'hod / dy. coe / coordinator (univ. office)') {
-                        pts = isCentral ? (adminConf.hodCentral ?? 15) : (adminConf.hodDept ?? 15);
-                    } else if (name === 'dy. hod / dept. exam cell incharge') {
-                        pts = adminConf.dyHodDept ?? 10;
-                    } else if (name === 'time table / project coordinator / curriculum coordinator') {
-                        pts = adminConf.timetableDept ?? 10;
-                    } else if (name === 'placement / internship / alumni coordinator') {
-                        pts = isCentral ? (adminConf.placementCentral ?? 10) : (adminConf.placementDept ?? 10);
-                    } else if (name === 'coursera / linkedin coordinator / ala') {
-                        pts = isCentral ? (adminConf.courseraCentral ?? 10) : (adminConf.courseraDept ?? 5);
-                    } else if (name === 'edc / iic / iqac coordinator') {
-                        pts = isCentral ? (adminConf.edcCentral ?? 10) : (adminConf.edcDept ?? 5);
-                    } else if (name === 'course coordinator') {
-                        pts = adminConf.courseDept ?? 5;
-                    } else if (name === 'website coordinator') {
-                        pts = isCentral ? (adminConf.websiteCentral ?? 10) : 0; // Website Coordinator: Central only (no dept level per form)
-                    } else if (name === 'nss / any clubs / professional chapters coordinator') {
-                        pts = isCentral ? (adminConf.nssCentral ?? 10) : (adminConf.nssDept ?? 5);
-                    } else if (name === 'any training program coordinator (smart interviews / gpp / etc.)') {
-                        pts = isCentral ? (adminConf.trainingCentral ?? 10) : (adminConf.trainingDept ?? 5);
-                    } else if (name === 'drc / research coordinator') {
-                        pts = adminConf.drcDept ?? 5;
-                    } else if (name === 'anti-ragging committee coordinator') {
-                        pts = isCentral ? (adminConf.antiRaggingCentral ?? 5) : (adminConf.antiRaggingDept ?? 3);
-                    } else if (name.startsWith('any other remarkable event')) {
+                    const catalogEntry = ADMIN_ROLE_CATALOG.find(c => c.roleId === r.roleId);
+
+                    if (catalogEntry) {
+                        const pg = catalogEntry.pointsGroup;
+                        const key = pg + (isCentral ? 'Central' : 'Dept');
+                        pts = adminConf[key] ?? pts;
+                    } else if (r.roleName && r.roleName.toLowerCase().startsWith('any other')) {
+                        // fallback for old un-migrated or "other"
                         pts = isCentral ? (adminConf.otherCentral ?? 10) : (adminConf.otherDept ?? 5);
                     } else {
                         pts = isCentral ? (adminConf.otherCentral ?? 10) : (adminConf.otherDept ?? 5);
                     }
 
                     adminItems.push({
-                        activityName: r.roleName,
+                        roleId: r.roleId || "",
+                        activityName: r.roleLabel || r.roleName,
                         level: r.level || "Dept level",
                         pointsClaimed: pts
                     });
@@ -1499,9 +1482,9 @@ exports.submitAppraisal = async (req, res) => {
         });
 
         // 2. Check Coursera (>= 40 Hours) in Contributions
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" }, removedFromAppraisal: { $ne: true } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, status: { $ne: "Rejected" }, removedFromAppraisal: { $ne: true } }).populate("category");
         const hasValidCoursera40Hours = contributions.some(c => {
-            const cat = parseInt(c.category);
+            const cat = c.category?.code || parseInt(c.category);
             return cat === 12 && Number(c.courseHours) >= 40;
         });
 
@@ -1545,7 +1528,8 @@ exports.submitAppraisal = async (req, res) => {
 exports.getPendingHODAppraisals = async (req, res) => {
     try {
         const Employee = require("../employee/employee.model");
-        const { getHODDepartments } = require("../../utils/hodHelper");
+        const { calculateTScore, calculateRScore, calculateVScore } = require("../../utils/appraisalCalculations");
+        const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
 
         const deptIds = await getHODDepartments(req.user);
 
@@ -1571,7 +1555,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
                 .populate("programId", "name code programPattern")
                 .populate("branchId", "name code");
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
-            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+            const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
             const appObj = app.toObject();
@@ -2574,7 +2558,7 @@ exports.getAppraisalById = async (req, res) => {
             .populate("programId", "name code programPattern")
             .populate("branchId", "name code");
         const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
-        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
+        const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
         const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
 
         const appObj = appraisal.toObject();

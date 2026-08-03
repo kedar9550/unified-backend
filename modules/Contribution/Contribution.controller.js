@@ -1,4 +1,5 @@
 const Contribution = require('./Contribution.model');
+const ContributionCategory = require('./ContributionCategory.model');
 const ResourceUtilization = require('../ResourceUtilization/ResourceUtilization.model');
 const Employee = require('../employee/employee.model');
 const AcademicYear = require('../academicYear/academicYear.model');
@@ -30,8 +31,8 @@ const validateCategoryFields = (category, data, academicYearStr) => {
     const cat = parseInt(category);
     switch (cat) {
         case 1:
-            if (!data.organizationName || !data.fromDate || !data.toDate) {
-                return "Organization Name, From Date, and To Date are mandatory for Category 1.";
+            if (!data.memberType || !data.organizationName || !data.fromDate || !data.toDate) {
+                return "Member Type, Organization Name, From Date, and To Date are mandatory for Category 1.";
             }
             if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
@@ -39,13 +40,11 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (isFutureDate(data.fromDate)) {
                 return "From Date cannot be in the future.";
             }
-            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
-                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
-            }
+
             break;
         case 2:
-            if (!data.journalName || !data.fromDate || !data.toDate) {
-                return "Journal Name, From Date, and To Date are mandatory for Category 2.";
+            if (!data.journalName || !data.journalType || !data.fromDate || !data.toDate) {
+                return "Journal Name, Journal Type, From Date, and To Date are mandatory for Category 2.";
             }
             if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
@@ -53,13 +52,11 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (isFutureDate(data.fromDate)) {
                 return "From Date cannot be in the future.";
             }
-            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
-                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
-            }
+
             break;
         case 3:
-            if (!data.journalConferenceName || !data.fromDate || !data.toDate) {
-                return "Journal/Conference Name, From Date, and To Date are mandatory for Category 3.";
+            if (!data.journalName || !data.journalType || !data.fromDate || !data.toDate) {
+                return "Journal Name, Journal Type, From Date, and To Date are mandatory for Category 3.";
             }
             if (new Date(data.fromDate) > new Date(data.toDate)) {
                 return "To Date must be greater than From Date.";
@@ -67,14 +64,12 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             if (isFutureDate(data.fromDate)) {
                 return "From Date cannot be in the future.";
             }
-            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
-                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
-            }
+
             break;
         case 4:
         case 5:
-            if (!data.awardName || !data.awardDate) {
-                return "Award Name and Award Date are mandatory.";
+            if (!data.awardName || !data.awardDate || !data.awardingAgency) {
+                return "Award Name, Awarding Agency, and Award Date are mandatory.";
             }
             if (isFutureDate(data.awardDate)) {
                 return "Award Date cannot be in the future.";
@@ -106,8 +101,8 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             }
             break;
         case 8:
-            if (!data.eventName || !data.eventDate) {
-                return "Event Name and Event Date are mandatory.";
+            if (!data.eventName || !data.eventType || !data.studentNames || !data.eventDate) {
+                return "Event Name, Event Type, Student Names, and Event Date are mandatory.";
             }
             if (isFutureDate(data.eventDate)) {
                 return "Event Date cannot be in the future.";
@@ -128,17 +123,18 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             }
             break;
         case 10:
-            if (!data.facilityName || !data.fromDate || !data.toDate) {
-                return "Facility Name, From Date, and To Date are mandatory.";
+            if (!data.facilityName || !data.contributionType) {
+                return "Facility Name and Contribution Type are mandatory.";
             }
-            if (new Date(data.fromDate) > new Date(data.toDate)) {
-                return "To Date must be greater than From Date.";
-            }
-            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
-                return "Dates cannot be in the future.";
-            }
-            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
-                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            if (data.contributionType === "Maintenance") {
+                if (!data.fromDate || !data.toDate) return "From Date and To Date are mandatory for Maintenance.";
+                if (new Date(data.fromDate) > new Date(data.toDate)) return "To Date must be greater than From Date.";
+                if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) return "Dates cannot be in the future.";
+                if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            } else if (data.contributionType === "Establishment") {
+                if (!data.fromDate) return "Establishment Date is mandatory.";
+                if (isFutureDate(data.fromDate)) return "Date cannot be in the future.";
+                if (!isDateWithinAcademicYear(data.fromDate, academicYearStr)) return `Date must fall within the selected Academic Year (${academicYearStr}).`;
             }
             break;
         case 11:
@@ -170,17 +166,14 @@ const validateCategoryFields = (category, data, academicYearStr) => {
             }
             break;
         case 13:
-            if (!data.grantName || !data.fromDate || !data.toDate) {
-                return "Grant Name, From Date, and To Date are mandatory.";
+            if (!data.grantType || !data.grantTitle || !data.fundingAgency || !data.grantAmount || !data.sanctionDate) {
+                return "Grant Type, Title, Funding Agency, Grant Amount, and Sanction Date are mandatory.";
             }
-            if (new Date(data.fromDate) > new Date(data.toDate)) {
-                return "To Date must be greater than From Date.";
+            if (isFutureDate(data.sanctionDate)) {
+                return "Sanction Date cannot be in the future.";
             }
-            if (isFutureDate(data.fromDate) || isFutureDate(data.toDate)) {
-                return "Dates cannot be in the future.";
-            }
-            if (!isDateWithinAcademicYear(data.fromDate, academicYearStr) || !isDateWithinAcademicYear(data.toDate, academicYearStr)) {
-                return `Dates must fall within the selected Academic Year (${academicYearStr}).`;
+            if (!isDateWithinAcademicYear(data.sanctionDate, academicYearStr)) {
+                return `Sanction Date must fall within the selected Academic Year (${academicYearStr}).`;
             }
             break;
         default:
@@ -195,7 +188,7 @@ const getContributionNameField = (category, data) => {
     switch (cat) {
         case 1: return { field: 'organizationName', value: data.organizationName };
         case 2: return { field: 'journalName', value: data.journalName };
-        case 3: return { field: 'journalConferenceName', value: data.journalConferenceName };
+        case 3: return { field: 'journalName', value: data.journalName };
         case 4:
         case 5: return { field: 'awardName', value: data.awardName };
         case 6: return { field: 'courseName', value: data.courseName };
@@ -240,21 +233,25 @@ exports.createContribution = async (req, res) => {
         }
         const academicYearStr = ayRecord.year;
 
+        const catDoc = await ContributionCategory.findById(data.category);
+        if (!catDoc) {
+            return res.status(400).json({ success: false, message: "Invalid Category selected." });
+        }
+        const categoryNum = catDoc.code;
+
         // Field validations per category
-        const validationError = validateCategoryFields(data.category, data, academicYearStr);
+        const validationError = validateCategoryFields(categoryNum, data, academicYearStr);
         if (validationError) {
             return res.status(400).json({ success: false, message: validationError });
         }
 
-        const categoryNum = parseInt(data.category);
-
         // Validate duplicates (same name/title in same category and academic year unless rejected)
-        const { field, value } = getContributionNameField(data.category, data);
+        const { field, value } = getContributionNameField(categoryNum, data);
         if (field && value) {
             const query = {
                 facultyId: req.user.userId,
                 academicYear: data.academicYear,
-                category: categoryNum,
+                category: catDoc._id,
                 [field]: { $regex: new RegExp("^" + value.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
                 status: { $ne: 'Rejected' },
                 removedFromAppraisal: { $ne: true }
@@ -311,19 +308,21 @@ exports.createContribution = async (req, res) => {
         const contribution = new Contribution({
             facultyId: req.user.userId,
             academicYear: data.academicYear,
-            category: categoryNum,
+            category: catDoc._id,
             
             // Populate matching category fields
             organizationName: categoryNum === 1 ? data.organizationName : undefined,
+            memberType: categoryNum === 1 ? data.memberType : undefined,
             fromDate: [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? data.fromDate : undefined,
             toDate: [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? data.toDate : undefined,
             
-            journalName: categoryNum === 2 ? data.journalName : (categoryNum === 3 ? data.journalConferenceName : undefined),
-            journalConferenceName: categoryNum === 3 ? data.journalConferenceName : undefined,
+            journalName: [2, 3].includes(categoryNum) ? data.journalName : undefined,
+            journalType: [2, 3].includes(categoryNum) ? data.journalType : undefined,
             
             duration: [1, 2, 3, 7, 10, 11, 12, 13].includes(categoryNum) ? data.duration : undefined,
             
             awardName: [4, 5].includes(categoryNum) ? data.awardName : undefined,
+            awardingAgency: [4, 5].includes(categoryNum) ? data.awardingAgency : undefined,
             awardDate: [4, 5].includes(categoryNum) ? data.awardDate : undefined,
             
             courseName: [6, 11, 12].includes(categoryNum) ? data.courseName : undefined,
@@ -332,6 +331,8 @@ exports.createContribution = async (req, res) => {
             certificationName: categoryNum === 7 ? data.certificationName : undefined,
             
             eventName: categoryNum === 8 ? data.eventName : undefined,
+            eventType: categoryNum === 8 ? data.eventType : undefined,
+            studentNames: categoryNum === 8 ? data.studentNames : undefined,
             eventDate: categoryNum === 8 ? data.eventDate : undefined,
             
             articleTitle: categoryNum === 9 ? data.articleTitle : undefined,
@@ -339,10 +340,16 @@ exports.createContribution = async (req, res) => {
             publicationDate: categoryNum === 9 ? data.publicationDate : undefined,
             
             facilityName: categoryNum === 10 ? data.facilityName : undefined,
+            contributionType: categoryNum === 10 ? data.contributionType : undefined,
             
             grantName: categoryNum === 13 ? data.grantName : undefined,
+            grantType: categoryNum === 13 ? data.grantType : undefined,
+            grantTitle: categoryNum === 13 ? data.grantTitle : undefined,
+            fundingAgency: categoryNum === 13 ? data.fundingAgency : undefined,
+            grantAmount: categoryNum === 13 ? Number(data.grantAmount) : undefined,
+            sanctionDate: categoryNum === 13 ? data.sanctionDate : undefined,
             
-            courseHours: categoryNum === 12 ? Number(data.courseHours) : undefined,
+            courseHours: (categoryNum === 12 || categoryNum === 7) ? Number(data.courseHours) : undefined,
             certificateNumber: data.certificateNumber || undefined,
             
             proof: `/uploads/contributions/${req.file.filename}`,
@@ -370,6 +377,7 @@ exports.getMyContributions = async (req, res) => {
         const list = await Contribution.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
+            .populate('category')
             .sort({ createdAt: -1 });
         res.json({ success: true, data: list });
     } catch (err) {
@@ -412,12 +420,16 @@ exports.updateContribution = async (req, res) => {
 
         // Validate fields for selected category
         const categoryVal = data.category || record.category;
-        const validationError = validateCategoryFields(categoryVal, { ...record.toObject(), ...data }, academicYearStr);
+        const catDoc = await ContributionCategory.findById(categoryVal);
+        if (!catDoc) {
+            return res.status(400).json({ success: false, message: "Invalid Category selected." });
+        }
+        const categoryNum = catDoc.code;
+
+        const validationError = validateCategoryFields(categoryNum, { ...record.toObject(), ...data }, academicYearStr);
         if (validationError) {
             return res.status(400).json({ success: false, message: validationError });
         }
-
-        const categoryNum = parseInt(categoryVal);
 
         // Validate duplicates (same name/title in same category and academic year unless rejected)
         const { field, value } = getContributionNameField(categoryNum, { ...record.toObject(), ...data });
@@ -426,7 +438,7 @@ exports.updateContribution = async (req, res) => {
                 _id: { $ne: id },
                 facultyId: req.user.userId,
                 academicYear: data.academicYear || record.academicYear,
-                category: categoryNum,
+                category: catDoc._id,
                 [field]: { $regex: new RegExp("^" + value.trim().replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + "$", "i") },
                 status: { $ne: 'Rejected' },
                 removedFromAppraisal: { $ne: true }
@@ -487,19 +499,23 @@ exports.updateContribution = async (req, res) => {
 
         // Update fields dynamically
         record.academicYear = data.academicYear || record.academicYear;
-        record.category = categoryNum;
+        record.category = catDoc._id;
 
         // Clear other fields to maintain schema purity
         record.organizationName = categoryNum === 1 ? (data.organizationName || record.organizationName) : undefined;
+        record.memberType = categoryNum === 1 ? (data.memberType || record.memberType) : undefined;
         record.fromDate = [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? (data.fromDate || record.fromDate) : undefined;
         record.toDate = [1, 2, 3, 7, 10, 12, 13].includes(categoryNum) ? (data.toDate || record.toDate) : undefined;
         
-        record.journalName = categoryNum === 2 ? (data.journalName || record.journalName) : (categoryNum === 3 ? (data.journalConferenceName || record.journalConferenceName) : undefined);
-        record.journalConferenceName = categoryNum === 3 ? (data.journalConferenceName || record.journalConferenceName) : undefined;
+        record.journalName = [2, 3].includes(categoryNum) ? (data.journalName || record.journalName) : undefined;
+        record.journalType = [2, 3].includes(categoryNum) ? (data.journalType || record.journalType) : undefined;
+        // journalConferenceName is deprecated, just ensure it's undefined
+        record.journalConferenceName = undefined;
         
         record.duration = [1, 2, 3, 7, 10, 11, 12, 13].includes(categoryNum) ? (data.duration || record.duration) : undefined;
         
         record.awardName = [4, 5].includes(categoryNum) ? (data.awardName || record.awardName) : undefined;
+        record.awardingAgency = [4, 5].includes(categoryNum) ? (data.awardingAgency || record.awardingAgency) : undefined;
         record.awardDate = [4, 5].includes(categoryNum) ? (data.awardDate || record.awardDate) : undefined;
         
         record.courseName = [6, 11, 12].includes(categoryNum) ? (data.courseName || record.courseName) : undefined;
@@ -508,6 +524,8 @@ exports.updateContribution = async (req, res) => {
         record.certificationName = categoryNum === 7 ? (data.certificationName || record.certificationName) : undefined;
         
         record.eventName = categoryNum === 8 ? (data.eventName || record.eventName) : undefined;
+        record.eventType = categoryNum === 8 ? (data.eventType || record.eventType) : undefined;
+        record.studentNames = categoryNum === 8 ? (data.studentNames || record.studentNames) : undefined;
         record.eventDate = categoryNum === 8 ? (data.eventDate || record.eventDate) : undefined;
         
         record.articleTitle = categoryNum === 9 ? (data.articleTitle || record.articleTitle) : undefined;
@@ -515,10 +533,16 @@ exports.updateContribution = async (req, res) => {
         record.publicationDate = categoryNum === 9 ? (data.publicationDate || record.publicationDate) : undefined;
         
         record.facilityName = categoryNum === 10 ? (data.facilityName || record.facilityName) : undefined;
+        record.contributionType = categoryNum === 10 ? (data.contributionType || record.contributionType) : undefined;
         
         record.grantName = categoryNum === 13 ? (data.grantName || record.grantName) : undefined;
+        record.grantType = categoryNum === 13 ? (data.grantType || record.grantType) : undefined;
+        record.grantTitle = categoryNum === 13 ? (data.grantTitle || record.grantTitle) : undefined;
+        record.fundingAgency = categoryNum === 13 ? (data.fundingAgency || record.fundingAgency) : undefined;
+        record.grantAmount = categoryNum === 13 ? (data.grantAmount !== undefined ? Number(data.grantAmount) : record.grantAmount) : undefined;
+        record.sanctionDate = categoryNum === 13 ? (data.sanctionDate || record.sanctionDate) : undefined;
 
-        record.courseHours = categoryNum === 12 ? (data.courseHours !== undefined ? Number(data.courseHours) : record.courseHours) : undefined;
+        record.courseHours = (categoryNum === 12 || categoryNum === 7) ? (data.courseHours !== undefined ? Number(data.courseHours) : record.courseHours) : undefined;
         record.certificateNumber = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
 
         if (req.file) {
@@ -639,12 +663,13 @@ exports.getPendingAtHOD = async (req, res) => {
         }
 
         if (req.query.category && req.query.category !== 'All') {
-            query.category = parseInt(req.query.category);
+            query.category = req.query.category;
         }
 
         const list = await Contribution.find(query)
             .populate('facultyId', 'name institutionId department coreDepartment profileImage')
             .populate('academicYear', 'year')
+            .populate('category')
             .sort({ createdAt: -1 });
 
         res.json({ success: true, data: list });
