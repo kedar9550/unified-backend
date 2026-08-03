@@ -145,6 +145,23 @@ app.use('/api/event-students', require('./modules/EventStudents/EventStudent.rou
 // payments
 app.use('/api/razorpay', require('./modules/Payments/Payments.route'));
 
+// Proxy for Student Photos to fix CORS in PDF Generation
+app.get('/api/proxy/student-photo/:roll', async (req, res) => {
+    try {
+        const { roll } = req.params;
+        const axios = require('axios');
+        const response = await axios.get(`https://info.aec.edu.in/adityacentral/StudentPhotos/${roll}.jpg`, {
+            responseType: 'arraybuffer'
+        });
+        res.set('Content-Type', 'image/jpeg');
+        res.set('Access-Control-Allow-Origin', '*');
+        res.set('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+        res.send(response.data);
+    } catch (error) {
+        res.status(404).send('Not Found');
+    }
+});
+
 // --- Error Handling ---
 
 // 404 Handler
