@@ -453,11 +453,10 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
             academicYearId: { $in: matchingYearIds },
-            subjectType: { $in: ["Theory", "THEORY", "Integrated", "INTEGRATED"] },
-            phase: 2
+            subjectType: { $in: ["Theory", "THEORY", "Integrated", "INTEGRATED"] }
         }).populate("branchId", "code");
 
-        // Filter: Group Phase 2 feedback records by course/section
+        // Filter: Group all feedback records by course/section
         const feedbackGroups = {};
         feedbackResults.forEach(res => {
             const subjectKey = (res.subjectCode || res.subjectName || "").trim().toLowerCase();
@@ -478,8 +477,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         Object.values(feedbackGroups).forEach(group => {
             if (group.length === 0) return;
 
-            // Select Phase 2 record
-            const targetRecord = group[0];
+            // Select record with the highest percentage across phases
+            const targetRecord = group.reduce((best, current) => {
+                const bestPct = best.percentage || 0;
+                const currentPct = current.percentage || 0;
+                return (currentPct > bestPct) ? current : best;
+            });
 
             const selectedPercentage = targetRecord.percentage || 0;
 
