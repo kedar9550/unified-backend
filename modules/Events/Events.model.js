@@ -65,11 +65,26 @@ const EventsSchema = new mongoose.Schema({
         required: true,
         min: 1
     },
-    venue: {
+    venueType: {
         type: String,
-        required: true,
+        enum: ['Indoor', 'Outdoor']
+    },
+    building: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Building',
+    },
+    floor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Floor',
+    },
+    ground: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Ground',
+    },
+    roomNo: {
+        type: String,
         trim: true,
-        maxlength: 300
+        default: ''
     },
     extraTeamSize: {
         type: Number,

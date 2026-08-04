@@ -82,21 +82,49 @@ exports.createEvent = async (req, res, next) => {
             eventName,
             price,
             maxTeamSize,
-            venue,
             extraTeamSize,
             extraAmountPerHead,
             overview,
             rules,
             conveners,
+            venueType,
+            building,
+            floor,
+            ground,
+            roomNo,
         } = req.body;
 
         const bannerImage = req.file;
 
-        if (!groupId || !eventName || !overview || !maxTeamSize || !venue) {
+        if (!groupId || !eventName || !overview || !maxTeamSize) {
             if (bannerImage) {
                 fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
             }
-            return res.status(400).json({ message: 'Group, Event Name, Venue, Max Team Size, and Overview are required.' });
+            return res.status(400).json({ message: 'Group, Event Name, Max Team Size, and Overview are required.' });
+        }
+        if (!venueType) {
+            if (bannerImage) {
+                fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
+            }
+            return res.status(400).json({ message: 'Venue Type is required.' });
+        }
+        if (venueType === 'Indoor' && (!building || !floor)) {
+            if (bannerImage) {
+                fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
+            }
+            return res.status(400).json({ message: 'Building and Floor are required for Indoor venues.' });
+        }
+        if (venueType === 'Outdoor' && !ground) {
+            if (bannerImage) {
+                fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
+            }
+            return res.status(400).json({ message: 'Ground is required for Outdoor venues.' });
+        }
+        if (venueType && !roomNo) {
+            if (bannerImage) {
+                fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
+            }
+            return res.status(400).json({ message: 'Room No is required.' });
         }
 
         const group = await Group.findById(groupId).populate('department', 'name');
@@ -134,7 +162,11 @@ exports.createEvent = async (req, res, next) => {
             eventName,
             price: Number(price) || 0,
             maxTeamSize: Number(maxTeamSize),
-            venue,
+            venueType,
+            building: building || undefined,
+            floor: floor || undefined,
+            ground: ground || undefined,
+            roomNo: roomNo || '',
             extraTeamSize: Number(extraTeamSize) || 0,
             extraAmountPerHead: Number(extraAmountPerHead) || 0,
             overview,
@@ -231,6 +263,9 @@ exports.getAllEvents = async (req, res, next) => {
 
         const events = await Events.find(filterQuery)
             .populate('group', 'name department')
+            .populate('building', 'name')
+            .populate('floor', 'name')
+            .populate('ground', 'name')
             .sort({ createdAt: -1 });
         res.status(200).json({ success: true, events });
     } catch (error) {
@@ -240,7 +275,11 @@ exports.getAllEvents = async (req, res, next) => {
 
 exports.getEventById = async (req, res, next) => {
     try {
-        const event = await Events.findById(req.params.id).populate('group', 'name department');
+        const event = await Events.findById(req.params.id)
+            .populate('group', 'name department')
+            .populate('building', 'name')
+            .populate('floor', 'name')
+            .populate('ground', 'name');
         if (!event) return res.status(404).json({ success: false, message: 'Event not found.' });
         res.status(200).json({ success: true, event });
     } catch (error) {
@@ -255,15 +294,31 @@ exports.updateEvent = async (req, res, next) => {
             eventName,
             price,
             maxTeamSize,
-            venue,
             extraTeamSize,
             extraAmountPerHead,
             overview,
             rules,
+            venueType,
+            building,
+            floor,
+            ground,
+            roomNo,
         } = req.body;
 
-        if (!groupId || !eventName || !overview || !maxTeamSize || !venue) {
-            return res.status(400).json({ message: 'Group, Event Name, Venue, Max Team Size, and Overview are required.' });
+        if (!groupId || !eventName || !overview || !maxTeamSize) {
+            return res.status(400).json({ message: 'Group, Event Name, Max Team Size, and Overview are required.' });
+        }
+        if (!venueType) {
+            return res.status(400).json({ message: 'Venue Type is required.' });
+        }
+        if (venueType === 'Indoor' && (!building || !floor)) {
+            return res.status(400).json({ message: 'Building and Floor are required for Indoor venues.' });
+        }
+        if (venueType === 'Outdoor' && !ground) {
+            return res.status(400).json({ message: 'Ground is required for Outdoor venues.' });
+        }
+        if (venueType && !roomNo) {
+            return res.status(400).json({ message: 'Room No is required.' });
         }
 
         const group = await Group.findById(groupId).populate('department', 'name');
@@ -284,7 +339,11 @@ exports.updateEvent = async (req, res, next) => {
             eventName,
             price: Number(price) || 0,
             maxTeamSize: Number(maxTeamSize),
-            venue,
+            venueType,
+            building: building || undefined,
+            floor: floor || undefined,
+            ground: ground || undefined,
+            roomNo: roomNo || '',
             extraTeamSize: Number(extraTeamSize) || 0,
             extraAmountPerHead: Number(extraAmountPerHead) || 0,
             overview,

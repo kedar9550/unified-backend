@@ -142,6 +142,7 @@ app.use('/api/event-assignments', require('./modules/EventAssignment/EventAssign
 app.use('/api/event-groups', require('./modules/EventAssignment/EventGroup.route'));
 app.use('/api/major-events', require('./modules/EventAssignment/MajorEvent.route'));
 app.use('/api/event-students', require('./modules/EventStudents/EventStudent.route'));
+app.use('/api/infrastructure', require('./modules/Infrastructure/Infrastructure.route'));
 
 // payments
 app.use('/api/razorpay', require('./modules/Payments/Payments.route'));

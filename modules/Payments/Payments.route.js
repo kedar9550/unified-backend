@@ -16,6 +16,11 @@ router.post('/verify-payment', paymentsController.verifyPayment);
 
 // Scan participant barcode
 router.post('/scan-barcode', paymentsController.scanBarcode);
+router.post('/scan-accommodation', paymentsController.scanAccommodationBarcode);
+
+// Accommodation Payments
+router.post('/accommodation/create-order', paymentsController.createAccommodationOrder);
+router.post('/accommodation/verify', paymentsController.verifyAccommodationPayment);
 router.put('/update-attendance', paymentsController.updateAttendance);
 
 module.exports = router;

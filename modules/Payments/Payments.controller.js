@@ -495,6 +495,136 @@ exports.scanBarcode = async (req, res) => {
   }
 };
 
+exports.scanAccommodationBarcode = async (req, res) => {
+  try {
+    const { barcode } = req.body;
+    if (!barcode) return res.status(400).json({ error: 'Barcode is required' });
+
+    // Verify ACCOMMODATION_COORDINATOR access
+    const activeRole = req.headers['active-role'];
+    if (activeRole !== 'ACCOMMODATION_COORDINATOR') {
+      return res.status(403).json({ error: 'You are not authorized to scan for accommodation.' });
+    }
+
+    // Find the registration containing this barcode
+    const registration = await PaymentRegistration.findOne({ 'participants.barcode': barcode });
+    
+    if (!registration) {
+      return res.status(404).json({ error: 'Pass not found or invalid barcode.' });
+    }
+
+    // Find the specific participant
+    const participantIndex = registration.participants.findIndex(p => p.barcode === barcode);
+    if (participantIndex === -1) {
+      return res.status(404).json({ error: 'Participant not found in registration.' });
+    }
+    
+    const participant = registration.participants[participantIndex];
+    
+    if (participant.accommodation?.toLowerCase() !== 'yes') {
+      return res.status(400).json({ error: 'This participant has not requested accommodation.', participant, eventName: registration.eventName });
+    }
+
+    if (participant.accommodationCheckedIn) {
+      return res.status(400).json({ error: 'Participant has already been checked into accommodation.', participant, eventName: registration.eventName });
+    }
+
+    if (!participant.accommodationPayment || !participant.accommodationPayment.paid) {
+      return res.json({
+        message: 'Payment required for accommodation.',
+        paymentRequired: true,
+        participant: registration.participants[participantIndex],
+        eventName: registration.eventName
+      });
+    }
+
+    // Mark as checked in since they have already paid
+    registration.participants[participantIndex].accommodationCheckedIn = true;
+    registration.markModified('participants');
+    await registration.save();
+
+    return res.json({
+      message: 'Participant accommodation checked in successfully.',
+      participant: registration.participants[participantIndex],
+      eventName: registration.eventName
+    });
+
+  } catch (err) {
+    console.error('Payments.scanAccommodationBarcode error', err);
+    return res.status(500).json({ error: 'Unable to scan barcode', details: err.message });
+  }
+};
+
+exports.createAccommodationOrder = async (req, res) => {
+  try {
+    const { amount, receipt } = req.body;
+    if (!amount || typeof amount !== 'number' || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
+    
+    // amount should be in paise. For Rs. 2, it is 200.
+    const order = await paymentsService.createOrder({ amount, currency: 'INR', receipt });
+    return res.json({ orderId: order.id, order });
+  } catch (err) {
+    console.error('Payments.createAccommodationOrder error', err);
+    return res.status(500).json({ error: 'Unable to create accommodation order', details: err.message });
+  }
+};
+
+exports.verifyAccommodationPayment = async (req, res) => {
+  try {
+    const { barcode, order_id, payment_id, signature, amount } = req.body;
+
+    if (!order_id || !payment_id || !signature || !barcode) {
+      return res.status(400).json({ error: 'Missing verification fields' });
+    }
+
+    const valid = paymentsService.verifySignature({ order_id, payment_id, signature });
+    if (!valid) return res.status(400).json({ error: 'Invalid signature' });
+
+    let fetchedPayment = null;
+    try {
+      fetchedPayment = await paymentsService.fetchPayment(payment_id);
+    } catch (err) {
+      console.error('Error fetching complete payment details from Razorpay:', err);
+    }
+
+    const actualAmountInPaisa = fetchedPayment ? fetchedPayment.amount : (amount || 200);
+
+    const registration = await PaymentRegistration.findOne({ 'participants.barcode': barcode });
+    if (!registration) {
+      return res.status(404).json({ error: 'Participant registration not found' });
+    }
+
+    const participantIndex = registration.participants.findIndex(p => p.barcode === barcode);
+    if (participantIndex === -1) {
+      return res.status(404).json({ error: 'Participant not found in registration' });
+    }
+
+    // Mark as paid and checked in
+    registration.participants[participantIndex].accommodationPayment = {
+      paid: true,
+      amount: actualAmountInPaisa,
+      razorpayOrderId: order_id,
+      razorpayPaymentId: payment_id,
+      paidAt: new Date()
+    };
+    registration.participants[participantIndex].accommodationCheckedIn = true;
+    
+    registration.markModified('participants');
+    await registration.save();
+
+    return res.json({
+      message: 'Accommodation payment successful and participant checked in.',
+      participant: registration.participants[participantIndex],
+      eventName: registration.eventName
+    });
+  } catch (err) {
+    console.error('Payments.verifyAccommodationPayment error', err);
+    return res.status(500).json({ error: 'Unable to verify accommodation payment', details: err.message });
+  }
+};
+
 exports.updateAttendance = async (req, res) => {
   try {
     const { receipt, roll, barcode, attended } = req.body;

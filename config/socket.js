@@ -19,6 +19,10 @@ module.exports = {
                     const match = cookieHeader.match(/(?:^|;\s*)token=([^;]*)/);
                     if (match) token = match[1];
                 }
+                
+                if (!token && socket.handshake.auth && socket.handshake.auth.token) {
+                    token = socket.handshake.auth.token;
+                }
 
                 if (!token) {
                     return next(new Error("Authentication error: No token provided"));
