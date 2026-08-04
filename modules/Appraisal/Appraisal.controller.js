@@ -555,6 +555,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const journals = await Journal.find({
             academicYear: academicYearId,
             status: "Approved",
+            appraisalEligible: 'Yes',
             $or: [
                 { facultyId },
                 { 'coAuthors.employeeId': faculty.institutionId }
@@ -709,6 +710,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const conferences = await Conference.find({
             academicYear: academicYearId,
             status: "Approved",
+            appraisalEligible: 'Yes',
             $or: [
                 { facultyId },
                 { 'coAuthors.employeeId': faculty.institutionId }

@@ -119,7 +119,8 @@ async function processCSV() {
                         applyingSeedGrant: 'No',
                         certificate: 'placeholder.pdf',
                         proceedings: 'placeholder.pdf',
-                        status: 'Approved'
+                        status: 'Approved',
+                        appraisalEligible: 'Yes'
                     };
 
                     // 5. Save to DB

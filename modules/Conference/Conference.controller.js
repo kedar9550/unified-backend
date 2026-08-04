@@ -267,6 +267,11 @@ exports.rndAction = async (req, res) => {
         const { action, comment, approvedAmount } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
+
+        if (action === 'Approve' && !req.body.appraisalEligible) {
+            return res.status(400).json({ success: false, message: 'Appraisal Eligible is required for approval.' });
+        }
+
         const conference = await Conference.findById(id);
         if (!conference) {
             return res.status(404).json({ success: false, message: 'Conference not found' });
@@ -276,6 +281,9 @@ exports.rndAction = async (req, res) => {
         conference.rndComment = comment;
         if (approvedAmount !== undefined) {
             conference.approvedAmount = approvedAmount;
+        }
+        if (req.body.appraisalEligible !== undefined) {
+            conference.appraisalEligible = req.body.appraisalEligible;
         }
 
         if (status === 'Approved' && (conference.applyIncentive === 'Yes' || conference.applyIncentive === 'yes') && conference.appraisalClaimant) {
