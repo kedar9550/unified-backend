@@ -453,11 +453,10 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const feedbackResults = await FacultyFeedResult.find({
             facultyId: faculty.institutionId,
             academicYearId: { $in: matchingYearIds },
-            subjectType: { $in: ["Theory", "THEORY", "Integrated", "INTEGRATED"] },
-            phase: 2
+            subjectType: { $in: ["Theory", "THEORY", "Integrated", "INTEGRATED"] }
         }).populate("branchId", "code");
 
-        // Filter: Group Phase 2 feedback records by course/section
+        // Filter: Group all feedback records by course/section
         const feedbackGroups = {};
         feedbackResults.forEach(res => {
             const subjectKey = (res.subjectCode || res.subjectName || "").trim().toLowerCase();
@@ -478,8 +477,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         Object.values(feedbackGroups).forEach(group => {
             if (group.length === 0) return;
 
-            // Select Phase 2 record
-            const targetRecord = group[0];
+            // Select record with the highest percentage across phases
+            const targetRecord = group.reduce((best, current) => {
+                const bestPct = best.percentage || 0;
+                const currentPct = current.percentage || 0;
+                return (currentPct > bestPct) ? current : best;
+            });
 
             const selectedPercentage = targetRecord.percentage || 0;
 
@@ -845,22 +848,13 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
             if (claimants.includes(faculty.institutionId)) {
                 claimStatus = "claimed_by_me";
-                const isEligible = isClaimantEligible(n, faculty.institutionId);
-                if (isEligible) {
-                    const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
-                    pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
-                }
             } else {
-                if (!isMultiAUSAuthor) {
-                    claimStatus = "auto_eligible";
-                    if (isClaimantEligible(n, faculty.institutionId)) {
-                        const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
-                        pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
-                    }
-                } else {
-                    claimStatus = "requires_claim_action";
-                    pts = 0;
-                }
+                claimStatus = "auto_eligible";
+            }
+            
+            if (isClaimantEligible(n, faculty.institutionId)) {
+                const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
+                pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
             }
 
             novelItems.push({
@@ -910,31 +904,17 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
             if (claimants.includes(faculty.institutionId)) {
                 claimStatus = "claimed_by_me";
-                const isEligible = isClaimantEligible(p, faculty.institutionId);
-                if (p.applyingSeedGrant !== "Yes" && p.fundingAgencyAditya !== "Yes" && isEligible) {
-                    const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
-                    if (statusKey === 'sanctioned') {
-                        const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
-                        pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-                    } else {
-                        pts = config.research.projectProposalPoints.shortlisted || 5;
-                    }
-                }
             } else {
-                if (!isMultiAUSAuthor) {
-                    claimStatus = "auto_eligible";
-                    if (p.applyingSeedGrant !== "Yes" && p.fundingAgencyAditya !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
-                        const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
-                        if (statusKey === 'sanctioned') {
-                            const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
-                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-                        } else {
-                            pts = config.research.projectProposalPoints.shortlisted || 5;
-                        }
-                    }
+                claimStatus = "auto_eligible";
+            }
+            
+            if (p.applyingSeedGrant !== "Yes" && p.fundingAgencyAditya !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
+                const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
+                if (statusKey === 'sanctioned') {
+                    const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
+                    pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                 } else {
-                    claimStatus = "requires_claim_action";
-                    pts = 0;
+                    pts = config.research.projectProposalPoints.shortlisted || 5;
                 }
             }
 
@@ -965,31 +945,17 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
             if (claimants.includes(faculty.institutionId)) {
                 claimStatus = "claimed_by_me";
-                const isEligible = isClaimantEligible(c, faculty.institutionId);
-                if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isEligible) {
-                    const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
-                    if (statusKey === 'sanctioned') {
-                        const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
-                        pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-                    } else {
-                        pts = config.research.projectProposalPoints.shortlisted || 5;
-                    }
-                }
             } else {
-                if (!isMultiAUSAuthor) {
-                    claimStatus = "auto_eligible";
-                    if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
-                        const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
-                        if (statusKey === 'sanctioned') {
-                            const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
-                            pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-                        } else {
-                            pts = config.research.projectProposalPoints.shortlisted || 5;
-                        }
-                    }
+                claimStatus = "auto_eligible";
+            }
+            
+            if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
+                const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
+                if (statusKey === 'sanctioned') {
+                    const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
+                    pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                 } else {
-                    claimStatus = "requires_claim_action";
-                    pts = 0;
+                    pts = config.research.projectProposalPoints.shortlisted || 5;
                 }
             }
 
