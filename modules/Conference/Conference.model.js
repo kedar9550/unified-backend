@@ -65,6 +65,11 @@ const ConferenceSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    appraisalEligible: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: null
+    },
 
     createdAt: {
         type: Date,
