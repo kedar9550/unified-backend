@@ -12,8 +12,16 @@ const ParticipantSchema = new mongoose.Schema({
   accommodation: { type: String, trim: true },
   department: { type: String, trim: true },
   location: { type: String, trim: true },
+  accommodationPayment: {
+    paid: { type: Boolean, default: false },
+    amount: { type: Number },
+    razorpayOrderId: { type: String },
+    razorpayPaymentId: { type: String },
+    paidAt: { type: Date }
+  },
   barcode: { type: String, trim: true, sparse: true, unique: true },
-  attended: { type: Boolean, default: false }
+  attended: { type: Boolean, default: false },
+  accommodationCheckedIn: { type: Boolean, default: false }
 }, { _id: false });
 
 const PaymentRegistrationSchema = new mongoose.Schema({
