@@ -138,6 +138,7 @@ app.use('/api/groups', require('./modules/Group/Group.route'));
 app.use('/api/event-departments', require('./modules/EventDepartment/EventDepartment.route'));
 // app.use('/api/eventdepartments', require('./modules/EventDepartment/EventDepartment.route'));
 // app.use('/api/departments', require('./modules/EventDepartment/EventDepartment.route'));
+app.use('/api/organisation-committee', require('./modules/OrganisationCommittee/OrganisationCommittee.route'));
 app.use('/api/event-assignments', require('./modules/EventAssignment/EventAssignment.route'));
 app.use('/api/event-groups', require('./modules/EventAssignment/EventGroup.route'));
 app.use('/api/major-events', require('./modules/EventAssignment/MajorEvent.route'));
