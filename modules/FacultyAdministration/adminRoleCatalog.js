@@ -49,7 +49,7 @@ const POINTS_TABLE = {
     other: { Central: 10, Dept: 5 }
 };
 
-const ASSIGNED_BY_OPTIONS = ["Registrar", "HOD", "Others"];
+const ASSIGNED_BY_OPTIONS = ["Pro Chancellor", "Deputy Pro Chancellor", "Vice Chancellor", "Registrar", "HOD", "Others"];
 
 module.exports = {
     ADMIN_ROLE_CATALOG,
