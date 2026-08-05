@@ -11,7 +11,7 @@ const { protect } = require('../../middlewares/authMiddleware');
 router
     .route('/')
     .post(protect, createCommitteeMember)
-    .get(protect, getCommitteeMembers);
+    .get(getCommitteeMembers);
 
 router
     .route('/:id')

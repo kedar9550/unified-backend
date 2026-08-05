@@ -156,9 +156,30 @@ exports.getAllGroups = async (req, res, next) => {
             }
         }
 
-        const groups = await Group.find(filterQuery)
+        const groupsData = await Group.find(filterQuery)
             .populate('department', 'name status')
             .sort({ createdAt: -1 });
+
+        // Populate phone numbers from Employee model
+        let groups = JSON.parse(JSON.stringify(groupsData));
+        const empIds = groups
+            .filter(g => g.eventCoordinator && g.eventCoordinator.employeeId)
+            .map(g => g.eventCoordinator.employeeId);
+
+        if (empIds.length > 0) {
+            const employees = await Employee.find({ institutionId: { $in: empIds } }).select('institutionId phone mobile');
+            const empMap = {};
+            employees.forEach(emp => {
+                empMap[emp.institutionId] = emp.phone || emp.mobile || 'N/A';
+            });
+
+            groups.forEach(g => {
+                if (g.eventCoordinator && g.eventCoordinator.employeeId) {
+                    g.eventCoordinator.phone = empMap[g.eventCoordinator.employeeId] || 'N/A';
+                }
+            });
+        }
+
         return res.status(200).json({ success: true, groups });
     } catch (error) {
         next(error);
