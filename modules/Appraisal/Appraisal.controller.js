@@ -1515,8 +1515,8 @@ exports.submitAppraisal = async (req, res) => {
 exports.getPendingHODAppraisals = async (req, res) => {
     try {
         const Employee = require("../employee/employee.model");
-        const { calculateTScore, calculateRScore, calculateVScore } = require("../../utils/appraisalCalculations");
         const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
+        const { getHODDepartments } = require("../../utils/hodHelper");
 
         const deptIds = await getHODDepartments(req.user);
 
