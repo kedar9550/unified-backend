@@ -125,7 +125,8 @@ async function processCSV() {
                         applyIncentive: 'No',
                         publishedPaper: 'placeholder.pdf',
                         referencePages: 'placeholder.pdf',
-                        status: 'Approved'
+                        status: 'Approved',
+                        appraisalEligible: 'Yes'
                     };
 
                     // 5. Save to DB

@@ -312,6 +312,10 @@ exports.rndAction = async (req, res) => {
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
         const finalJcrImpactFactor = req.body.jcrImpactFactor !== undefined ? req.body.jcrImpactFactor : req.body.impactFactor;
 
+        if (action === 'Approve' && !req.body.appraisalEligible) {
+            return res.status(400).json({ success: false, message: 'Appraisal Eligible is required for approval.' });
+        }
+
         const journal = await Journal.findById(id);
         if (!journal) {
             return res.status(404).json({ success: false, message: 'Journal not found' });
@@ -325,6 +329,7 @@ exports.rndAction = async (req, res) => {
         if (req.body.citations !== undefined) journal.citations = req.body.citations;
         if (req.body.journalQuartile !== undefined) journal.journalQuartile = req.body.journalQuartile;
         if (req.body.journalType !== undefined) journal.journalType = req.body.journalType;
+        if (req.body.appraisalEligible !== undefined) journal.appraisalEligible = req.body.appraisalEligible;
 
         if (status === 'Approved' && (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') && journal.appraisalClaimant) {
             journal.incentiveClaimant = journal.appraisalClaimant;

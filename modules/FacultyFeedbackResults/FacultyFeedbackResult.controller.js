@@ -52,8 +52,6 @@ const uploadCSV = async (req, res) => {
             "section",
             "phase",
             "semester_or_year",
-            "totalstudents",
-            "givenstudents",
             "percentage"
         ];
 
@@ -120,15 +118,17 @@ const uploadCSV = async (req, res) => {
                 if (semester_or_year === undefined || semester_or_year === "") throw new Error("Semester/Year is missing");
                 if (phase === undefined || phase === "") throw new Error("Phase is missing");
 
-                const total = Number(totalstudents);
-                const given = Number(givenstudents);
                 const perc = Number(percentage);
                 const phs = Number(phase);
 
-                if (isNaN(total)) throw new Error(`Invalid totalStudents count: ${totalstudents}`);
-                if (isNaN(given)) throw new Error(`Invalid givenStudents count: ${givenstudents}`);
                 if (isNaN(perc)) throw new Error(`Invalid percentage: ${percentage}`);
                 if (isNaN(phs) || (phs !== 1 && phs !== 2)) throw new Error(`Invalid phase '${phase}' (must be 1 or 2)`);
+
+                const total = (totalstudents !== undefined && totalstudents !== "") ? Number(totalstudents) : null;
+                const given = (givenstudents !== undefined && givenstudents !== "") ? Number(givenstudents) : null;
+
+                if (total !== null && isNaN(total)) throw new Error(`Invalid totalStudents count: ${totalstudents}`);
+                if (given !== null && isNaN(given)) throw new Error(`Invalid givenStudents count: ${givenstudents}`);
 
                 // Resolve Program
                 let programDoc = programCache[programName];
