@@ -56,7 +56,7 @@ router.post(
     groupController.createGroup
 );
 
-router.get('/', protect, groupController.getAllGroups);
+router.get('/', groupController.getAllGroups);
 
 router.get('/:id', protect, groupController.getGroupById);
 
