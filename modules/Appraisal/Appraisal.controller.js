@@ -431,7 +431,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 totalPPClaimed += ppPoints;
 
                 // CO points
-                const reached = res.noOfCosAttained || 0;
+                let reached = res.noOfCosAttained || 0;
+                if (reached > 5) reached = 5;
                 const coPointsMap = config.teaching.coAttainmentPoints || DEFAULT_CONFIG.teaching.coAttainmentPoints;
                 const coPoints = coPointsMap[reached] || 0;
 
@@ -725,8 +726,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 continue;
             }
 
+            const ausAuthors = (b.authors || []).filter(a => a.employeeId);
+            const isSingleAUSAuthor = ausAuthors.length === 0;
+
             let pts = 0;
-            if (b.appraisalClaimant === faculty.institutionId) {
+            if (b.appraisalClaimant === faculty.institutionId || (!b.appraisalClaimant && isSingleAUSAuthor)) {
                 pts = config.research.bookConferencePoints.isbnBook || 10;
             }
             const isbn = b.isbn || b.isbnNumber || null;
@@ -746,9 +750,15 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 continue;
             }
 
+            const ausCoAuthors = (c.coAuthors || []).filter(co =>
+                (co.employeeId && co.employeeId !== '') ||
+                (co.affiliation && co.affiliation.toLowerCase().includes('aditya'))
+            );
+            const isSingleAUSAuthor = ausCoAuthors.length === 0;
+
             let pts = 0;
             const isbn = c.isbnNumber || null;
-            if (c.appraisalClaimant === faculty.institutionId && isbn) {
+            if ((c.appraisalClaimant === faculty.institutionId || (!c.appraisalClaimant && isSingleAUSAuthor)) && isbn) {
                 pts = config.research.bookConferencePoints.isbnBookChapter || 5;
             }
             bookChapterItems.push({
@@ -767,8 +777,14 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 continue;
             }
 
+            const ausCoAuthors = (c.coAuthors || []).filter(co =>
+                (co.employeeId && co.employeeId !== '') ||
+                (co.affiliation && co.affiliation.toLowerCase().includes('aditya'))
+            );
+            const isSingleAUSAuthor = ausCoAuthors.length === 0;
+
             let pts = 0;
-            if (c.appraisalClaimant === faculty.institutionId) {
+            if (c.appraisalClaimant === faculty.institutionId || (!c.appraisalClaimant && isSingleAUSAuthor)) {
                 pts = config.research.bookConferencePoints.scopusConference || 5;
             }
             const issn = c.issnIsbn || null;
@@ -806,8 +822,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 return; // skip
             }
 
+            const ausCoInventors = (p.coInventors || []).filter(c => c.employeeId);
+            const isSingleAUSAuthor = ausCoInventors.length === 0;
+
             let pts = 0;
-            if (p.appraisalClaimant === faculty.institutionId) {
+            if (p.appraisalClaimant === faculty.institutionId || (!p.appraisalClaimant && isSingleAUSAuthor)) {
                 const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
                 if (statusKey === 'published' || statusKey === 'granted') {
                     pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
