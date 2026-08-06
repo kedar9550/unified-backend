@@ -262,7 +262,7 @@ exports.getAllEvents = async (req, res, next) => {
         }
 
         const events = await Events.find(filterQuery)
-            .populate('group', 'name department')
+            .populate('group', 'name department eventCoordinator')
             .populate('building', 'name')
             .populate('floor', 'name')
             .populate('ground', 'name')
@@ -276,7 +276,7 @@ exports.getAllEvents = async (req, res, next) => {
 exports.getEventById = async (req, res, next) => {
     try {
         const event = await Events.findById(req.params.id)
-            .populate('group', 'name department')
+            .populate('group', 'name department eventCoordinator')
             .populate('building', 'name')
             .populate('floor', 'name')
             .populate('ground', 'name');

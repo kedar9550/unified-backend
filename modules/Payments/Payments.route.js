@@ -22,5 +22,6 @@ router.post('/scan-accommodation', paymentsController.scanAccommodationBarcode);
 router.post('/accommodation/create-order', paymentsController.createAccommodationOrder);
 router.post('/accommodation/verify', paymentsController.verifyAccommodationPayment);
 router.put('/update-attendance', paymentsController.updateAttendance);
+router.put('/registrations/:id/winner', paymentsController.updateWinnerStatus);
 
 module.exports = router;
