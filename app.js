@@ -79,6 +79,24 @@ app.use(mongoSanitize);
 // --- Static Files (Profile Images) ---
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// --- Image Proxy (For PDF Generation) ---
+app.get('/api/proxy/image', async (req, res) => {
+    try {
+        const url = req.query.url;
+        if (!url) return res.status(400).send('URL is required');
+        const response = await fetch(url);
+        if (!response.ok) return res.status(response.status).send('Failed to fetch image');
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        res.set('Content-Type', response.headers.get('content-type'));
+        res.set('Access-Control-Allow-Origin', '*');
+        res.send(buffer);
+    } catch (err) {
+        console.error('Image proxy error:', err);
+        res.status(500).send('Error fetching image');
+    }
+});
+
 // --- Routes ---
 
 // Health Check Route

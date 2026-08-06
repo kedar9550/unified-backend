@@ -32,24 +32,24 @@ exports.getRegistrations = async (req, res) => {
           if (empId) {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
-            
+
             const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
 
             const myEvents = await Events.find({
-                $or: [
-                    { 'conveners.employeeId': empId },
-                    { 'facultyCoordinators.employeeId': empId },
-                    { 'facultyCoordinator.employeeId': empId }
-                ]
+              $or: [
+                { 'conveners.employeeId': empId },
+                { 'facultyCoordinators.employeeId': empId },
+                { 'facultyCoordinator.employeeId': empId }
+              ]
             }).select('eventName');
             const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
 
             query.$or = [
-                { schoolId: { $in: myGroupNames } },
-                { eventName: { $in: myEventNames } }
+              { schoolId: { $in: myGroupNames } },
+              { eventName: { $in: myEventNames } }
             ];
-        }
+          }
         } catch (err) {
           console.error('Error decoding token for EVENT_COORDINATOR filter', err);
         }
@@ -103,6 +103,7 @@ exports.verifyPayment = async (req, res) => {
       amountInRupees,
       amountRupees,
       currency = 'INR',
+      teamId,
       teamSize,
       participants,
       receipt,
@@ -130,7 +131,7 @@ exports.verifyPayment = async (req, res) => {
     const parsedAmountInRupees = fetchedPayment ? fetchedPayment.amount / 100 : Number(
       amountRupees ?? amountInRupees ?? (parsedAmountInPaisa > 0 ? parsedAmountInPaisa / 100 : amount ?? 0)
     );
-    
+
     const amountValue = Number.isFinite(parsedAmountInRupees) && parsedAmountInRupees > 0
       ? parsedAmountInRupees
       : Number(parsedAmountInPaisa > 0 ? parsedAmountInPaisa / 100 : amount ?? 0);
@@ -147,6 +148,7 @@ exports.verifyPayment = async (req, res) => {
       amount: amountValue,
       amountRupees: amountValue,
       currency,
+      teamId: teamId || '',
       teamSize: Number(teamSize) || 1,
       participants: (Array.isArray(participants) ? participants : []).map(p => ({
         ...p,
@@ -158,8 +160,8 @@ exports.verifyPayment = async (req, res) => {
       razorpaySignature: signature,
       paymentStatus: 'PAID',
       verified: true,
-      rawPaymentData: fetchedPayment 
-        ? { ...(rawPaymentData || req.body), razorpayCompleteResponse: fetchedPayment } 
+      rawPaymentData: fetchedPayment
+        ? { ...(rawPaymentData || req.body), razorpayCompleteResponse: fetchedPayment }
         : (rawPaymentData || req.body),
     });
 
@@ -189,35 +191,35 @@ exports.getDashboardStats = async (req, res) => {
   try {
     let query = {};
     const activeRole = req.headers['active-role'];
-    
-    if (activeRole === 'EVENT_COORDINATOR') {
+
+    if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
       const jwt = require('jsonwebtoken');
       const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
-      
+
       if (token) {
         try {
           const decoded = jwt.verify(token, process.env.JWT_SECRET);
           const empId = decoded.institutionId;
-          
+
           if (empId) {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
-            
+
             const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
 
             const myEvents = await Events.find({
-                $or: [
-                    { 'conveners.employeeId': empId },
-                    { 'facultyCoordinators.employeeId': empId },
-                    { 'facultyCoordinator.employeeId': empId }
-                ]
+              $or: [
+                { 'conveners.employeeId': empId },
+                { 'facultyCoordinators.employeeId': empId },
+                { 'facultyCoordinator.employeeId': empId }
+              ]
             }).select('eventName');
             const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
 
             query.$or = [
-                { schoolId: { $in: myGroupNames } },
-                { eventName: { $in: myEventNames } }
+              { schoolId: { $in: myGroupNames } },
+              { eventName: { $in: myEventNames } }
             ];
           }
         } catch (err) {
@@ -362,8 +364,8 @@ exports.getDashboardStats = async (req, res) => {
       const dateKey = p.paidAt
         ? new Date(p.paidAt).toISOString().slice(0, 10)
         : p.createdAt
-        ? new Date(p.createdAt).toISOString().slice(0, 10)
-        : null;
+          ? new Date(p.createdAt).toISOString().slice(0, 10)
+          : null;
       if (dateKey) {
         if (!dailyRevenueMap[dateKey]) dailyRevenueMap[dateKey] = 0;
         dailyRevenueMap[dateKey] += amount;
@@ -417,7 +419,7 @@ exports.scanBarcode = async (req, res) => {
 
     // Find the registration containing this barcode
     const registration = await PaymentRegistration.findOne({ 'participants.barcode': barcode });
-    
+
     if (!registration) {
       return res.status(404).json({ error: 'Pass not found or invalid barcode.' });
     }
@@ -435,16 +437,16 @@ exports.scanBarcode = async (req, res) => {
           if (empId) {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
-            
+
             const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => g.name.toLowerCase());
 
             const myEvents = await Events.find({
-                $or: [
-                    { 'conveners.employeeId': empId },
-                    { 'facultyCoordinators.employeeId': empId },
-                    { 'facultyCoordinator.employeeId': empId }
-                ]
+              $or: [
+                { 'conveners.employeeId': empId },
+                { 'facultyCoordinators.employeeId': empId },
+                { 'facultyCoordinator.employeeId': empId }
+              ]
             }).select('eventName');
             const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
 
@@ -459,7 +461,7 @@ exports.scanBarcode = async (req, res) => {
           console.error('Error decoding token for scanBarcode', err);
         }
       }
-      
+
       if (!authorized) {
         return res.status(403).json({ error: 'You are not authorized to scan passes for this event.' });
       }
@@ -470,9 +472,9 @@ exports.scanBarcode = async (req, res) => {
     if (participantIndex === -1) {
       return res.status(404).json({ error: 'Participant not found in registration.' });
     }
-    
+
     const participant = registration.participants[participantIndex];
-    
+
     if (participant.attended) {
       return res.status(400).json({ error: 'Participant has already been marked as attended.', participant, eventName: registration.eventName });
     }
@@ -508,7 +510,7 @@ exports.scanAccommodationBarcode = async (req, res) => {
 
     // Find the registration containing this barcode
     const registration = await PaymentRegistration.findOne({ 'participants.barcode': barcode });
-    
+
     if (!registration) {
       return res.status(404).json({ error: 'Pass not found or invalid barcode.' });
     }
@@ -518,9 +520,9 @@ exports.scanAccommodationBarcode = async (req, res) => {
     if (participantIndex === -1) {
       return res.status(404).json({ error: 'Participant not found in registration.' });
     }
-    
+
     const participant = registration.participants[participantIndex];
-    
+
     if (participant.accommodation?.toLowerCase() !== 'yes') {
       return res.status(400).json({ error: 'This participant has not requested accommodation.', participant, eventName: registration.eventName });
     }
@@ -561,7 +563,7 @@ exports.createAccommodationOrder = async (req, res) => {
     if (!amount || typeof amount !== 'number' || amount <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
-    
+
     // amount should be in paise. For Rs. 2, it is 200.
     const order = await paymentsService.createOrder({ amount, currency: 'INR', receipt });
     return res.json({ orderId: order.id, order });
@@ -610,7 +612,7 @@ exports.verifyAccommodationPayment = async (req, res) => {
       paidAt: new Date()
     };
     registration.participants[participantIndex].accommodationCheckedIn = true;
-    
+
     registration.markModified('participants');
     await registration.save();
 
@@ -628,15 +630,15 @@ exports.verifyAccommodationPayment = async (req, res) => {
 exports.updateAttendance = async (req, res) => {
   try {
     const { receipt, roll, barcode, attended } = req.body;
-    
+
     if (typeof attended !== 'boolean') {
       return res.status(400).json({ error: 'Attended status must be a boolean.' });
     }
-    
+
     // Find registration using receipt and matching either roll or barcode
     let query = {};
     if (receipt) query.receipt = receipt;
-    
+
     // Fallback if receipt is missing, we must have roll or barcode
     if (!receipt && !roll && !barcode) {
       return res.status(400).json({ error: 'Missing identification fields.' });
@@ -669,16 +671,16 @@ exports.updateAttendance = async (req, res) => {
           if (empId) {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
-            
+
             const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => g.name.toLowerCase());
 
             const myEvents = await Events.find({
-                $or: [
-                    { 'conveners.employeeId': empId },
-                    { 'facultyCoordinators.employeeId': empId },
-                    { 'facultyCoordinator.employeeId': empId }
-                ]
+              $or: [
+                { 'conveners.employeeId': empId },
+                { 'facultyCoordinators.employeeId': empId },
+                { 'facultyCoordinator.employeeId': empId }
+              ]
             }).select('eventName');
             const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
 
@@ -693,7 +695,7 @@ exports.updateAttendance = async (req, res) => {
           console.error('Error decoding token for updateAttendance', err);
         }
       }
-      
+
       if (!authorized) {
         return res.status(403).json({ error: 'You are not authorized to update passes for this event.' });
       }
@@ -721,5 +723,49 @@ exports.updateAttendance = async (req, res) => {
   } catch (err) {
     console.error('Payments.updateAttendance error', err);
     return res.status(500).json({ error: 'Unable to update attendance', details: err.message });
+  }
+};
+
+exports.updateWinnerStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { prizeType, status } = req.body;
+
+    if (typeof status !== 'boolean') {
+      return res.status(400).json({ error: 'status must be a boolean.' });
+    }
+
+    if (!['first', 'second', 'third'].includes(prizeType)) {
+      return res.status(400).json({ error: 'Invalid prize type.' });
+    }
+
+    const registration = await PaymentRegistration.findById(id);
+    if (!registration) {
+      return res.status(404).json({ error: 'Registration not found.' });
+    }
+
+    if (status === true) {
+      // Mutual exclusivity: if setting one to true, others become false
+      registration.isFirstWinner = prizeType === 'first';
+      registration.isSecondWinner = prizeType === 'second';
+      registration.isThirdWinner = prizeType === 'third';
+    } else {
+      // Just toggle the specific one off
+      if (prizeType === 'first') registration.isFirstWinner = false;
+      if (prizeType === 'second') registration.isSecondWinner = false;
+      if (prizeType === 'third') registration.isThirdWinner = false;
+    }
+
+    await registration.save();
+
+    return res.json({
+      message: 'Winner status updated successfully.',
+      isFirstWinner: registration.isFirstWinner,
+      isSecondWinner: registration.isSecondWinner,
+      isThirdWinner: registration.isThirdWinner,
+    });
+  } catch (err) {
+    console.error('Payments.updateWinnerStatus error', err);
+    return res.status(500).json({ error: 'Unable to update winner status', details: err.message });
   }
 };
