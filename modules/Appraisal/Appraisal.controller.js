@@ -1475,21 +1475,9 @@ exports.submitAppraisal = async (req, res) => {
             return cat === 12 && Number(c.courseHours) >= 40;
         });
 
-        if (!hasValidFdp && !hasValidCoursera40Hours) {
-            return res.status(400).json({
-                success: false,
-                message: "Appraisal submission blocked: Faculty must satisfy the FDP (at least 5 days from allowed organizers) / Coursera (at least 40 Hours) requirement."
-            });
-        }
-
         // Validate Condition 2: Metric 2.1 Score
         const metric21Score = appraisal.research?.papers?.totalClaimed || 0;
-        if (metric21Score < minMetric21) {
-            return res.status(400).json({
-                success: false,
-                message: `Appraisal submission blocked: Minimum Metric 2.1 (Paper Publication) score of ${minMetric21} is required (Current: ${metric21Score}).`
-            });
-        }
+        // Validation removed as per new update (No gating for submission)
 
         // Update all Draft entries for ResourceUtilization and Contribution to Pending at HOD
         await ResourceUtilization.updateMany(
