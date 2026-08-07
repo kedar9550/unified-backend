@@ -1436,6 +1436,7 @@ exports.submitAppraisal = async (req, res) => {
             return res.status(400).json({ success: false, message: "Your Parent Department is not set. Please contact the Administrator to assign it before submitting your appraisal." });
         }
 
+
         // Determine thresholds based on category
         const doc = (faculty.doctorate || "").toLowerCase().trim();
         const lead = (faculty.leadership || "").toLowerCase().trim();
