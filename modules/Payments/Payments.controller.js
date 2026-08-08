@@ -18,8 +18,13 @@ exports.createOrder = async (req, res) => {
 
 exports.getRegistrations = async (req, res) => {
   try {
-    const { email, roll } = req.query;
+    const { email, roll, teamId } = req.query;
     let query = {};
+
+    if (teamId && teamId.trim()) {
+      const cleanTeamId = teamId.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.teamId = { $regex: new RegExp(`^${cleanTeamId}$`, 'i') };
+    }
 
     const activeRole = req.headers['active-role'];
     if (activeRole === 'EVENT_COORDINATOR') {
@@ -167,6 +172,29 @@ exports.verifyPayment = async (req, res) => {
 
     await registration.save();
 
+    // Send invoice email asynchronously
+    try {
+      const eventsController = require('../Events/Events.controller');
+      const emailPayload = {
+        email: (Array.isArray(participants) && participants[0]?.email) ? participants[0].email : '',
+        invoiceId: `INV/${new Date().getFullYear()}/${registration._id.toString().substring(18)}`.toUpperCase(),
+        invoiceDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+        eventName: eventName || '',
+        teamSize: Number(teamSize) || 1,
+        amountPaid: amountValue,
+        participants: Array.isArray(participants) ? participants : [],
+      };
+      
+      if (emailPayload.email) {
+        // Send email in the background to not block the response
+        eventsController.sendInvoiceMailInternal(emailPayload).catch(e => {
+          console.error('Background invoice email failed:', e);
+        });
+      }
+    } catch (mailErr) {
+      console.error('Failed to initiate invoice mail after payment', mailErr);
+    }
+
     return res.status(201).json({ ok: true, registrationId: registration._id });
   } catch (err) {
     console.error('Payments.verifyPayment error', err);
@@ -309,13 +337,19 @@ exports.getDashboardStats = async (req, res) => {
       revenue: Math.round(d.revenue * 100) / 100,
     }));
 
-    // ─── Gender stats ─────────────────────────────────────
+    // ─── Gender & Attendance stats ─────────────────────────
     const genderMap = { male: 0, female: 0, others: 0 };
+    let totalAttended = 0;
+    let accommodationCheckedInCount = 0;
+    
     participants.forEach((p) => {
       const g = (p.gender || '').toLowerCase();
       if (g === 'male') genderMap.male++;
       else if (g === 'female') genderMap.female++;
       else genderMap.others++;
+      
+      if (p.attended) totalAttended++;
+      if (p.accommodationCheckedIn) accommodationCheckedInCount++;
     });
 
     // ─── Campus-wise gender ───────────────────────────────
@@ -390,6 +424,7 @@ exports.getDashboardStats = async (req, res) => {
     return res.json({
       totalTeams,
       totalStudents,
+      totalAttended,
       yearCounts,
       campusWise: campusMap,
       departmentStats,
@@ -398,6 +433,7 @@ exports.getDashboardStats = async (req, res) => {
       accommodation: {
         yes: accommodationYes,
         no: accommodationNo,
+        checkedIn: accommodationCheckedInCount,
         genderBreakdown: accommGender,
       },
       revenue: {

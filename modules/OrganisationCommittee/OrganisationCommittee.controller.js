@@ -1,30 +1,46 @@
 const OrganisationCommittee = require('./OrganisationCommittee.model');
+const Studentdata = require('../StudentData/Studentdata.model');
 
 exports.createCommitteeMember = async (req, res, next) => {
     try {
-        const { employee, role, status } = req.body;
+        const { employee, rollNo, role, status } = req.body;
 
-        if (!employee || !role) {
-            return res.status(400).json({ success: false, message: 'Please provide employee and role' });
+        if (!role) {
+            return res.status(400).json({ success: false, message: 'Please provide role' });
         }
 
-        // Check if the employee already has this role
-        const existing = await OrganisationCommittee.findOne({ employee, role });
-        if (existing) {
-            return res.status(400).json({ success: false, message: 'This employee is already assigned to this role' });
+        let employeeId = employee;
+
+        if (role === 'Student Coordinator') {
+            if (!rollNo) {
+                return res.status(400).json({ success: false, message: 'Please provide rollNo for Student Coordinator' });
+            }
+            const existing = await OrganisationCommittee.findOne({ rollNo: rollNo.toUpperCase(), role });
+            if (existing) {
+                return res.status(400).json({ success: false, message: 'This student is already assigned to this role' });
+            }
+        } else {
+            if (!employee) {
+                return res.status(400).json({ success: false, message: 'Please provide employee for this role' });
+            }
+            const existing = await OrganisationCommittee.findOne({ employee, role });
+            if (existing) {
+                return res.status(400).json({ success: false, message: 'This employee is already assigned to this role' });
+            }
         }
 
         const userId = req.user ? (req.user._id || req.user.userId) : null;
 
         const member = await OrganisationCommittee.create({
-            employee,
+            ...(employeeId && { employee: employeeId }),
+            ...(rollNo && { rollNo: rollNo.toUpperCase() }),
             role,
             status,
             createdBy: userId
         });
 
-        // Populate employee details for response
-        const populatedMember = await OrganisationCommittee.findById(member._id).populate('employee', 'name employeeName employeeCode email phone department designation institutionId');
+        const populatedMember = await OrganisationCommittee.findById(member._id)
+            .populate('employee', 'name employeeName employeeCode email phone department designation institutionId');
 
         res.status(201).json({
             success: true,
@@ -44,9 +60,28 @@ exports.getCommitteeMembers = async (req, res, next) => {
             query.role = role;
         }
 
-        const members = await OrganisationCommittee.find(query)
+        let members = await OrganisationCommittee.find(query)
             .populate('employee', 'name employeeName employeeCode email phone department designation institutionId')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const axios = require('axios');
+        
+        for (let member of members) {
+            if (member.role === 'Student Coordinator' && member.rollNo) {
+                try {
+                    const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/studentdata/${member.rollNo.toUpperCase()}`);
+                    if (response.data && response.data.length > 0) {
+                        const studentData = response.data[0];
+                        member.studentName = studentData.studentname;
+                        member.mobileNumber = studentData.mobilenumber;
+                        member.branch = studentData.branch;
+                    }
+                } catch (e) {
+                    console.error("Failed to fetch student from external API", e.message);
+                }
+            }
+        }
 
         res.status(200).json({
             success: true,
@@ -60,7 +95,7 @@ exports.getCommitteeMembers = async (req, res, next) => {
 
 exports.updateCommitteeMember = async (req, res, next) => {
     try {
-        const { status, employee } = req.body;
+        const { status, employee, rollNo } = req.body;
 
         let member = await OrganisationCommittee.findById(req.params.id);
 
@@ -68,19 +103,32 @@ exports.updateCommitteeMember = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Committee member not found' });
         }
 
-        // Check if employee is being changed and if it already exists for this role
-        if (employee && employee !== member.employee.toString()) {
-            const existing = await OrganisationCommittee.findOne({ employee, role: member.role });
-            if (existing) {
-                return res.status(400).json({ success: false, message: 'This employee is already assigned to this role' });
+        let updateData = { status };
+
+        if (member.role === 'Student Coordinator') {
+            if (rollNo && rollNo.toUpperCase() !== member.rollNo) {
+                const existing = await OrganisationCommittee.findOne({ rollNo: rollNo.toUpperCase(), role: member.role });
+                if (existing) {
+                    return res.status(400).json({ success: false, message: 'This student is already assigned to this role' });
+                }
+                updateData.rollNo = rollNo.toUpperCase();
+            }
+        } else {
+            if (employee && employee !== member.employee?.toString()) {
+                const existing = await OrganisationCommittee.findOne({ employee, role: member.role });
+                if (existing) {
+                    return res.status(400).json({ success: false, message: 'This employee is already assigned to this role' });
+                }
+                updateData.employee = employee;
             }
         }
 
         member = await OrganisationCommittee.findByIdAndUpdate(
             req.params.id,
-            { status, ...(employee && { employee }) },
+            updateData,
             { new: true, runValidators: true }
-        ).populate('employee', 'name employeeName employeeCode email phone department designation institutionId');
+        )
+        .populate('employee', 'name employeeName employeeCode email phone department designation institutionId');
 
         res.status(200).json({
             success: true,
