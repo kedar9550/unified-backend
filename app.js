@@ -162,9 +162,12 @@ app.use('/api/event-groups', require('./modules/EventAssignment/EventGroup.route
 app.use('/api/major-events', require('./modules/EventAssignment/MajorEvent.route'));
 app.use('/api/event-students', require('./modules/EventStudents/EventStudent.route'));
 app.use('/api/infrastructure', require('./modules/Infrastructure/Infrastructure.route'));
+app.use('/api/inquiry', require('./modules/Inquiry/Inquiry.route'));
+app.use('/api/contact', require('./modules/Inquiry/Inquiry.route'));
 
 // payments
 app.use('/api/razorpay', require('./modules/Payments/Payments.route'));
+app.use('/api/payments', require('./modules/Payments/Payments.route'));
 
 // Proxy for Student Photos to fix CORS in PDF Generation
 app.get('/api/proxy/student-photo/:roll', async (req, res) => {
