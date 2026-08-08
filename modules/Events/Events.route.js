@@ -4,6 +4,7 @@ const { protect, authorize } = require('../../middlewares/authMiddleware');
 const eventsController = require('./Events.controller');
 
 // --- Routes ---
+router.post('/send-invoice', protect, authorize('STUDENT_EVENT_ADMIN'), eventsController.sendInvoiceMail);
 router.post('/', protect, authorize('STUDENT_EVENT_ADMIN'), eventsController.createEvent);
 router.get('/', eventsController.getAllEvents);
 router.get('/:id', protect, eventsController.getEventById);

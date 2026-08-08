@@ -4,11 +4,15 @@ const OrganisationCommitteeSchema = new mongoose.Schema({
     employee: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',
-        required: [true, 'Employee is required']
+        required: function() { return this.role !== 'Student Coordinator'; }
+    },
+    rollNo: {
+        type: String,
+        required: function() { return this.role === 'Student Coordinator'; }
     },
     role: {
         type: String,
-        enum: ['Convener', 'Co-convener'],
+        enum: ['Convener', 'Co-convener', 'Student Coordinator'],
         required: [true, 'Role is required']
     },
     status: {
