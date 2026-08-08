@@ -2484,6 +2484,11 @@ exports.getAllAppraisals = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
+            .populate('valueAddition.resourceUtilization.items.eventId')
+            .populate({
+                path: 'valueAddition.expertiseContribution.items.contributionId',
+                populate: { path: 'category' }
+            })
             .sort({ updatedAt: -1 });
 
         res.json({
