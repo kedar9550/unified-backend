@@ -18,6 +18,106 @@ const getFacultyCategoryHelper = (fac) => {
     if (qual.includes("phd") || qual.includes("ph.d") || doct === "yes" || doct === "true") return "Doctorate Faculty";
     return "Non-Doctorate Faculty";
 };
+
+const attachEligibilityInfo = (appraisalObj, config) => {
+    if (!appraisalObj || !appraisalObj.facultyId) {
+        if (appraisalObj) appraisalObj.eligibility = { type: 'N/A', mins: {}, status: 'Unfulfilled' };
+        return appraisalObj;
+    }
+
+    const type = getFacultyCategoryHelper(appraisalObj.facultyId);
+    let mins = {};
+    if (config && config.minimumPoints && config.minimumPoints[type]) {
+        mins = config.minimumPoints[type];
+    }
+    const minPoints = mins.total || 0;
+
+    const allowedOrg = [
+        "ugc", "aicte", "iit", "iim", "nit", "mhrd r&d lab", "mhrd r&d labs",
+        "nitttr", "niper", "icmr", "nirf ranked institute (below 200)",
+        "nirf ranked institute (below rank 200)", "govt. university", "government university", "nptel"
+    ];
+
+    let hasFDP = false;
+
+    // 1. Check FDP in Resource Utilization (3.1)
+    if (appraisalObj.valueAddition && Array.isArray(appraisalObj.valueAddition.resourceUtilization?.items)) {
+        for (const item of appraisalObj.valueAddition.resourceUtilization.items) {
+            const event = item.eventId;
+            if (event && event.status !== "Rejected") {
+                const cat = (event.activityCategory || '').toLowerCase().trim();
+                const evType = (event.activityType || '').toLowerCase().trim();
+                const org = (event.organizingInstitutionCategory || '').toLowerCase().trim();
+                const days = Number(event.numberOfDaysParticipated) || Number(event.daysParticipated) || Number(event.duration) || 0;
+
+                if (cat === 'fdp' && evType === 'fdp participant' && days >= 5 && allowedOrg.includes(org)) {
+                    if (org.includes("nirf")) {
+                        const rank = Number(event.nirfRank);
+                        if (!isNaN(rank) && rank > 0 && rank < 200) {
+                            hasFDP = true;
+                            break;
+                        }
+                    } else {
+                        hasFDP = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Check Coursera 40hrs in Expertise Contribution (3.2)
+    if (!hasFDP && appraisalObj.valueAddition && Array.isArray(appraisalObj.valueAddition.expertiseContribution?.items)) {
+        for (const item of appraisalObj.valueAddition.expertiseContribution.items) {
+            const contribution = item.contributionId;
+            if (contribution && contribution.category && contribution.status !== "Rejected") {
+                const catCode = typeof contribution.category === 'object' ? contribution.category?.code : parseInt(contribution.category);
+                
+                // Assuming Category 12 is Coursera, fallback to name matching if code not present
+                const catName = (contribution.category.name || '').toLowerCase();
+                if ((catCode === 12 || catName.includes('coursera')) && Number(contribution.courseHours) >= 40) {
+                    hasFDP = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    const r21Obtained = appraisalObj.research?.papers?.totalClaimed || 0;
+    const r21Min = mins.research21 || 0;
+    const iRaw = appraisalObj.hodEvaluation?.totalInterpersonalPoints || 0;
+
+    let isFulfilled = true;
+    if (!hasFDP) isFulfilled = false;
+    if (r21Obtained < r21Min) isFulfilled = false;
+    
+    // In previous frontend it was checked >= 30, but usually it's checked against min config. Let's use >= 30 for consistency with old code or check against mins.interpersonalSkills if exists.
+    const iRawMin = mins.interpersonalSkills || 30;
+    if (iRaw < iRawMin) isFulfilled = false;
+
+    const teachingObtained = appraisalObj.teaching?.totalClaimed || 0;
+    const researchObtained = appraisalObj.research?.totalClaimed || 0;
+    const v31 = appraisalObj.valueAddition?.resourceUtilization?.totalClaimed || 0;
+    const v32 = appraisalObj.valueAddition?.expertiseContribution?.totalClaimed || 0;
+    const v3Obtained = v31 + v32;
+    const aRaw = appraisalObj.administration?.totalClaimed || 0;
+    const grandTotal = parseFloat((teachingObtained + researchObtained + v3Obtained + aRaw + iRaw).toFixed(2));
+
+    if (grandTotal < minPoints) isFulfilled = false;
+
+    appraisalObj.eligibility = {
+        type,
+        mins,
+        status: isFulfilled ? "Fulfilled" : "Unfulfilled",
+        details: {
+            fdpStatus: hasFDP ? "Fulfilled" : "Unfulfilled",
+            r21Status: (r21Obtained >= r21Min) ? "Fulfilled" : "Unfulfilled",
+            interpersonalStatus: (iRaw >= iRawMin) ? "Fulfilled" : "Unfulfilled"
+        }
+    };
+
+    return appraisalObj;
+};
 const AcademicYear = require("../academicYear/academicYear.model");
 const Department = require("../academics/department.model");
 const Program = require("../academics/program.model");
@@ -359,6 +459,12 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         // Check if there is an active saved Appraisal
         let appraisal = await Appraisal.findOne({ facultyId, academicYearId });
 
+        // Fetch configurations for dynamic calculations
+        let config = await AppraisalConfig.findOne({ academicYearId });
+        if (!config || !config.isActive) {
+            return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
+        }
+
         // If appraisal is already submitted/evaluated, return it as-is
         if (appraisal && appraisal.status !== "Draft") {
             const proctoringEntries = await FacultyProctoringEntry.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } })
@@ -367,11 +473,25 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
             const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
+            
+            // Re-populate required fields for attachEligibilityInfo if not already populated
+            await appraisal.populate([
+                {
+                    path: 'valueAddition.expertiseContribution.items.contributionId',
+                    populate: { path: 'category' }
+                },
+                {
+                    path: 'valueAddition.resourceUtilization.items.eventId'
+                }
+            ]);
+            const appObj = appraisal.toObject();
+            appObj.facultyId = faculty.toObject();
+            attachEligibilityInfo(appObj, config);
 
             return res.json({
                 success: true,
                 isCalculatedFresh: false,
-                data: appraisal,
+                data: appObj,
                 proctoringDetail: proctoringEntries,
                 proctoringDetails: proctoringEntries,
                 resourceUtilizationDetails: resourceUt,
@@ -386,11 +506,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             });
         }
 
-        // Fetch configurations for dynamic calculations
-        let config = await AppraisalConfig.findOne({ academicYearId });
-        if (!config || !config.isActive) {
-            return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
-        }
+
 
         // ==========================================
         // DYNAMIC CALCULATIONS
@@ -1336,12 +1452,25 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             await appraisal.save();
         }
 
+        await appraisal.populate([
+            {
+                path: 'valueAddition.expertiseContribution.items.contributionId',
+                populate: { path: 'category' }
+            },
+            {
+                path: 'valueAddition.resourceUtilization.items.eventId'
+            }
+        ]);
+        const appObj = appraisal.toObject();
+        appObj.facultyId = faculty.toObject();
+        attachEligibilityInfo(appObj, config);
+
         res.json({
             success: true,
             isCalculatedFresh: true,
             isProfileComplete,
             missingProfileFields,
-            data: appraisal,
+            data: appObj,
             proctoringDetail: proctoringEntries,
             proctoringDetails: proctoringEntries,
             resourceUtilizationDetails: resourceUt,
@@ -1520,7 +1649,20 @@ exports.getPendingHODAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find({
             facultyId: { $in: facultyIds },
             status: { $in: ["Submitted to HOD", "Rejected by HOD", "Pending Research Admin", "Completed"] }
-        }).populate("facultyId", "name institutionId coreDepartment department doctorate leadership").populate("academicYearId", "year");
+        })
+        .populate("facultyId", "name institutionId coreDepartment department doctorate leadership qualification")
+        .populate("academicYearId", "year")
+        .populate([
+            {
+                path: 'valueAddition.expertiseContribution.items.contributionId',
+                populate: { path: 'category' }
+            },
+            {
+                path: 'valueAddition.resourceUtilization.items.eventId'
+            }
+        ]);
+
+        const config = await AppraisalConfig.findOne({ isActive: true }); // Assuming active config or we can match academicYearId from the appraisals
 
         const appraisalsWithDetails = [];
         for (const app of appraisals) {
@@ -1540,6 +1682,8 @@ exports.getPendingHODAppraisals = async (req, res) => {
             appObj.resourceUtilizationDetails = resourceUt;
             appObj.contributionDetails = contributions;
             appObj.administrationDetail = adminRoles;
+
+            attachEligibilityInfo(appObj, config);
 
             appraisalsWithDetails.push(appObj);
         }
@@ -1695,7 +1839,18 @@ exports.getPendingRNDAppraisals = async (req, res) => {
     try {
         const appraisals = await Appraisal.find({
             status: { $in: ["Pending Research Admin", "Completed"] }
-        }).populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college").populate("academicYearId", "year");
+        })
+        .populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college leadership")
+        .populate("academicYearId", "year")
+        .populate([
+            {
+                path: 'valueAddition.expertiseContribution.items.contributionId',
+                populate: { path: 'category' }
+            },
+            {
+                path: 'valueAddition.resourceUtilization.items.eventId'
+            }
+        ]);
 
         const AuthorCitations = require('../AuthorCitations/AuthorCitations.model');
         const AppraisalConfig = require('./AppraisalConfig.model');
@@ -1775,7 +1930,13 @@ exports.getPendingRNDAppraisals = async (req, res) => {
             }
         }
 
-        res.json({ success: true, data: appraisals });
+        const config = await AppraisalConfig.findOne({ isActive: true });
+        const appraisalsObj = appraisals.map(app => {
+            const appObj = app.toObject();
+            return attachEligibilityInfo(appObj, config);
+        });
+
+        res.json({ success: true, data: appraisalsObj });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -2478,7 +2639,7 @@ exports.getAllAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find({ academicYearId })
             .populate({
                 path: 'facultyId',
-                select: 'name email phone institutionId designation profileImage department coreDepartment qualification',
+                select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership',
                 populate: [
                     { path: 'department', select: 'name' },
                     { path: 'coreDepartment', select: 'name' }
@@ -2491,9 +2652,15 @@ exports.getAllAppraisals = async (req, res) => {
             })
             .sort({ updatedAt: -1 });
 
+        const config = await AppraisalConfig.findOne({ academicYearId });
+        const appraisalsObj = appraisals.map(app => {
+            const appObj = app.toObject();
+            return attachEligibilityInfo(appObj, config);
+        });
+
         res.json({
             success: true,
-            data: appraisals
+            data: appraisalsObj
         });
     } catch (err) {
         console.error("Get All Appraisals Error:", err);
@@ -2507,12 +2674,17 @@ exports.getAppraisalById = async (req, res) => {
         const { id } = req.params;
         const appraisal = await Appraisal.findById(id).populate({
             path: 'facultyId',
-            select: 'name email phone institutionId designation profileImage department coreDepartment qualification',
+            select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership',
             populate: [
                 { path: 'department', select: 'name' },
                 { path: 'coreDepartment', select: 'name' }
             ]
-        }).populate('research.novelProducts.items.productId');
+        }).populate('research.novelProducts.items.productId')
+          .populate('valueAddition.resourceUtilization.items.eventId')
+          .populate({
+              path: 'valueAddition.expertiseContribution.items.contributionId',
+              populate: { path: 'category' }
+          });
 
         if (!appraisal) {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
@@ -2548,6 +2720,9 @@ exports.getAppraisalById = async (req, res) => {
         appObj.resourceUtilizationDetails = resourceUt;
         appObj.contributionDetails = contributions;
         appObj.administrationDetail = adminRoles;
+
+        const config = await AppraisalConfig.findOne({ academicYearId });
+        attachEligibilityInfo(appObj, config);
 
         res.json({
             success: true,
@@ -2586,39 +2761,19 @@ exports.getMyAppraisals = async (req, res) => {
             .populate('academicYearId', 'year')
             .sort({ createdAt: -1 });
 
-        // Calculate total points and determine minimum points based on qualification/designation
         const formattedAppraisals = await Promise.all(appraisals.map(async (app) => {
-            const teachingPts = app.teaching?.totalClaimed || 0;
-            const researchPts = app.research?.totalClaimed || 0;
-            const valueAddPts = app.valueAddition?.totalClaimed || 0;
-            const adminPts = app.administration?.totalClaimed || 0;
-            const hodPts = app.hodEvaluation?.totalInterpersonalPoints || 0;
-            const totalPointsGained = Number((teachingPts + researchPts + valueAddPts + adminPts + hodPts).toFixed(2));
-
-            let minPointsRequired = 0;
             const config = await AppraisalConfig.findOne({ academicYearId: app.academicYearId._id });
-
-            if (config && config.minimumPoints) {
-                // Simplified designation/qualification check
-                const qual = (faculty.qualification || "").toLowerCase();
-                const isDoctorate = qual.includes("ph.d") || qual.includes("phd") || qual.includes("doctorate");
-                const desig = (faculty.designation || "").toLowerCase();
-                const isLeadership = desig.includes("dean") || desig.includes("principal") || desig.includes("director");
-
-                if (isLeadership) {
-                    minPointsRequired = config.minimumPoints.leadershipTeam?.total || 140;
-                } else if (isDoctorate) {
-                    minPointsRequired = config.minimumPoints.doctorates?.total || 165;
-                } else {
-                    minPointsRequired = config.minimumPoints.nonDoctorates?.total || 140;
-                }
-            }
+            
+            const appObj = app.toObject();
+            appObj.facultyId = faculty.toObject();
+            const eligibleApp = attachEligibilityInfo(appObj, config);
 
             return {
                 _id: app._id,
                 academicYearId: app.academicYearId, // includes _id and year
-                totalPointsGained,
-                minPointsRequired,
+                totalPointsGained: eligibleApp.eligibility?.totalObtained || (app.teaching?.totalClaimed || 0) + (app.research?.totalClaimed || 0) + (app.valueAddition?.totalClaimed || 0) + (app.administration?.totalClaimed || 0) + (app.hodEvaluation?.totalInterpersonalPoints || 0),
+                minPointsRequired: eligibleApp.eligibility?.mins?.total || 0,
+                eligibility: eligibleApp.eligibility,
                 status: app.status,
                 createdAt: app.createdAt
             };
