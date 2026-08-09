@@ -21,7 +21,7 @@ const AdministrativeRoleSchema = new mongoose.Schema({
     assignedBy: {
         type: {
             type: String,
-            enum: ["Pro Chancellor", "Deputy Pro Chancellor", "Vice Chancellor", "Registrar", "HOD", "Others", ""]
+            enum: ["Pro Chancellor", "Deputy Pro Chancellor", "Vice Chancellor", "Registrar", "HOD", "Dean - Career Development", "Others", ""]
         },
         otherText: {
             type: String,
