@@ -101,7 +101,14 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     const v32 = appraisalObj.valueAddition?.expertiseContribution?.totalClaimed || 0;
     const v3Obtained = v31 + v32;
     const aRaw = appraisalObj.administration?.totalClaimed || 0;
-    const grandTotal = parseFloat((teachingObtained + researchObtained + v3Obtained + aRaw + iRaw).toFixed(2));
+    
+    const sum1to4 = teachingObtained + researchObtained + v3Obtained + aRaw;
+    const capped1to4 = Math.min(200, sum1to4);
+    
+    // Attach capped 1-4 total to object so UI and Excel can use it if needed
+    appraisalObj.cappedTotal1to4 = capped1to4;
+
+    const grandTotal = parseFloat((capped1to4 + iRaw).toFixed(2));
 
     if (grandTotal < minPoints) isFulfilled = false;
 
@@ -113,7 +120,8 @@ const attachEligibilityInfo = (appraisalObj, config) => {
             fdpStatus: hasFDP ? "Fulfilled" : "Unfulfilled",
             r21Status: (r21Obtained >= r21Min) ? "Fulfilled" : "Unfulfilled",
             interpersonalStatus: (iRaw >= iRawMin) ? "Fulfilled" : "Unfulfilled"
-        }
+        },
+        totalObtained: grandTotal
     };
 
     return appraisalObj;

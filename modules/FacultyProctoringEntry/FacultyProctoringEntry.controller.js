@@ -77,7 +77,8 @@ exports.uploadExcel = async (req, res) => {
                 if (!programme) throw new Error("Programme is missing");
                 if (!branch) throw new Error("Branch is missing");
                 if (!semYear) throw new Error("Sem/Year is missing");
-                if (!section) throw new Error("Sec is missing");
+
+                const safeSection = section ? String(section).trim() : "";
 
                 // Validate Programme exists
                 const programDoc = await Program.findOne({
@@ -114,10 +115,10 @@ exports.uploadExcel = async (req, res) => {
                     branch: String(branch).trim(),
                     semesterNumber: semesterNumber,
                     yearNumber: yearNumber,
-                    section: String(section).trim()
+                    section: safeSection
                 });
                 if (duplicateDb) {
-                    throw new Error(`Duplicate entry found in database for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}', Sec '${section}' under Academic Year '${rowAcademicYear}'`);
+                    throw new Error(`Duplicate entry found in database for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}', Sec '${safeSection}' under Academic Year '${rowAcademicYear}'`);
                 }
 
                 // Check for duplicate in the current upload batch
@@ -128,10 +129,10 @@ exports.uploadExcel = async (req, res) => {
                     r.branch === String(branch).trim() &&
                     r.semesterNumber === semesterNumber &&
                     r.yearNumber === yearNumber &&
-                    r.section === String(section).trim()
+                    r.section === safeSection
                 );
                 if (isDuplicateBatch) {
-                    throw new Error(`Duplicate entry found in the uploaded file for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}', Sec '${section}' under Academic Year '${rowAcademicYear}'`);
+                    throw new Error(`Duplicate entry found in the uploaded file for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}', Sec '${safeSection}' under Academic Year '${rowAcademicYear}'`);
                 }
 
                 // Check for Branch
@@ -166,7 +167,7 @@ exports.uploadExcel = async (req, res) => {
                     branchId: branchDoc ? branchDoc._id : null,
                     semesterNumber: semesterNumber || null,
                     yearNumber: yearNumber || null,
-                    section: String(section).trim(),
+                    section: safeSection,
                     totalStudents: totalNum,
                     eligibleStudents: eligibleNum,
                     passedStudents: passedNum,
