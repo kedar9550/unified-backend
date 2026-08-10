@@ -1,16 +1,6 @@
-const allowedOrigins = [
-    'http://localhost:5173',
-    'https://digitalservices.adityauniversity.in'
-];
-
-if (process.env.FRONTEND_URI) {
-    const envOrigins = process.env.FRONTEND_URI.split(',').map(o => o.trim());
-    envOrigins.forEach(o => {
-        if (o && !allowedOrigins.includes(o)) {
-            allowedOrigins.push(o);
-        }
-    });
-}
+const allowedOrigins = process.env.FRONTEND_URI 
+    ? process.env.FRONTEND_URI.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
 
 const corsOptions = {
     origin: function (origin, callback) {
