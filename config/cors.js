@@ -1,5 +1,5 @@
 const allowedOrigins = process.env.FRONTEND_URIS
-    ? process.env.FRONTEND_URI.split(',').map(o => o.trim()).filter(Boolean)
+    ? process.env.FRONTEND_URIS.split(',').map(o => o.trim()).filter(Boolean)
     : [];
 
 const corsOptions = {
