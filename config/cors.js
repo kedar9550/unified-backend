@@ -1,4 +1,4 @@
-const allowedOrigins = process.env.FRONTEND_URI 
+const allowedOrigins = process.env.FRONTEND_URIS
     ? process.env.FRONTEND_URI.split(',').map(o => o.trim()).filter(Boolean)
     : [];
 
