@@ -467,8 +467,14 @@ exports.sendInvoiceMailInternal = async (data) => {
         participants = []
     } = data;
 
-    if (!email) {
-        throw new Error('Email is required');
+    const targetEmails = new Set();
+    if (email) targetEmails.add(email);
+    participants.forEach(p => {
+        if (p.email) targetEmails.add(p.email);
+    });
+
+    if (targetEmails.size === 0) {
+        throw new Error('No emails provided');
     }
 
     const nodemailer = require('nodemailer');
@@ -483,18 +489,19 @@ exports.sendInvoiceMailInternal = async (data) => {
     });
 
         const participantsHtml = participants.length > 0 
-            ? participants.map((p, index) => `
+            ? participants.map((p, index) => {
+                const collegeDisplay = p.college === 'Other College' && p.otherCollege ? p.otherCollege : (p.college || 'Aditya University');
+                return `
                 <tr ${index < participants.length - 1 ? 'style="border-bottom: 1px solid #e0e0e0;"' : ''}>
                     <td style="padding: 10px; border: 1px solid #e0e0e0;">${index + 1}</td>
                     <td style="padding: 10px; border: 1px solid #e0e0e0;">${p.name || '-'}</td>
                     <td style="padding: 10px; border: 1px solid #e0e0e0;">${p.roll || p.email || '-'}</td>
-                    <td style="padding: 10px; border: 1px solid #e0e0e0;">${p.college || 'Aditya University'}</td>
-                    <td style="padding: 10px; border: 1px solid #e0e0e0;"><span style="border: 1px solid #0f9d58; color: #0f9d58; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;">✓ Pass</span></td>
+                    <td style="padding: 10px; border: 1px solid #e0e0e0;">${collegeDisplay}</td>
                 </tr>
-            `).join('')
+            `}).join('')
             : `
                 <tr>
-                    <td colspan="5" style="padding: 10px; border: 1px solid #e0e0e0; text-align: center;">No participant details provided</td>
+                    <td colspan="4" style="padding: 10px; border: 1px solid #e0e0e0; text-align: center;">No participant details provided</td>
                 </tr>
             `;
 
@@ -505,7 +512,6 @@ exports.sendInvoiceMailInternal = async (data) => {
                     <tr>
                         <td style="padding: 20px;">
                             <img src="cid:aditya_logo" alt="Logo" style="height: 50px; vertical-align: middle; margin-right: 15px;" />
-                            <h1 style="color: #ffcc00; margin: 0; font-size: 24px; display: inline-block; vertical-align: middle;">ADITYA UNIVERSITY</h1>
                         </td>
                         <td align="right" style="padding: 20px;">
                             <div style="background-color: #ffcc00; color: #001a4d; padding: 8px 20px; font-weight: bold; font-size: 16px; display: inline-block; position: relative;">
@@ -605,7 +611,6 @@ exports.sendInvoiceMailInternal = async (data) => {
                                             <th style="padding: 10px; border: 1px solid #e0e0e0;">Name</th>
                                             <th style="padding: 10px; border: 1px solid #e0e0e0;">Roll No</th>
                                             <th style="padding: 10px; border: 1px solid #e0e0e0;">College</th>
-                                            <th style="padding: 10px; border: 1px solid #e0e0e0;">Pass</th>
                                         </tr>
                                     </thead>
                                     <tbody style="font-size: 14px; color: #333;">
@@ -620,7 +625,6 @@ exports.sendInvoiceMailInternal = async (data) => {
                                             <th style="padding: 10px; border: 1px solid #e0e0e0;">Date</th>
                                             <th style="padding: 10px; border: 1px solid #e0e0e0;">Event Name</th>
                                             <th style="padding: 10px; border: 1px solid #e0e0e0;">Amount</th>
-                                            <th style="padding: 10px; border: 1px solid #e0e0e0;">Action</th>
                                         </tr>
                                     </thead>
                                     <tbody style="font-size: 14px; color: #333;">
@@ -628,7 +632,6 @@ exports.sendInvoiceMailInternal = async (data) => {
                                             <td style="padding: 10px; border: 1px solid #e0e0e0;">${invoiceDate}</td>
                                             <td style="padding: 10px; border: 1px solid #e0e0e0;">${eventName}</td>
                                             <td style="padding: 10px; border: 1px solid #e0e0e0; color: #0f9d58; font-weight: bold;">₹${amountPaid}</td>
-                                            <td style="padding: 10px; border: 1px solid #e0e0e0;"><span style="border: 1px solid #1a73e8; color: #1a73e8; padding: 4px 10px; border-radius: 4px; font-size: 12px;">📄 Receipt</span></td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -669,7 +672,7 @@ exports.sendInvoiceMailInternal = async (data) => {
 
         const path = require('path');
         const fs = require('fs');
-        const logoPath = path.resolve(__dirname, '../../../../unified-frontend/src/assets/Aditya University Gold Logo.png');
+        const logoPath = path.resolve(__dirname, '../../../unified-frontend/src/assets/Aditya University Gold Logo.png');
         
         let mailAttachments = [];
         if (fs.existsSync(logoPath)) {
@@ -682,7 +685,7 @@ exports.sendInvoiceMailInternal = async (data) => {
 
         const mailOptions = {
             from: process.env.EMAIL_USER,
-            to: email,
+            to: Array.from(targetEmails).join(','),
             subject: 'Invoice Confirmation - VEDA 2K26',
             html: htmlContent,
             attachments: mailAttachments
