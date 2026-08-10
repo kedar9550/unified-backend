@@ -46,7 +46,7 @@ const FacultyProctoringEntrySchema = new mongoose.Schema({
     },
     section: {
         type: String,
-        required: true
+        default: ""
     },
     totalStudents: {
         type: Number,
