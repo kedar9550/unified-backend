@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
 const dotenv = require('dotenv');
+const Employee = require('../modules/employee/employee.model');
+const Student = require('../modules/StudentData/Studentdata.model');
 
 dotenv.config();
 
@@ -27,6 +29,22 @@ const protect = async (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+        // Check if user is still active in the database
+        let isActive = true;
+        if (decoded.userType === 'Employee') {
+            const emp = await Employee.findById(decoded.userId).select('isActive');
+            if (emp && emp.isActive === false) isActive = false;
+        } else if (decoded.userType === 'Student') {
+            const student = await Student.findById(decoded.userId).select('system.isActive');
+            if (student && student.system?.isActive === false) isActive = false;
+        }
+
+        if (!isActive) {
+            res.status(401);
+            return next(new Error('User account is deactivated. Please log in again.'));
+        }
+
         req.user = decoded; // { userId, app, roles }
 
         // Extract HOD departments if they exist in roles
