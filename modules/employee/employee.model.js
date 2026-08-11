@@ -18,11 +18,13 @@ const EmployeeSchema = new mongoose.Schema({
         unique: true
     },
 
+    // Note: This refers to "Serving Department" in the UI
     department: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Department",
         required: true
     },
+    // Note: This refers to "Parent Department" in the UI
     coreDepartment: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Department",

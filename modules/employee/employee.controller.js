@@ -25,7 +25,7 @@ const STUDENT_DATA_API_URL = process.env.STUDENT_DATA_API_URL || "https://info.a
  */
 const registerUser = async (req, res) => {
     try {
-        const { fullname, id, department, designation, email, phone, password, userType, otp, signature, expiry, coreDepartment } = req.body;
+        const { fullname, id, department, designation, email, phone, password, roleId, otp, signature, expiry, coreDepartment } = req.body;
 
         if (!fullname || !id || !department || !designation || !email || !phone || !password) {
             return res.status(400).json({ message: "All fields required" });
@@ -141,27 +141,23 @@ const registerUser = async (req, res) => {
         });
 
         const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
-        let roleName = "STAFF";
-
-        if (userType) {
-            roleName = userType.toUpperCase();
-        } else {
-            const checkDesig = (designation || "").toLowerCase();
-            if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) {
-                roleName = "FACULTY";
-            } else if (/technician|programmer/i.test(checkDesig)) {
-                roleName = "TECHNICAL_STAFF";
-            }
+        
+        let defaultRole;
+        if (roleId) {
+            defaultRole = await Role.findById(roleId);
+        }
+        
+        if (!defaultRole) {
+            defaultRole = await Role.findOne({ key: "FACULTY", app: appName });
         }
 
-        let defaultRole = await Role.findOne({ key: roleName, app: appName });
         if (!defaultRole) {
             defaultRole = await Role.create({
-                name: roleName,
-                key: roleName,
+                name: "FACULTY",
+                key: "FACULTY",
                 app: appName,
                 defaultRole: true,
-                description: `Default role for ${roleName}`
+                description: `Default role for FACULTY`
             });
         }
 
@@ -842,8 +838,8 @@ const bulkUpdateEmployees = async (req, res) => {
 const adminUpdateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, coreDepartment, name, department, designation, leadership, isActive } = req.body;
-        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership, isActive });
+        const { email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId } = req.body;
+        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId });
 
         const employee = await Employee.findById(id);
         if (!employee) {
@@ -859,6 +855,35 @@ const adminUpdateEmployee = async (req, res) => {
                 return res.status(409).json({ success: false, message: "Email is already in use by another user" });
             }
             employee.email = email.toLowerCase();
+        }
+
+        if (defaultRoleId) {
+            const currentAppRoles = await UserAppRole.find({ userId: employee._id, app: process.env.APP_NAME || 'UNIFIED_SYSTEM' }).populate('role');
+            const existingDefaultUserAppRole = currentAppRoles.find(ur => ur.role && ur.role.defaultRole);
+            
+            if (existingDefaultUserAppRole && existingDefaultUserAppRole.role._id.toString() !== defaultRoleId.toString()) {
+                await UserAppRole.findByIdAndDelete(existingDefaultUserAppRole._id);
+                
+                const alreadyHasNewRole = currentAppRoles.find(ur => ur.role && ur.role._id.toString() === defaultRoleId.toString());
+                if (!alreadyHasNewRole) {
+                    await UserAppRole.create({
+                        userId: employee._id,
+                        userModel: 'Employee',
+                        app: process.env.APP_NAME || 'UNIFIED_SYSTEM',
+                        role: defaultRoleId
+                    });
+                }
+            } else if (!existingDefaultUserAppRole) {
+                const alreadyHasNewRole = currentAppRoles.find(ur => ur.role && ur.role._id.toString() === defaultRoleId.toString());
+                if (!alreadyHasNewRole) {
+                    await UserAppRole.create({
+                        userId: employee._id,
+                        userModel: 'Employee',
+                        app: process.env.APP_NAME || 'UNIFIED_SYSTEM',
+                        role: defaultRoleId
+                    });
+                }
+            }
         }
 
         if (coreDepartment) {
