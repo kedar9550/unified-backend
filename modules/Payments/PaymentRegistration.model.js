@@ -21,7 +21,8 @@ const ParticipantSchema = new mongoose.Schema({
   },
   barcode: { type: String, trim: true, sparse: true, unique: true },
   attended: { type: Boolean, default: false },
-  accommodationCheckedIn: { type: Boolean, default: false }
+  accommodationCheckedIn: { type: Boolean, default: false },
+  scanCount: { type: Number, default: 0 }
 }, { _id: false });
 
 const PaymentRegistrationSchema = new mongoose.Schema({
