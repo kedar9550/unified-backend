@@ -761,7 +761,12 @@ const bulkUpdateEmployees = async (req, res) => {
                 const identityData = identityResponse?.data?.[0];
 
                 if (!identityData || identityData.error) {
-                    errors.push({ id: institutionId, error: "Not found in ECAP" });
+                    if (employee.isActive !== false) {
+                        await Employee.updateOne({ _id: employee._id }, { $set: { isActive: false } });
+                        updated.push(institutionId);
+                    } else {
+                        uptodate.push(institutionId);
+                    }
                     continue;
                 }
 
@@ -837,8 +842,8 @@ const bulkUpdateEmployees = async (req, res) => {
 const adminUpdateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, coreDepartment, name, department, designation, leadership } = req.body;
-        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership });
+        const { email, coreDepartment, name, department, designation, leadership, isActive } = req.body;
+        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership, isActive });
 
         const employee = await Employee.findById(id);
         if (!employee) {
@@ -867,6 +872,7 @@ const adminUpdateEmployee = async (req, res) => {
         if (department) employee.department = department;
         if (designation) employee.designation = designation;
         if (leadership) employee.leadership = leadership;
+        if (isActive !== undefined) employee.isActive = isActive;
         
         await employee.save();
 
