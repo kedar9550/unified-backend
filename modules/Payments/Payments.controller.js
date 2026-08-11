@@ -512,13 +512,21 @@ exports.scanBarcode = async (req, res) => {
     const participant = registration.participants[participantIndex];
 
     if (participant.attended) {
-      return res.status(400).json({ error: 'Participant has already been marked as attended.', participant, eventName: registration.eventName });
+      await PaymentRegistration.updateOne(
+        { _id: registration._id, 'participants.barcode': barcode },
+        { $inc: { 'participants.$.scanCount': 1 } }
+      );
+      return res.status(400).json({ error: 'Participant has already been marked as attended.', participant: registration.participants[participantIndex], eventName: registration.eventName });
     }
 
-    // Mark as attended
-    registration.participants[participantIndex].attended = true;
-    registration.markModified('participants');
-    await registration.save();
+    // Mark as attended and increment scan count
+    await PaymentRegistration.updateOne(
+      { _id: registration._id, 'participants.barcode': barcode },
+      { 
+        $set: { 'participants.$.attended': true },
+        $inc: { 'participants.$.scanCount': 1 }
+      }
+    );
 
     return res.json({
       message: 'Participant marked as attended successfully.',
