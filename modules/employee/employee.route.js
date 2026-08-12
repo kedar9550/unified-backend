@@ -57,17 +57,17 @@ const csvStorage = multer.diskStorage({
         cb(null, uploadPath);
     },
     filename: function (req, file, cb) {
-        cb(null, 'bulk-' + Date.now() + '.csv');
+        cb(null, 'bulk-' + Date.now() + path.extname(file.originalname));
     }
 });
 const uploadCsv = multer({ 
     storage: csvStorage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
     fileFilter: (req, file, cb) => {
-        const allowed = ['.csv'];
+        const allowed = ['.csv', '.xlsx'];
         const ext = path.extname(file.originalname).toLowerCase();
         if (allowed.includes(ext)) return cb(null, true);
-        cb(new Error('Only CSV files are allowed. Max size 5MB.'));
+        cb(new Error('Only CSV and XLSX files are allowed. Max size 5MB.'));
     }
 });
 

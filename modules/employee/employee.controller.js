@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
 const csv = require('csv-parser');
+const ExcelJS = require('exceljs');
 const { getHODDepartments } = require('../../utils/hodHelper');
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -622,38 +623,121 @@ const bulkRegisterUser = async (req, res) => {
         const errors = [];
         const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
 
-        const stream = fs.createReadStream(req.file.path).pipe(csv());
+        const filePath = req.file.path;
+        const ext = path.extname(filePath).toLowerCase();
 
-        for await (const row of stream) {
+        const employeesData = [];
+        const qualificationsData = {};
+
+        if (ext === '.xlsx') {
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.readFile(filePath);
+
+            const empSheet = workbook.getWorksheet(1); // First sheet: Employees
+            const qualSheet = workbook.getWorksheet(2); // Second sheet: Qualifications
+
+            if (!empSheet) {
+                throw new Error("Employees sheet not found. Ensure it's the first sheet.");
+            }
+
+            // Extract Employees
+            let empHeaders = [];
+            empSheet.eachRow((row, rowNumber) => {
+                if (rowNumber === 1) {
+                    empHeaders = row.values.slice(1).map(h => (h || "").toString().trim().toLowerCase());
+                } else {
+                    const rowData = {};
+                    row.values.slice(1).forEach((val, index) => {
+                        rowData[empHeaders[index]] = val;
+                    });
+                    employeesData.push(rowData);
+                }
+            });
+
+            // Extract Qualifications if sheet exists
+            if (qualSheet) {
+                let qualHeaders = [];
+                qualSheet.eachRow((row, rowNumber) => {
+                    if (rowNumber === 1) {
+                        qualHeaders = row.values.slice(1).map(h => (h || "").toString().trim().toLowerCase());
+                    } else {
+                        const rowData = {};
+                        row.values.slice(1).forEach((val, index) => {
+                            rowData[qualHeaders[index]] = val;
+                        });
+
+                        const instId = (rowData['institution id'] || rowData['id'] || rowData['institutionid'])?.toString().trim();
+                        if (instId) {
+                            if (!qualificationsData[instId]) qualificationsData[instId] = [];
+                            
+                            const level = rowData['level']?.toString().trim();
+                            const qual = rowData['qualification']?.toString().trim();
+                            
+                            // Only add if level and qualification are present
+                            if (level && qual) {
+                                qualificationsData[instId].push({
+                                    level: level,
+                                    qualification: qual,
+                                    completedMonth: rowData['completed month']?.toString().trim() || "",
+                                    completedYear: rowData['completed year']?.toString().trim() || ""
+                                });
+                            }
+                        }
+                    }
+                });
+            }
+        } else if (ext === '.csv') {
+            await new Promise((resolve, reject) => {
+                fs.createReadStream(filePath)
+                    .pipe(csv())
+                    .on('data', (row) => employeesData.push(row))
+                    .on('end', resolve)
+                    .on('error', reject);
+            });
+        } else {
+            throw new Error("Unsupported file format. Please use .xlsx or .csv");
+        }
+
+        // Process Extracted Employees
+        for (const row of employeesData) {
             try {
-                const institutionId = (row.institutionId || row.id || row.institution || row.institutionID)?.trim();
-                const email = (row.email || row.Email || row.EmailAddress || row['email address'])?.trim();
-                const csvDept = (row.department || row.Department || row['serving department'] || row['servingDepartment'] || row.ServingDepartment || row.Serving_Department || row.Dept || row.dept || row.serving_department)?.trim();
-                const csvCoreDept = (row.coreDepartment || row.core_department || row.coredepartment || row.CoreDepartment || row['parent department'] || row['parentDepartment'] || row.ParentDepartment || row.Parent_Department || row.parent_department)?.trim();
+                const institutionId = (row.institutionId || row.id || row.institution || row.institutionID || row['institution id'])?.toString().trim();
+                const email = (row.email || row.Email || row.EmailAddress || row['email address'])?.toString().trim();
+                const csvDept = (row.department || row.Department || row['serving department'] || row['servingdeptcode'] || row['serving dept code'] || row.ServingDepartment || row.Serving_Department || row.Dept || row.dept || row.serving_department)?.toString().trim();
+                const csvCoreDept = (row.coreDepartment || row.core_department || row.coredepartment || row['parent dept code'] || row.CoreDepartment || row['parent department'] || row['parentDepartment'] || row.ParentDepartment || row.Parent_Department || row.parent_department)?.toString().trim();
+                const leadershipInput = (row.leadership || row.Leadership)?.toString().trim().toLowerCase();
+                const dojInput = (row.dateOfJoining || row['date of joining'] || row.doj)?.toString().trim();
+                const defaultRoleInput = (row.defaultRole || row['default role'] || row.DefaultRole || row.role)?.toString().trim();
+                
+                
+                const panNumber = (row.panNumber || row['pan number'] || row.pan)?.toString().trim();
+                const scopusId = (row.scopusId || row['scopus id'])?.toString().trim();
+                const wosId = (row.wosId || row['web of science id'] || row['wos id'])?.toString().trim();
+                const orcidId = (row.orcidId || row['orc id'] || row.orcid)?.toString().trim();
+                const googleScholarId = (row.googleScholarId || row['google scholar id'])?.toString().trim();
 
                 if (!institutionId) {
-                    errors.push({ id: "Unknown", error: "Missing institutionId or id in CSV" });
+                    errors.push({ id: "Unknown", error: "Missing institutionId or id in sheet" });
                     continue;
                 }
 
                 if (!email) {
-                    errors.push({ id: institutionId, error: "Missing email in CSV" });
+                    errors.push({ id: institutionId, error: "Missing email" });
                     continue;
                 }
 
-                // Validate email format
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
                     errors.push({ id: institutionId, error: "Invalid email format" });
                     continue;
                 }
 
                 if (!csvDept) {
-                    errors.push({ id: institutionId, error: "Missing Serving Department in CSV" });
+                    errors.push({ id: institutionId, error: "Missing Serving Department" });
                     continue;
                 }
 
                 if (!csvCoreDept) {
-                    errors.push({ id: institutionId, error: "Missing Parent Department in CSV" });
+                    errors.push({ id: institutionId, error: "Missing Parent Department" });
                     continue;
                 }
 
@@ -681,6 +765,7 @@ const bulkRegisterUser = async (req, res) => {
                 const ecapName = (identityData.employeename || identityData.EmployeeName)?.trim();
                 const ecapDesig = (identityData.designation || identityData.Designation)?.trim() || "Employee";
                 const ecapPhone = (identityData.mobileno || identityData.MobileNo)?.trim() || "0000000000";
+                const ecapDoj = (identityData.dateofjoining || identityData.DateOfJoining)?.trim();
 
                 if (!ecapName) {
                     errors.push({ id: institutionId, error: "Missing Name in ECAP Data" });
@@ -697,11 +782,7 @@ const bulkRegisterUser = async (req, res) => {
                 });
                 if (!deptRecord) {
                     const deptCode = csvDept.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "DEPT";
-                    deptRecord = await Department.create({
-                        name: csvDept,
-                        code: deptCode,
-                        type: 'Academic'
-                    });
+                    deptRecord = await Department.create({ name: csvDept, code: deptCode, type: 'Academic' });
                 }
 
                 // Match Parent Department
@@ -714,16 +795,35 @@ const bulkRegisterUser = async (req, res) => {
                 });
                 if (!coreDeptRecord) {
                     const coreDeptCode = csvCoreDept.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "CDEPT";
-                    coreDeptRecord = await Department.create({
-                        name: csvCoreDept,
-                        code: coreDeptCode,
-                        type: 'Academic'
-                    });
+                    coreDeptRecord = await Department.create({ name: csvCoreDept, code: coreDeptCode, type: 'Academic' });
                 }
 
-                const password = "Aditya@123"; // Default password
+                // College Assignment Logic (matching registerUser)
+                let assignedCollege = "";
+                if (coreDeptRecord.type === "Central") {
+                    assignedCollege = "Aditya University";
+                } else if (coreDeptRecord.type === "Academic") {
+                    const coreSchoolId = coreDeptRecord.schoolIds && coreDeptRecord.schoolIds.length > 0 ? coreDeptRecord.schoolIds[0] : coreDeptRecord.schoolId;
+                    if (coreSchoolId) {
+                        const schoolRecord = await School.findById(coreSchoolId);
+                        if (schoolRecord) {
+                            const scCode = schoolRecord.code?.toLowerCase();
+                            if (['soe', 'soc', 'sop', 'sos'].includes(scCode)) {
+                                assignedCollege = "Aditya University";
+                            } else if (scCode === 'acet') {
+                                assignedCollege = "Aditya College of Engineering and Technology";
+                            } else if (scCode === 'acop') {
+                                assignedCollege = "Aditya College of Pharmacy";
+                            } else {
+                                assignedCollege = schoolRecord.name;
+                            }
+                        }
+                    }
+                }
 
-                const user = await Employee.create({
+                const password = "Aditya@123";
+
+                const newEmployeeData = {
                     name: ecapName,
                     institutionId,
                     department: deptRecord._id,
@@ -731,13 +831,57 @@ const bulkRegisterUser = async (req, res) => {
                     designation: ecapDesig,
                     email,
                     phone: ecapPhone,
-                    password
-                });
+                    password,
+                    leadership: leadershipInput === 'yes' ? 'yes' : 'no',
+                    dateOfJoining: dojInput || ecapDoj,
+                    college: assignedCollege
+                };
+
+                // Add optional identifiers
+                if (panNumber) newEmployeeData.panNumber = panNumber;
+                if (scopusId) newEmployeeData.scopusId = scopusId;
+                if (wosId) newEmployeeData.wosId = wosId;
+                if (orcidId) newEmployeeData.orcidId = orcidId;
+                if (googleScholarId) newEmployeeData.googleScholarId = googleScholarId;
+
+                // Add qualifications if extracted from Excel Sheet 2
+                if (qualificationsData[institutionId] && qualificationsData[institutionId].length > 0) {
+                    newEmployeeData.qualifications = qualificationsData[institutionId];
+                } 
+                // Or parse qualifications from CSV/Excel flat columns
+                else {
+                    const parsedQuals = [];
+                    // Check up to 10 qualifications dynamically
+                    for (let i = 1; i <= 10; i++) {
+                        const level = (row[`qual ${i} level`] || row[`Qual ${i} Level`] || row[`qual${i}level`] || row[`qualification ${i} level`])?.toString().trim();
+                        const qual = (row[`qual ${i} degree`] || row[`Qual ${i} Degree`] || row[`qual ${i} qualification`] || row[`qual${i}degree`] || row[`qualification ${i}`])?.toString().trim();
+                        const month = (row[`qual ${i} month`] || row[`Qual ${i} Month`] || row[`qual${i}month`])?.toString().trim();
+                        const year = (row[`qual ${i} year`] || row[`Qual ${i} Year`] || row[`qual${i}year`])?.toString().trim();
+                        
+                        if (level && qual) {
+                            parsedQuals.push({
+                                level: level,
+                                qualification: qual,
+                                completedMonth: month || "",
+                                completedYear: year || ""
+                            });
+                        }
+                    }
+                    if (parsedQuals.length > 0) {
+                        newEmployeeData.qualifications = parsedQuals;
+                    }
+                }
+
+                const user = await Employee.create(newEmployeeData);
 
                 let roleName = "STAFF";
-                const checkDesig = (ecapDesig || "").toLowerCase();
-                if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) roleName = "FACULTY";
-                else if (/technician|programmer/i.test(checkDesig)) roleName = "TECHNICAL_STAFF";
+                if (defaultRoleInput) {
+                    roleName = defaultRoleInput.toUpperCase();
+                } else {
+                    const checkDesig = (ecapDesig || "").toLowerCase();
+                    if (/prof|professor|ass|teaching|ph\.?d\.?\s*full[- ]?time\s*scholar/i.test(checkDesig)) roleName = "FACULTY";
+                    else if (/technician|programmer/i.test(checkDesig)) roleName = "TECHNICAL_STAFF";
+                }
 
                 let defaultRole = await Role.findOne({ name: roleName, app: appName });
                 if (!defaultRole) defaultRole = await Role.create({ name: roleName, app: appName, defaultRole: true, description: `Default role for ${roleName}` });
@@ -745,11 +889,11 @@ const bulkRegisterUser = async (req, res) => {
                 await UserAppRole.create({ userId: user._id, userModel: 'Employee', app: appName, role: defaultRole._id });
                 results.push({ id: institutionId, status: "Success" });
             } catch (rowErr) {
-                errors.push({ id: row.institutionId || "Unknown", error: rowErr.message });
+                errors.push({ id: row.institutionId || row['institution id'] || "Unknown", error: rowErr.message });
             }
         }
 
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
         res.json({
             success: true,
