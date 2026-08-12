@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
 const Department = require('../academics/department.model');
+const School = require('../academics/school.model');
 const authService = require('../../utils/authService');
 const generateToken = require('../../utils/generateToken');
 const sendOtpSms = require('../../utils/smsService');
@@ -25,7 +26,7 @@ const STUDENT_DATA_API_URL = process.env.STUDENT_DATA_API_URL || "https://info.a
  */
 const registerUser = async (req, res) => {
     try {
-        const { fullname, id, department, designation, email, phone, password, roleId, otp, signature, expiry, coreDepartment } = req.body;
+        const { fullname, id, department, designation, email, phone, password, roleId, otp, signature, expiry, coreDepartment, qualifications, dateOfJoining, leadership } = req.body;
 
         if (!fullname || !id || !department || !designation || !email || !phone || !password) {
             return res.status(400).json({ message: "All fields required" });
@@ -96,7 +97,7 @@ const registerUser = async (req, res) => {
                 { name: new RegExp(`^${escapedDept}$`, 'i') },
                 { code: new RegExp(`^${escapedDept}$`, 'i') }
             ]
-        });
+        }).populate('schoolIds');
 
         if (!deptRecord) {
             const deptCode = department.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "DEPT";
@@ -108,14 +109,15 @@ const registerUser = async (req, res) => {
         }
 
         let coreDeptId = deptRecord._id;
+        let coreDeptRecord = null;
         if (coreDepartment) {
             const escapedCoreDept = escapeRegex(coreDepartment);
-            let coreDeptRecord = await Department.findOne({
+            coreDeptRecord = await Department.findOne({
                 $or: [
                     { name: new RegExp(`^${escapedCoreDept}$`, 'i') },
                     { code: new RegExp(`^${escapedCoreDept}$`, 'i') }
                 ]
-            });
+            }).populate('schoolIds');
 
             if (!coreDeptRecord) {
                 const coreDeptCode = coreDepartment.replace(/[^a-zA-Z]/g, '').substring(0, 5).toUpperCase() || "CDEPT";
@@ -128,6 +130,27 @@ const registerUser = async (req, res) => {
             coreDeptId = coreDeptRecord._id;
         }
 
+        let assignedCollege = (identityData && identityData.college) || "";
+        const coreDeptForCollege = coreDepartment ? coreDeptRecord : deptRecord;
+
+        if (coreDeptForCollege) {
+            if (coreDeptForCollege.type === 'Central') {
+                assignedCollege = "Aditya University";
+            } else if (coreDeptForCollege.type === 'Academic' && coreDeptForCollege.schoolIds && coreDeptForCollege.schoolIds.length > 0) {
+                const school = coreDeptForCollege.schoolIds[0];
+                const code = (school.code || "").toLowerCase();
+                if (['soe', 'soc', 'sop', 'sos'].includes(code)) {
+                    assignedCollege = "Aditya University";
+                } else if (code === 'acet') {
+                    assignedCollege = "Aditya College of Engineering and Technology";
+                } else if (code === 'acop') {
+                    assignedCollege = "Aditya College of Pharmacy";
+                } else {
+                    assignedCollege = school.name;
+                }
+            }
+        }
+
         const employee = await Employee.create({
             name: fullname,
             institutionId: id,
@@ -137,7 +160,10 @@ const registerUser = async (req, res) => {
             email,
             phone,
             password,
-            college: (identityData && identityData.college) || ""
+            college: assignedCollege,
+            qualifications: Array.isArray(qualifications) ? qualifications : [],
+            dateOfJoining: dateOfJoining || "",
+            leadership: leadership || "no"
         });
 
         const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
@@ -325,7 +351,7 @@ const updateProfile = async (req, res) => {
 
             return res.json({ user: normalizedUser });
         } else {
-            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college", "qualification"];
+            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college", "qualifications"];
             const updates = {};
             allowedFields.forEach((field) => {
                 // Allow setting empty values except email and phone which are required
@@ -338,13 +364,15 @@ const updateProfile = async (req, res) => {
                 }
             });
 
-            if (updates.qualification !== undefined) {
-                const qual = (updates.qualification || "").toUpperCase().trim();
-                if (qual === "PHD") {
-                    updates.doctorate = "yes";
-                } else {
-                    updates.doctorate = "no";
-                }
+            if (updates.qualifications !== undefined) {
+                const hasDoctorate = updates.qualifications.some(q => 
+                    q.level === "Doctoral" || 
+                    (q.qualification || "").toUpperCase().trim() === "PHD" || 
+                    (q.qualification || "").toUpperCase().trim() === "PH.D." ||
+                    (q.qualification || "").toUpperCase().trim() === "PHARMD" || 
+                    (q.qualification || "").toUpperCase().trim() === "PHARM.D."
+                );
+                updates.doctorate = hasDoctorate ? "yes" : "no";
             }
 
             const user = await Employee.findOneAndUpdate(
@@ -551,7 +579,6 @@ const syncProfileWithECAP = async (req, res) => {
         // Update employee
         const updateData = {
             name: ecapName || employee.name,
-            department: deptId,
             designation: ecapDesig || employee.designation,
             phone: ecapPhone || employee.phone
         };
@@ -838,8 +865,8 @@ const bulkUpdateEmployees = async (req, res) => {
 const adminUpdateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
-        const { email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId } = req.body;
-        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId });
+        const { email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId, qualifications, dateOfJoining } = req.body;
+        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId, qualifications, dateOfJoining });
 
         const employee = await Employee.findById(id);
         if (!employee) {
@@ -898,6 +925,8 @@ const adminUpdateEmployee = async (req, res) => {
         if (designation) employee.designation = designation;
         if (leadership) employee.leadership = leadership;
         if (isActive !== undefined) employee.isActive = isActive;
+        if (qualifications) employee.qualifications = qualifications;
+        if (dateOfJoining !== undefined) employee.dateOfJoining = dateOfJoining;
         
         await employee.save();
 
@@ -1055,7 +1084,9 @@ const getAllEmployees = async (req, res) => {
                     designation: 1,
                     leadership: 1,
                     userType: { $literal: 'Employee' },
-                    roles: 1
+                    roles: 1,
+                    qualifications: 1,
+                    dateOfJoining: 1
                 }
             }
         ]);
@@ -1199,6 +1230,17 @@ const sendSignupOtp = async (req, res) => {
         const phone = (identityData.mobileno || identityData.MobileNo)?.trim();
         const department = (identityData.departmentname || identityData.DepartmentName)?.trim();
         const designation = (identityData.designation || identityData.Designation)?.trim();
+        
+        let dateOfJoining = "";
+        const dojRaw = identityData.dateofjoin || identityData.DateOfJoin;
+        if (dojRaw) {
+            const parts = dojRaw.split('/');
+            if (parts.length === 3) {
+                dateOfJoining = `${parts[2]}-${parts[1]}-${parts[0]}`; // Convert DD/MM/YYYY to YYYY-MM-DD
+            } else {
+                dateOfJoining = dojRaw;
+            }
+        }
 
         if (!phone) {
             return res.status(400).json({ message: "No mobile number associated with this ID in ECAP records" });
@@ -1235,7 +1277,8 @@ const sendSignupOtp = async (req, res) => {
                 fullname: name,
                 department,
                 designation,
-                phone
+                phone,
+                dateOfJoining
             }
         });
     } catch (e) {

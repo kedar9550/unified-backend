@@ -35,9 +35,29 @@ const EmployeeSchema = new mongoose.Schema({
         trim: true,
         default: ""
     },
-    qualification: {
+    qualifications: [{
+        level: {
+            type: String,
+            enum: ["UG", "PG", "Doctoral"],
+            required: true
+        },
+        qualification: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        completedMonth: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        completedYear: {
+            type: Number,
+            required: true
+        }
+    }],
+    dateOfJoining: {
         type: String,
-        trim: true,
         default: ""
     },
     doctorate: {
@@ -103,7 +123,7 @@ const EmployeeSchema = new mongoose.Schema({
     },
     college: {
         type: String,
-        enum: ["Aditya University", "Aditya College of Pharmacy", ""],
+        enum: ["Aditya University", "Aditya College of Engineering and Technology", "Aditya College of Pharmacy", ""],
         default: ""
     },
 
@@ -127,48 +147,17 @@ const EmployeeSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-const isLeadershipDesignation = (designation) => {
-    if (!designation) return false;
-    const cleanDesig = designation.toLowerCase().replace(/[^a-z0-9]/g, ' ');
-    const leadershipRoles = ['Deans', 'Associate Deans', 'CoE', 'HoD', 'Chancellor', 'Pro-chancellor', 'Registrar', 'Vice-chancellor', 'Director Academics', 'Head'];
-    return leadershipRoles.some(role => {
-        if (!role) return false;
-        let cleanRole = role.toLowerCase().trim();
-        if (cleanRole.endsWith('s') && !['coe', 'chancellor', 'pro-chancellor', 'vice-chancellor', 'registrar'].includes(cleanRole)) {
-            cleanRole = cleanRole.slice(0, -1);
-        }
-        cleanRole = cleanRole.replace(/[^a-z0-9]/g, ' ');
-        return cleanDesig.includes(cleanRole);
-    });
-};
-
-function handleEmployeeUpdate(update) {
-    if (!update) return;
-
-    // If leadership is explicitly provided in the update, DO NOT auto-overwrite it
-    if (update.$set && update.$set.leadership !== undefined) return;
-    if (update.leadership !== undefined) return;
-
-    if (update.$set && update.$set.designation !== undefined) {
-        update.$set.leadership = isLeadershipDesignation(update.$set.designation) ? "yes" : "no";
-    } else if (update.designation !== undefined) {
-        update.leadership = isLeadershipDesignation(update.designation) ? "yes" : "no";
-    }
-}
-
 // hash password
 EmployeeSchema.pre("save", async function () {
-    if ((this.isModified("designation") || this.isNew) && !this.isModified("leadership")) {
-        this.leadership = isLeadershipDesignation(this.designation) ? "yes" : "no";
-    }
-
-    if (this.isModified("qualification")) {
-        const qual = (this.qualification || "").toUpperCase().trim();
-        if (qual === "PHD") {
-            this.doctorate = "yes";
-        } else {
-            this.doctorate = "no";
-        }
+    if (this.isModified("qualifications")) {
+        const hasDoctorate = this.qualifications && this.qualifications.some(q => 
+            q.level === "Doctoral" || 
+            (q.qualification || "").toUpperCase().trim() === "PHD" || 
+            (q.qualification || "").toUpperCase().trim() === "PH.D." ||
+            (q.qualification || "").toUpperCase().trim() === "PHARMD" || 
+            (q.qualification || "").toUpperCase().trim() === "PHARM.D."
+        );
+        this.doctorate = hasDoctorate ? "yes" : "no";
     }
 
     if (!this.isModified("password")) return;
@@ -176,16 +165,22 @@ EmployeeSchema.pre("save", async function () {
     this.password = await bcrypt.hash(this.password, salt);
 });
 
-EmployeeSchema.pre("updateOne", function () {
-    handleEmployeeUpdate(this.getUpdate());
-});
-
 EmployeeSchema.pre("findOneAndUpdate", function () {
-    handleEmployeeUpdate(this.getUpdate());
+    const update = this.getUpdate();
+    if (update.$set && update.$set.qualifications) {
+        const hasDoctorate = update.$set.qualifications.some(q => 
+            q.level === "Doctoral" || 
+            (q.qualification || "").toUpperCase().trim() === "PHD" || 
+            (q.qualification || "").toUpperCase().trim() === "PH.D." ||
+            (q.qualification || "").toUpperCase().trim() === "PHARMD" || 
+            (q.qualification || "").toUpperCase().trim() === "PHARM.D."
+        );
+        update.$set.doctorate = hasDoctorate ? "yes" : "no";
+    }
 });
 
 EmployeeSchema.pre("updateMany", function () {
-    handleEmployeeUpdate(this.getUpdate());
+    // Other logic if needed
 });
 
 // compare password

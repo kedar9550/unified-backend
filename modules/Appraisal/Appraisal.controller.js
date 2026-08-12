@@ -11,11 +11,23 @@ const Employee = require("../employee/employee.model");
 const getFacultyCategoryHelper = (fac) => {
     if (!fac) return "Non-Doctorate Faculty";
     const lead = (fac.leadership || "").toLowerCase().trim();
-    const qual = (fac.qualification || "").toLowerCase().trim();
     const doct = (fac.doctorate || "").toLowerCase().trim();
 
     if (lead === "yes" || lead === "true") return "Leadership Team";
-    if (qual.includes("phd") || qual.includes("ph.d") || doct === "yes" || doct === "true") return "Doctorate Faculty";
+    
+    let hasPhd = false;
+    if (fac.qualifications && Array.isArray(fac.qualifications)) {
+        hasPhd = fac.qualifications.some(q => 
+            q.level === "Doctoral" || 
+            (q.qualification || "").toLowerCase().trim().includes("phd") || 
+            (q.qualification || "").toLowerCase().trim().includes("ph.d")
+        );
+    } else if (fac.qualification) {
+        const qual = fac.qualification.toLowerCase().trim();
+        hasPhd = qual.includes("phd") || qual.includes("ph.d");
+    }
+
+    if (hasPhd || doct === "yes" || doct === "true") return "Doctorate Faculty";
     return "Non-Doctorate Faculty";
 };
 
@@ -1412,7 +1424,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 wosId: faculty.wosId || "",
                 orcidId: faculty.orcidId || "",
                 dateOfJoining: faculty.createdAt, // fallback or map if doj is there
-                qualification: faculty.qualification || "N/A"
+                qualification: (faculty.qualifications && faculty.qualifications.length > 0) 
+                    ? faculty.qualifications.map(q => q.qualification).join(', ') 
+                    : "N/A"
             },
             teaching: {
                 passPercentage: { courses: theoryPP, averagePoints: ppAverage },
