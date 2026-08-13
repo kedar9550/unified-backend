@@ -38,7 +38,17 @@ const AppraisalSchema = new mongoose.Schema({
         wosId: String,
         orcidId: String,
         dateOfJoining: Date,
-        qualification: String
+        qualification: String,
+        qualifications: [{
+            level: String,
+            qualification: String,
+            completedMonth: String,
+            completedYear: Number
+        }],
+        schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
+        schoolName: String,
+        schoolCode: String,
+        isACET: { type: Boolean, default: false }
     },
 
     // PART-B: Performance Attributes & Points

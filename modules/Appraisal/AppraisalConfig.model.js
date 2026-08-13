@@ -153,6 +153,10 @@ const AppraisalConfigSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    cutoffDate: {
+        type: Date,
+        default: null
+    },
     lastUpdatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Employee"

@@ -40,8 +40,22 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     const type = getFacultyCategoryHelper(appraisalObj.facultyId);
     let mins = {};
     if (config && config.minimumPoints && config.minimumPoints[type]) {
-        mins = config.minimumPoints[type];
+        // Deep copy to avoid mutating the config
+        mins = JSON.parse(JSON.stringify(config.minimumPoints[type]));
     }
+    
+    // Adjust minimums for ACET
+    const isACET = appraisalObj.personalInfoSnapshot?.isACET || false;
+    if (isACET) {
+        if (type === "Leadership Team") {
+            mins.teaching = 30;
+        } else {
+            mins.teaching = 38;
+        }
+        // Total drops by 20 because max teaching drops from 80 to 60
+        mins.total = (mins.total || 0) - 20;
+    }
+    
     const minPoints = mins.total || 0;
 
     const allowedOrg = [
@@ -115,7 +129,8 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     const aRaw = appraisalObj.administration?.totalClaimed || 0;
     
     const sum1to4 = teachingObtained + researchObtained + v3Obtained + aRaw;
-    const capped1to4 = Math.min(200, sum1to4);
+    const max1to4 = isACET ? 180 : 200;
+    const capped1to4 = Math.min(max1to4, sum1to4);
     
     // Attach capped 1-4 total to object so UI and Excel can use it if needed
     appraisalObj.cappedTotal1to4 = capped1to4;
@@ -392,7 +407,7 @@ exports.getAppraisalConfig = async (req, res) => {
 // 2. Save/Update Appraisal Point Config (UNIPRIME)
 exports.saveAppraisalConfig = async (req, res) => {
     try {
-        const { academicYearId, teaching, research, valueAddition, administration, minimumPoints, isActive } = req.body;
+        const { academicYearId, teaching, research, valueAddition, administration, minimumPoints, isActive, cutoffDate } = req.body;
         if (!academicYearId) {
             return res.status(400).json({ success: false, message: "Academic Year ID is required." });
         }
@@ -407,6 +422,9 @@ exports.saveAppraisalConfig = async (req, res) => {
             if (isActive !== undefined) {
                 config.isActive = isActive;
             }
+            if (cutoffDate !== undefined) {
+                config.cutoffDate = cutoffDate;
+            }
             config.lastUpdatedBy = req.user.userId;
             await config.save();
         } else {
@@ -418,6 +436,7 @@ exports.saveAppraisalConfig = async (req, res) => {
                 administration,
                 minimumPoints: minimumPoints || {},
                 isActive: isActive || false,
+                cutoffDate: cutoffDate || null,
                 lastUpdatedBy: req.user.userId
             });
             await config.save();
@@ -443,9 +462,27 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const facultyId = req.user.userId;
 
         // Fetch Faculty Info
-        const faculty = await Employee.findById(facultyId).populate("department coreDepartment");
+        const faculty = await Employee.findById(facultyId).populate({
+            path: "department",
+            populate: { path: "schoolIds" }
+        }).populate("coreDepartment");
         if (!faculty) {
             return res.status(404).json({ success: false, message: "Faculty not found." });
+        }
+
+        // Fetch configurations for dynamic calculations and checks
+        let config = await AppraisalConfig.findOne({ academicYearId });
+        if (!config || !config.isActive) {
+            return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
+        }
+
+        // Cutoff Date Check
+        if (config.cutoffDate && faculty.dateOfJoining) {
+            const doj = new Date(faculty.dateOfJoining);
+            const cutoff = new Date(config.cutoffDate);
+            if (doj > cutoff) {
+                return res.status(403).json({ success: false, message: "You are not eligible for appraisal as your joining date is after the cutoff date." });
+            }
         }
 
         // Check profile completeness for alert flag
@@ -478,12 +515,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // Check if there is an active saved Appraisal
         let appraisal = await Appraisal.findOne({ facultyId, academicYearId });
-
-        // Fetch configurations for dynamic calculations
-        let config = await AppraisalConfig.findOne({ academicYearId });
-        if (!config || !config.isActive) {
-            return res.status(403).json({ success: false, message: "Self-appraisal is not active for this academic year." });
-        }
 
         // If appraisal is already submitted/evaluated, return it as-is
         if (appraisal && appraisal.status !== "Draft") {
@@ -683,8 +714,26 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         const proctoringAverage = proctoringItems.length > 0 ? Number((totalProctorPoints / proctoringItems.length).toFixed(2)) : 0;
 
-        // Sum of all Teaching points (capped at 80)
-        const totalTeachingPoints = Math.min(80, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
+        // Determine if ACET for scoring caps
+        let isACET = false;
+        let schoolId = null;
+        let schoolName = "";
+        let schoolCode = "";
+        
+        const servingDept = faculty.department;
+        if (servingDept && servingDept.schoolIds && servingDept.schoolIds.length > 0) {
+            const school = servingDept.schoolIds[0]; // Assuming populated
+            schoolId = school._id;
+            schoolName = school.name || "";
+            schoolCode = school.code || "";
+            if (schoolCode.toLowerCase() === 'acet' || schoolName.toLowerCase().includes('engineering and technology')) {
+                isACET = true;
+            }
+        }
+
+        // Sum of all Teaching points (capped at 80 normally, 60 for ACET)
+        const teachingMax = isACET ? 60 : 80;
+        const totalTeachingPoints = Math.min(teachingMax, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
 
         // --- 2. Research Contributions ---
 
@@ -1410,6 +1459,14 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // Compile updated dynamic snapshot details
         const evaluatedCategory = getFacultyCategoryHelper(faculty);
+        
+        let deptName = "N/A";
+        if (faculty.department) {
+            deptName = (faculty.department.type === 'Central' && faculty.coreDepartment) 
+                ? faculty.coreDepartment.name 
+                : faculty.department.name;
+        }
+
         const updatedAppraisalData = {
             facultyId,
             academicYearId,
@@ -1418,15 +1475,20 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             personalInfoSnapshot: {
                 name: faculty.name,
                 institutionId: faculty.institutionId,
-                departmentName: faculty.coreDepartment?.name || faculty.department?.name || "N/A",
+                departmentName: deptName,
                 designation: faculty.designation || "N/A",
                 scopusId: faculty.scopusId || "",
                 wosId: faculty.wosId || "",
                 orcidId: faculty.orcidId || "",
-                dateOfJoining: faculty.createdAt, // fallback or map if doj is there
+                dateOfJoining: faculty.dateOfJoining || faculty.createdAt, // fallback
                 qualification: (faculty.qualifications && faculty.qualifications.length > 0) 
                     ? faculty.qualifications.map(q => q.qualification).join(', ') 
-                    : "N/A"
+                    : faculty.qualification || "N/A",
+                qualifications: faculty.qualifications || [],
+                schoolId: schoolId,
+                schoolName: schoolName,
+                schoolCode: schoolCode,
+                isACET: isACET
             },
             teaching: {
                 passPercentage: { courses: theoryPP, averagePoints: ppAverage },
@@ -1583,8 +1645,8 @@ exports.submitAppraisal = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please update your profile qualification before submitting the appraisal." });
         }
 
-        if (!faculty.coreDepartment) {
-            return res.status(400).json({ success: false, message: "Your Parent Department is not set. Please contact the Administrator to assign it before submitting your appraisal." });
+        if (!faculty.department) {
+            return res.status(400).json({ success: false, message: "Your Serving Department is not set. Please contact the Administrator to assign it before submitting your appraisal." });
         }
 
 
@@ -2426,7 +2488,8 @@ exports.updateProctoringDuties = async (req, res) => {
         const proctoringAverage = appraisal.teaching.proctoring?.averagePoints || 0;
         const coAverage = appraisal.teaching.coAttainment?.averagePoints || 0;
 
-        appraisal.teaching.totalClaimed = Math.min(80, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
+        const teachingMax = appraisal.personalInfoSnapshot?.isACET ? 60 : 80;
+        appraisal.teaching.totalClaimed = Math.min(teachingMax, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
 
         await appraisal.save();
         res.json({ success: true, message: "Proctoring duties response saved.", data: appraisal });
