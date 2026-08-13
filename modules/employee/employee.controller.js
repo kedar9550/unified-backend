@@ -689,7 +689,7 @@ const bulkRegisterUser = async (req, res) => {
         } else if (ext === '.csv') {
             await new Promise((resolve, reject) => {
                 fs.createReadStream(filePath)
-                    .pipe(csv())
+                    .pipe(csv({ mapHeaders: ({ header }) => header.trim().toLowerCase() }))
                     .on('data', (row) => employeesData.push(row))
                     .on('end', resolve)
                     .on('error', reject);
@@ -697,6 +697,30 @@ const bulkRegisterUser = async (req, res) => {
         } else {
             throw new Error("Unsupported file format. Please use .xlsx or .csv");
         }
+
+        const formatDOJ = (dateRaw) => {
+            if (!dateRaw) return "";
+            if (dateRaw instanceof Date) {
+                const y = dateRaw.getFullYear();
+                const m = String(dateRaw.getMonth() + 1).padStart(2, '0');
+                const d = String(dateRaw.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+            let dStr = dateRaw.toString().trim();
+            if (/^\d{2}-\d{2}-\d{4}$/.test(dStr)) {
+                const [dd, mm, yyyy] = dStr.split('-');
+                return `${yyyy}-${mm}-${dd}`;
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(dStr)) return dStr;
+            const parsed = new Date(dStr);
+            if (!isNaN(parsed)) {
+                const y = parsed.getFullYear();
+                const m = String(parsed.getMonth() + 1).padStart(2, '0');
+                const d = String(parsed.getDate()).padStart(2, '0');
+                return `${y}-${m}-${d}`;
+            }
+            return dStr;
+        };
 
         // Process Extracted Employees
         for (const row of employeesData) {
@@ -706,15 +730,12 @@ const bulkRegisterUser = async (req, res) => {
                 const csvDept = (row.department || row.Department || row['serving department'] || row['servingdeptcode'] || row['serving dept code'] || row.ServingDepartment || row.Serving_Department || row.Dept || row.dept || row.serving_department)?.toString().trim();
                 const csvCoreDept = (row.coreDepartment || row.core_department || row.coredepartment || row['parent dept code'] || row.CoreDepartment || row['parent department'] || row['parentDepartment'] || row.ParentDepartment || row.Parent_Department || row.parent_department)?.toString().trim();
                 const leadershipInput = (row.leadership || row.Leadership)?.toString().trim().toLowerCase();
-                const dojInput = (row.dateOfJoining || row['date of joining'] || row.doj)?.toString().trim();
+                const dojRaw = row.dateOfJoining || row['date of joining'] || row.doj;
+                const dojInput = formatDOJ(dojRaw);
                 const defaultRoleInput = (row.defaultRole || row['default role'] || row.DefaultRole || row.role)?.toString().trim();
                 
                 
-                const panNumber = (row.panNumber || row['pan number'] || row.pan)?.toString().trim();
-                const scopusId = (row.scopusId || row['scopus id'])?.toString().trim();
-                const wosId = (row.wosId || row['web of science id'] || row['wos id'])?.toString().trim();
-                const orcidId = (row.orcidId || row['orc id'] || row.orcid)?.toString().trim();
-                const googleScholarId = (row.googleScholarId || row['google scholar id'])?.toString().trim();
+
 
                 if (!institutionId) {
                     errors.push({ id: "Unknown", error: "Missing institutionId or id in sheet" });
@@ -837,12 +858,6 @@ const bulkRegisterUser = async (req, res) => {
                     college: assignedCollege
                 };
 
-                // Add optional identifiers
-                if (panNumber) newEmployeeData.panNumber = panNumber;
-                if (scopusId) newEmployeeData.scopusId = scopusId;
-                if (wosId) newEmployeeData.wosId = wosId;
-                if (orcidId) newEmployeeData.orcidId = orcidId;
-                if (googleScholarId) newEmployeeData.googleScholarId = googleScholarId;
 
                 // Add qualifications if extracted from Excel Sheet 2
                 if (qualificationsData[institutionId] && qualificationsData[institutionId].length > 0) {
@@ -1498,6 +1513,100 @@ const saveFcmToken = async (req, res) => {
     }
 };
 
+const downloadBulkTemplate = async (req, res) => {
+    try {
+        const departments = await Department.find({ status: true }).select('code');
+        const deptCodes = departments.map(d => d.code).filter(Boolean);
+        if (deptCodes.length === 0) deptCodes.push("CSE"); // Fallback
+
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet('Template');
+        const listsSheet = workbook.addWorksheet('Lists', { state: 'hidden' });
+
+        // Populate lists sheet for data validation
+        listsSheet.getColumn('A').values = ['UG', 'PG', 'Doctoral'];
+        listsSheet.getColumn('B').values = ['B.Tech.', 'B.Ed.'];
+        listsSheet.getColumn('C').values = ['M.Tech.', 'M.E.', 'M.Sc.', 'M.A.', 'M.Com.', 'MCA', 'MBA', 'M.Phil.', 'M.Pharm', 'PGDM', 'MMS', 'M.S.'];
+        listsSheet.getColumn('D').values = ['Pharm.D.', 'Ph.D.'];
+        listsSheet.getColumn('E').values = deptCodes;
+        listsSheet.getColumn('F').values = ['yes', 'no'];
+        listsSheet.getColumn('G').values = ['FACULTY', 'STAFF'];
+
+        // Define named ranges for indirect validation
+        workbook.definedNames.add('Lists!$B$1:$B$2', 'UG');
+        workbook.definedNames.add('Lists!$C$1:$C$12', 'PG');
+        workbook.definedNames.add('Lists!$D$1:$D$2', 'Doctoral');
+
+        const deptRange = `Lists!$E$1:$E$${deptCodes.length}`;
+
+        // Headers
+        const headers = [
+            "Institution ID", "Email Address", "Serving Dept Code", 
+            "Parent Dept Code", "Date of Joining", "Leadership", "Default Role",
+            "Qual 1 Level", "Qual 1 Degree", "Qual 1 Month", "Qual 1 Year",
+            "Qual 2 Level", "Qual 2 Degree", "Qual 2 Month", "Qual 2 Year",
+            "Qual 3 Level", "Qual 3 Degree", "Qual 3 Month", "Qual 3 Year"
+        ];
+        
+        sheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
+
+        // Add sample row
+        sheet.addRow({
+            "Institution ID": "12345",
+            "Email Address": "test@adityauniversity.in",
+            "Serving Dept Code": deptCodes[0] || "CSE",
+            "Parent Dept Code": deptCodes[0] || "CSE",
+            "Date of Joining": "01-01-2025",
+            "Leadership": "no",
+            "Default Role": "FACULTY",
+            "Qual 1 Level": "UG",
+            "Qual 1 Degree": "B.Tech.",
+            "Qual 1 Month": "May",
+            "Qual 1 Year": "2019",
+            "Qual 2 Level": "PG",
+            "Qual 2 Degree": "M.Tech.",
+            "Qual 2 Month": "June",
+            "Qual 2 Year": "2021",
+            "Qual 3 Level": "Doctoral",
+            "Qual 3 Degree": "Ph.D.",
+            "Qual 3 Month": "January",
+            "Qual 3 Year": "2025"
+        });
+
+        // Apply data validation for Levels and Degrees up to 1000 rows
+        for (let i = 2; i <= 1000; i++) {
+            // Serving Dept (C), Parent Dept (D)
+            sheet.getCell(`C${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [deptRange] };
+            sheet.getCell(`D${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [deptRange] };
+
+            // Leadership (F), Default Role (G)
+            sheet.getCell(`F${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$F$1:$F$2'] };
+            sheet.getCell(`G${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$G$1:$G$2'] };
+
+            // Qual 1 Level (H), Qual 1 Degree (I)
+            sheet.getCell(`H${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
+            sheet.getCell(`I${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(H${i})`] };
+
+            // Qual 2 Level (L), Qual 2 Degree (M)
+            sheet.getCell(`L${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
+            sheet.getCell(`M${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(L${i})`] };
+
+            // Qual 3 Level (P), Qual 3 Degree (Q)
+            sheet.getCell(`P${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
+            sheet.getCell(`Q${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(P${i})`] };
+        }
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=employee_bulk_upload_template.xlsx');
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error('Error generating bulk template:', error);
+        res.status(500).json({ message: 'Error generating template file' });
+    }
+};
+
 module.exports = {
     registerUser,
     validateUser,
@@ -1519,5 +1628,6 @@ module.exports = {
     sendSignupOtp,
     verifySignupOtp,
     saveFcmToken,
-    getPublicDepartments
+    getPublicDepartments,
+    downloadBulkTemplate
 };

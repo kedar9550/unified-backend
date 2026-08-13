@@ -26,7 +26,8 @@ const {
     sendSignupOtp,
     verifySignupOtp,
     saveFcmToken,
-    getPublicDepartments
+    getPublicDepartments,
+    downloadBulkTemplate
 } = require('./employee.controller');
 
 // --- Multer Setup ---
@@ -94,6 +95,7 @@ router.post('/hod/add-staff', protect, addHODStaff);
 router.get('/search', protect, searchUser);
 router.get('/staff/:id', protect, getStaffData);
 router.post('/ecap-data', getecapdata);
+router.get('/bulk-template', protect, downloadBulkTemplate);
 router.post('/bulk-upload', protect, uploadCsv.single('file'), bulkRegisterUser);
 router.put('/bulk-sync', protect, bulkUpdateEmployees);
 router.put('/:id/admin-update', protect, adminUpdateEmployee);
