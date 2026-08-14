@@ -491,7 +491,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         if (!faculty.wosId) missingProfileFields.push("Web of Science ID");
         if (!faculty.orcidId) missingProfileFields.push("ORCID ID");
         if (!faculty.designation) missingProfileFields.push("Designation");
-        if (!faculty.qualification || faculty.qualification.trim() === "") missingProfileFields.push("Qualification");
         if (!faculty.coreDepartment) missingProfileFields.push("Parent Department");
 
         const isProfileComplete = missingProfileFields.length === 0;
@@ -1640,11 +1639,6 @@ exports.submitAppraisal = async (req, res) => {
         if (!faculty) {
             return res.status(404).json({ success: false, message: "Faculty profile not found." });
         }
-
-        if (!faculty.qualification || faculty.qualification.trim() === "") {
-            return res.status(400).json({ success: false, message: "Please update your profile qualification before submitting the appraisal." });
-        }
-
         if (!faculty.department) {
             return res.status(400).json({ success: false, message: "Your Serving Department is not set. Please contact the Administrator to assign it before submitting your appraisal." });
         }
