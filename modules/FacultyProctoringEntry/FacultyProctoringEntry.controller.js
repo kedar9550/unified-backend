@@ -114,11 +114,10 @@ exports.uploadExcel = async (req, res) => {
                     programme: String(programme).trim(),
                     branch: String(branch).trim(),
                     semesterNumber: semesterNumber,
-                    yearNumber: yearNumber,
-                    section: safeSection
+                    yearNumber: yearNumber
                 });
                 if (duplicateDb) {
-                    throw new Error(`Duplicate entry found in database for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}', Sec '${safeSection}' under Academic Year '${rowAcademicYear}'`);
+                    throw new Error(`Duplicate entry found in database for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' under Academic Year '${rowAcademicYear}'`);
                 }
 
                 // Check for duplicate in the current upload batch
@@ -128,11 +127,10 @@ exports.uploadExcel = async (req, res) => {
                     r.programme === String(programme).trim() &&
                     r.branch === String(branch).trim() &&
                     r.semesterNumber === semesterNumber &&
-                    r.yearNumber === yearNumber &&
-                    r.section === safeSection
+                    r.yearNumber === yearNumber
                 );
                 if (isDuplicateBatch) {
-                    throw new Error(`Duplicate entry found in the uploaded file for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}', Sec '${safeSection}' under Academic Year '${rowAcademicYear}'`);
+                    throw new Error(`Duplicate entry found in the uploaded file for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' under Academic Year '${rowAcademicYear}'`);
                 }
 
                 // Check for Branch
@@ -319,8 +317,7 @@ exports.createEntry = async (req, res) => {
             facultyId: fId,
             academicYear,
             programId,
-            branchId,
-            section: secVal
+            branchId
         };
         if (programDoc.programPattern === "YEAR") {
             duplicateQuery.yearNumber = Number(yearNumber);
@@ -330,7 +327,7 @@ exports.createEntry = async (req, res) => {
 
         const existing = await FacultyProctoringEntry.findOne(duplicateQuery);
         if (existing) {
-            return res.status(400).json({ message: `Record already exists for Program/Branch Section '${section}' in this semester/year.` });
+            return res.status(400).json({ message: `Record already exists for this Program/Branch/Semester/Year in this cycle.` });
         }
 
         const total = Number(totalStudents) || 0;
@@ -394,7 +391,6 @@ exports.updateEntry = async (req, res) => {
             updates.passPercentage = eligible > 0 ? Number(((passed / eligible) * 100).toFixed(2)) : 0;
 
             // Duplicate Check
-            const sec = updates.section !== undefined ? updates.section : existing.section;
             const prog = updates.programId !== undefined ? updates.programId : existing.programId;
             const br = updates.branchId !== undefined ? updates.branchId : existing.branchId;
             const ay = updates.academicYear !== undefined ? updates.academicYear : existing.academicYear;
@@ -404,8 +400,7 @@ exports.updateEntry = async (req, res) => {
                 facultyId: existing.facultyId,
                 academicYear: ay,
                 programId: prog,
-                branchId: br,
-                section: sec
+                branchId: br
             };
 
             const programDoc = await Program.findById(prog);
@@ -419,7 +414,7 @@ exports.updateEntry = async (req, res) => {
 
             const duplicate = await FacultyProctoringEntry.findOne(query);
             if (duplicate) {
-                return res.status(400).json({ message: `Another proctoring record already exists for Section '${sec}' in this semester/year.` });
+                return res.status(400).json({ message: `Another proctoring record already exists for this Program/Branch/Semester/Year in this cycle.` });
             }
         }
 

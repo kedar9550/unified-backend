@@ -19,20 +19,20 @@ const upload = multer({
 });
 
 // Admin/Prime: Upload proctoring Excel data
-router.post("/upload-excel", protect, authorize("ADMIN", "UNIPRIME"), upload.single("file"), facultyProctoringController.uploadExcel);
+router.post("/upload-excel", protect, authorize("ADMIN", "UNIPRIME", "FEEDBACK_COORDINATOR"), upload.single("file"), facultyProctoringController.uploadExcel);
 
 // Admin/Prime: Delete by academic year
-router.delete("/clear", protect, authorize("ADMIN", "UNIPRIME"), facultyProctoringController.deleteSemesterData);
+router.delete("/clear", protect, authorize("ADMIN", "UNIPRIME", "FEEDBACK_COORDINATOR"), facultyProctoringController.deleteSemesterData);
 
 // Admin/Prime: View all proctoring entries
-router.get("/all", protect, authorize("ADMIN", "UNIPRIME"), facultyProctoringController.getAllEntries);
+router.get("/all", protect, authorize("ADMIN", "UNIPRIME", "FEEDBACK_COORDINATOR"), facultyProctoringController.getAllEntries);
 
 // Faculty: View own proctoring data
 router.get("/my-entries", protect, facultyProctoringController.getMyEntries);
 
 // Single Entry CRUD
-router.post("/", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY", "UNIPRIME"), facultyProctoringController.createEntry);
-router.put("/:id", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY", "UNIPRIME"), facultyProctoringController.updateEntry);
-router.delete("/:id", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY", "UNIPRIME"), facultyProctoringController.deleteEntry);
+router.post("/", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY", "UNIPRIME", "FEEDBACK_COORDINATOR"), facultyProctoringController.createEntry);
+router.put("/:id", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY", "UNIPRIME", "FEEDBACK_COORDINATOR"), facultyProctoringController.updateEntry);
+router.delete("/:id", protect, authorize("ADMIN", "EXAMSECTION", "FACULTY", "UNIPRIME", "FEEDBACK_COORDINATOR"), facultyProctoringController.deleteEntry);
 
 module.exports = router;
