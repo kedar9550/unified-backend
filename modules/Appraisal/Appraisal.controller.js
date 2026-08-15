@@ -1732,7 +1732,8 @@ exports.submitAppraisal = async (req, res) => {
         } else {
             const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
             const hodRoleIds = [ADMIN_ROLE_CATALOG.HOD, ADMIN_ROLE_CATALOG.DEPARTMENT_HOD];
-            const isHOD = req.user.roles && req.user.roles.some(role => hodRoleIds.includes(role));
+            const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase() || r.role || r);
+            const isHOD = userRoles.some(role => hodRoleIds.includes(role));
             
             if (isHOD) {
                 nextStatus = "Submitted to Dean";
@@ -1775,7 +1776,11 @@ exports.getPendingHODAppraisals = async (req, res) => {
 
         const appraisals = await Appraisal.find({
             facultyId: { $in: facultyIds },
-            status: { $in: ["Submitted to HOD", "Rejected by HOD", "Pending Research Admin", "Completed"] }
+            $or: [
+                { status: "Submitted to HOD" },
+                { status: "Rejected by HOD" },
+                { "hodEvaluation.evaluatedBy": { $exists: true } }
+            ]
         })
         .populate("facultyId", "name institutionId coreDepartment department doctorate leadership qualification")
         .populate("academicYearId", "year")
@@ -3003,7 +3008,10 @@ exports.getPendingManagementAppraisals = async (req, res) => {
         // Check if they are a regular School Dean
         // Checking via roles catalog if available, or designation fallback
         const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
-        if ((req.user.roles && req.user.roles.includes(ADMIN_ROLE_CATALOG.SCHOOL_DEAN)) || designation === "Dean" || designation === "Associate Dean") {
+        const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase() || r.role || r);
+        const isSchoolDean = userRoles.includes(ADMIN_ROLE_CATALOG.SCHOOL_DEAN) || designation.includes("Dean") || designation.includes("Associate Dean");
+
+        if (isSchoolDean) {
             allowedStatuses.push("Submitted to Dean");
         }
 
@@ -3011,7 +3019,29 @@ exports.getPendingManagementAppraisals = async (req, res) => {
             return res.json({ success: true, data: [] });
         }
 
-        const appraisals = await Appraisal.find({ status: { $in: allowedStatuses } })
+        let filter = { status: { $in: allowedStatuses } };
+
+        // Ensure School Deans only see "Submitted to Dean" appraisals from their own schools
+        if (isSchoolDean) {
+            const { getHODDepartments } = require("../../utils/hodHelper");
+            const deptIds = await getHODDepartments(req.user);
+
+            const facultyIds = await Employee.find({
+                $or: [
+                    { coreDepartment: { $in: deptIds } },
+                    { department: { $in: deptIds } }
+                ]
+            }).distinct('_id');
+
+            filter = {
+                $or: [
+                    { status: "Submitted to Dean", facultyId: { $in: facultyIds } },
+                    { status: { $in: allowedStatuses.filter(s => s !== "Submitted to Dean") } }
+                ]
+            };
+        }
+
+        const appraisals = await Appraisal.find(filter)
             .populate("facultyId", "name institutionId coreDepartment department doctorate leadership qualification")
             .populate("academicYearId", "year");
 
