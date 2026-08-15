@@ -63,35 +63,39 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     let hasFDP = false;
 
     // 1. Check FDP in Resource Utilization (3.1)
-    if (appraisalObj.valueAddition && Array.isArray(appraisalObj.valueAddition.resourceUtilization?.items)) {
-        for (const item of appraisalObj.valueAddition.resourceUtilization.items) {
-            const event = item.eventId;
-            if (event && event.status !== "Rejected") {
-                const cat = (event.activityCategory || '').toLowerCase().trim();
-                const evType = (event.activityType || '').toLowerCase().trim();
-                const org = (event.organizingInstitutionCategory || '').toLowerCase().trim();
-                const days = Number(event.numberOfDaysParticipated) || Number(event.daysParticipated) || Number(event.duration) || 0;
+    const resourceItems = appraisalObj.resourceUtilizationDetails || 
+                          (appraisalObj.valueAddition && appraisalObj.valueAddition.resourceUtilization?.items?.map(i => i.eventId)) || 
+                          [];
 
-                if (cat === 'fdp' && evType === 'fdp participant' && days >= 5 && !disallowedOrg.includes(org)) {
-                    if (org.includes("nirf")) {
-                        const rank = Number(event.nirfRank);
-                        if (!isNaN(rank) && rank > 0 && rank < 200) {
-                            hasFDP = true;
-                            break;
-                        }
-                    } else {
+    for (const event of resourceItems) {
+        if (event && event.status !== "Rejected") {
+            const cat = (event.activityCategory || '').toLowerCase().trim();
+            const evType = (event.activityType || '').toLowerCase().trim();
+            const org = (event.organizingInstitutionCategory || '').toLowerCase().trim();
+            const days = Number(event.numberOfDaysParticipated) || Number(event.daysParticipated) || Number(event.duration) || 0;
+
+            if (cat === 'fdp' && evType === 'fdp participant' && days >= 5 && !disallowedOrg.includes(org)) {
+                if (org.includes("nirf")) {
+                    const rank = Number(event.nirfRank);
+                    if (!isNaN(rank) && rank > 0 && rank < 200) {
                         hasFDP = true;
                         break;
                     }
+                } else {
+                    hasFDP = true;
+                    break;
                 }
             }
         }
     }
 
     // 2. Check Coursera 40hrs in Expertise Contribution (3.2)
-    if (!hasFDP && appraisalObj.valueAddition && Array.isArray(appraisalObj.valueAddition.expertiseContribution?.items)) {
-        for (const item of appraisalObj.valueAddition.expertiseContribution.items) {
-            const contribution = item.contributionId;
+    if (!hasFDP) {
+        const contributionItems = appraisalObj.contributionDetails || 
+                                  (appraisalObj.valueAddition && appraisalObj.valueAddition.expertiseContribution?.items?.map(i => i.contributionId)) || 
+                                  [];
+                                  
+        for (const contribution of contributionItems) {
             if (contribution && contribution.category && contribution.status !== "Rejected") {
                 const catCode = typeof contribution.category === 'object' ? contribution.category?.code : parseInt(contribution.category);
                 
@@ -1792,15 +1796,15 @@ exports.evaluateHODAppraisal = async (req, res) => {
             const academicYearId = appraisal.academicYearId;
 
             // User requested: At the time of rejection, any items in section 3.1 (Resource Utilization),
-            // 3.2 (Expertise Contribution), and 4 (Administration) that are currently "Pending"
+            // 3.2 (Expertise Contribution) that are currently "Pending at HOD"
             // should automatically have their status reverted back to "Draft" so the faculty can edit them.
             await ResourceUtilization.updateMany(
-                { facultyId, academicYear: academicYearId, status: "Pending" },
+                { facultyId, academicYear: academicYearId, status: "Pending at HOD" },
                 { $set: { status: "Draft" } }
             );
 
             await Contribution.updateMany(
-                { facultyId, academicYear: academicYearId, status: "Pending" },
+                { facultyId, academicYear: academicYearId, status: "Pending at HOD" },
                 { $set: { status: "Draft" } }
             );
 
