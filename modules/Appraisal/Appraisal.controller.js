@@ -1687,7 +1687,8 @@ exports.submitAppraisal = async (req, res) => {
         const metric21Score = appraisal.research?.papers?.totalClaimed || 0;
         // Validation removed as per new update (No gating for submission)
 
-        // Update all Draft entries for ResourceUtilization and Contribution to Pending at HOD
+        // Update all Draft entries for ResourceUtilization and Contribution to Pending
+        // Keeping "Pending at HOD" for backwards compatibility, or maybe change to a generic "Pending" if needed.
         await ResourceUtilization.updateMany(
             { facultyId, academicYear: academicYearId, status: "Draft" },
             { status: "Pending at HOD" }
@@ -1697,11 +1698,59 @@ exports.submitAppraisal = async (req, res) => {
             { status: "Pending at HOD" }
         );
 
+        let nextStatus = "Submitted to Dean"; // Default
+        
+        const designation = (faculty.designation || "").trim();
+        const schoolCode = (appraisal.personalInfoSnapshot?.schoolCode || "").toUpperCase();
+        
+        const designationRoutingMap = {
+            "Dean - Research & Consultancy": "Vice Chancellor",
+            "Dean - International Relations": "Vice Chancellor",
+            "Controller of Examinations": "Vice Chancellor",
+            "Dean - (IQAC)": "Vice Chancellor",
+            "Dean-Career Development": "Vice Chancellor",
+            "Dean - (Admissions)": "Dy. Pro Chancellor",
+            "Dean - Administration": "Registrar",
+            "Dean Students Affairs": "Registrar",
+            "Dean - School of Engg.,": "Pro Vice-Chancellor (E & S)",
+            "Dean_School of Pharmacy": "Pro Vice-Chancellor (E & S)",
+            "Dean_ Student Welfare": "Pro Vice-Chancellor (E & S)",
+            "Associate Dean - School of Computing": "Pro Vice-Chancellor (E & S)",
+            "Associate Dean - School of Sciences": "Pro Vice-Chancellor (E & S)",
+            "Associate Dean - FE Dept": "Pro Vice-Chancellor (E & S)",
+            "Associate Dean - School of Business": "Pro Vice-Chancellor (S & P)",
+            "Associate Dean (IQAC)": "Dean - (IQAC)",
+            "Associate Dean-Admissions": "Dean - (Admissions)",
+            "Associate Dean-Academics": "Pro Vice-Chancellor (A)",
+            "Assoc.Prof. & Asst. Registrar_Statutory ECE": "Registrar",
+            "Asst.Prof. -Maths & Asst. Registrar_Ad FE": "Registrar",
+            "Asst.Prof., Head IT Applications": "Registrar"
+        };
+
+        if (designationRoutingMap[designation]) {
+            nextStatus = "Submitted to " + designationRoutingMap[designation];
+        } else {
+            const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
+            const hodRoleIds = [ADMIN_ROLE_CATALOG.HOD, ADMIN_ROLE_CATALOG.DEPARTMENT_HOD];
+            const isHOD = req.user.roles && req.user.roles.some(role => hodRoleIds.includes(role));
+            
+            if (isHOD) {
+                nextStatus = "Submitted to Dean";
+            } else {
+                const schoolsWithHOD = ["ACET", "SOE", "SOC", "FE"];
+                if (schoolsWithHOD.includes(schoolCode)) {
+                    nextStatus = "Submitted to HOD";
+                } else {
+                    nextStatus = "Submitted to Dean";
+                }
+            }
+        }
+
         // Lock and submit
-        appraisal.status = "Submitted to HOD";
+        appraisal.status = nextStatus;
         await appraisal.save();
 
-        res.json({ success: true, message: "Appraisal submitted to HOD successfully.", data: appraisal });
+        res.json({ success: true, message: `Appraisal ${nextStatus} successfully.`, data: appraisal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -1917,10 +1966,10 @@ exports.evaluateHODAppraisal = async (req, res) => {
             evaluationDate: new Date()
         };
 
-        appraisal.status = "Completed";
+        appraisal.status = "Submitted to Dean";
         await appraisal.save();
 
-        res.json({ success: true, message: "Appraisal evaluated by HOD and finalized.", data: appraisal });
+        res.json({ success: true, message: "Appraisal evaluated by HOD and submitted to Dean.", data: appraisal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -2922,5 +2971,89 @@ exports.generateAppraisalPDF = async (req, res) => {
     } catch (err) {
         console.error("Generate PDF Error:", err);
         res.status(500).json({ success: false, message: "Failed to generate PDF" });
+    }
+};
+
+// 12. Generic Management Pending list
+exports.getPendingManagementAppraisals = async (req, res) => {
+    try {
+        const Employee = require("../employee/employee.model");
+        const userEmployee = await Employee.findById(req.user.userId);
+        if (!userEmployee) return res.status(404).json({ success: false, message: "User not found" });
+
+        const designation = (userEmployee.designation || "").trim();
+        let allowedStatuses = [];
+
+        // Check for specific senior management roles
+        const specificRoles = [
+            "Vice Chancellor",
+            "Dy. Pro Chancellor",
+            "Registrar",
+            "Pro Vice-Chancellor (E & S)",
+            "Pro Vice-Chancellor (A)",
+            "Pro Vice-Chancellor (S & P)",
+            "Dean - (IQAC)",
+            "Dean - (Admissions)"
+        ];
+
+        if (specificRoles.includes(designation)) {
+            allowedStatuses.push(`Submitted to ${designation}`);
+        }
+
+        // Check if they are a regular School Dean
+        // Checking via roles catalog if available, or designation fallback
+        const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
+        if ((req.user.roles && req.user.roles.includes(ADMIN_ROLE_CATALOG.SCHOOL_DEAN)) || designation === "Dean" || designation === "Associate Dean") {
+            allowedStatuses.push("Submitted to Dean");
+        }
+
+        if (allowedStatuses.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const appraisals = await Appraisal.find({ status: { $in: allowedStatuses } })
+            .populate("facultyId", "name institutionId coreDepartment department doctorate leadership qualification")
+            .populate("academicYearId", "year");
+
+        res.json({ success: true, data: appraisals });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// 13. Generic Management Evaluation
+exports.evaluateManagementAppraisal = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { action, comments } = req.body; // 'Approve' or 'Reject'
+        
+        const appraisal = await Appraisal.findById(id);
+        if (!appraisal) return res.status(404).json({ success: false, message: "Appraisal not found." });
+
+        if (!appraisal.status.startsWith("Submitted to ")) {
+             return res.status(400).json({ success: false, message: "Appraisal is not in a submittable state for management." });
+        }
+
+        let roleName = appraisal.status.replace("Submitted to ", "");
+        
+        if (action === "Approve") {
+            appraisal.status = `Approved by ${roleName}`;
+        } else if (action === "Reject") {
+            appraisal.status = `Rejected by ${roleName}`;
+        } else {
+             return res.status(400).json({ success: false, message: "Invalid action." });
+        }
+
+        // Store comments inside a generic managementEvaluation object if needed
+        appraisal.rndEvaluation = appraisal.rndEvaluation || {};
+        appraisal.rndEvaluation.comments = comments ? (appraisal.rndEvaluation.comments ? appraisal.rndEvaluation.comments + "\n" + comments : comments) : appraisal.rndEvaluation.comments;
+        appraisal.rndEvaluation.evaluatedBy = req.user.userId;
+        appraisal.rndEvaluation.evaluationDate = new Date();
+
+        await appraisal.save();
+        res.json({ success: true, message: `Appraisal ${action}d successfully.`, data: appraisal });
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
 };

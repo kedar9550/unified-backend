@@ -22,7 +22,9 @@ const {
     getAppraisalById,
     getActiveAppraisalYear,
     getMyAppraisals,
-    generateAppraisalPDF
+    generateAppraisalPDF,
+    getPendingManagementAppraisals,
+    evaluateManagementAppraisal
 } = require("./Appraisal.controller");
 
 const { protect, authorize } = require("../../middlewares/authMiddleware");
@@ -79,6 +81,10 @@ router.get("/scopus-data/:academicYearId", protect, authorize("FACULTY", "ADMIN"
 // HOD and Dean Appraisal actions
 router.get("/pending-hod", protect, authorize("DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN"), getPendingHODAppraisals);
 router.put("/hod-evaluate/:id", protect, authorize("DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN"), evaluateHODAppraisal);
+
+// Management Appraisal actions (Dean, Pro-VC, VC, Registrar, etc.)
+router.get("/pending-management", protect, getPendingManagementAppraisals);
+router.put("/management-evaluate/:id", protect, evaluateManagementAppraisal);
 
 // R&D Admin Appraisal actions
 router.get("/pending-rnd", protect, authorize("ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR"), getPendingRNDAppraisals);
