@@ -2,14 +2,15 @@ const Discrepancy = require("./discrepancy.model");
 const path = require("path");
 const fs = require("fs");
 const FacultySubjectResult = require("../FacultySubjectResult/FacultySubjectResult.model");
-const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
+const FacultyProctoringEntry = require("../FacultyProctoringEntry/FacultyProctoringEntry.model");
+// const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
 const FacultyFeedResult = require("../FacultyFeedbackResults/FacultyFeedResult.model");
 
 // Section → responsible role mapping
 const SECTION_ROLE_MAP = {
     TEACHING: "EXAMSECTION",
-    PROCTORING: "UNIPRIME",
-    FEEDBACK: "FEEDBACK COORDINATOR",
+    PROCTORING: "FEEDBACK_COORDINATOR",
+    FEEDBACK: "FEEDBACK_COORDINATOR",
     CO_ATTAINMENT: "EXAMSECTION",
     OTHER: "ADMIN",
 };
@@ -36,7 +37,8 @@ const raiseDiscrepancy = async (req, res) => {
                     return res.status(400).json({ message: "No Course Average Pass Percentage records found for you in the selected Academic Year." });
                 }
             } else if (section === 'PROCTORING') {
-                const hasData = await ProctorSummary.exists({ proctorId: instId, academicYearId });
+                // const hasData = await ProctorSummary.exists({ proctorId: instId, academicYearId });
+                const hasData = await FacultyProctoringEntry.exists({ empId: instId, academicYear: academicYearId });
                 if (!hasData) {
                     return res.status(400).json({ message: "No Proctoring Students' Average Pass Percentage records found for you in the selected Academic Year." });
                 }
@@ -114,8 +116,8 @@ const getDiscrepancies = async (req, res) => {
                 ];
             } else {
                 const rolesToQuery = [activeRole];
-                if (activeRole === "FEEDBACK COORDINATOR") {
-                    rolesToQuery.push("FEEDBACK");
+                if (activeRole === "FEEDBACK_COORDINATOR" || activeRole === "FEEDBACK COORDINATOR") {
+                    rolesToQuery.push("FEEDBACK", "FEEDBACK COORDINATOR", "FEEDBACK_COORDINATOR", "PROCTORING");
                 }
 
                 if (activeRole === "EXAMSECTION") {
@@ -182,10 +184,12 @@ const resolveDiscrepancy = async (req, res) => {
 
         // Check this user's role matches assignedRole
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase());
-        const isAdmin = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME") || userRoles.includes("FEEDBACK COORDINATOR");
+        const isAdmin = userRoles.includes("ADMIN") || userRoles.includes("UNIPRIME") || userRoles.includes("FEEDBACK_COORDINATOR") || userRoles.includes("FEEDBACK COORDINATOR");
         const isHOD = userRoles.includes("HOD");
+        const isFeedbackCoordinator = userRoles.includes("FEEDBACK_COORDINATOR") || userRoles.includes("FEEDBACK COORDINATOR");
         const hasAccess = isAdmin ||
             userRoles.includes(disc.assignedRole?.toUpperCase()) ||
+            (isFeedbackCoordinator && (disc.assignedRole?.toUpperCase() === "FEEDBACK" || disc.assignedRole?.toUpperCase() === "FEEDBACK COORDINATOR" || disc.assignedRole?.toUpperCase() === "FEEDBACK_COORDINATOR")) ||
             (isHOD && disc.section === "PROCTORING" && disc.proctoringType === "ASSIGNED_COUNT");
 
         if (!hasAccess) {

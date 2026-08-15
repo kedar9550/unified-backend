@@ -232,20 +232,21 @@ const uploadUnifiedResults = async (req, res) => {
                 const passPercentage = app > 0 ? ((pas / app) * 100).toFixed(2) : 0;
 
                 // Duplicate Check
-                const duplicateKey = `${ayId}_${semesterNumber}_${yearNumber}_${trimmedCourseCode}_${trimmedSection}`;
+                const trimmedCourseName = (coursename || "").trim().toUpperCase();
+                const duplicateKey = `${faculty.institutionId}_${ayId}_${programDoc._id}_${branchDoc._id}_${trimmedCourseName}_${trimmedCourseCode}_${finalCourseType}_${trimmedSection}_${semesterNumber}_${yearNumber}`;
 
                 if (processedKeys.has(duplicateKey)) {
-                    const existingFacultyInCsv = processedKeys.get(duplicateKey);
-                    if (existingFacultyInCsv === faculty.institutionId) {
-                        throw new Error(`Duplicate entry for Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}' for this Faculty in this CSV`);
-                    } else {
-                        throw new Error(`Duplicate entry in CSV: Another faculty (ID: ${existingFacultyInCsv}) is also assigned to Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}'`);
-                    }
+                    throw new Error(`Duplicate entry found in this CSV for Faculty: ${faculty.institutionId}, Course: ${trimmedCourseCode}, Section: ${trimmedSection}`);
                 }
 
                 const query = {
+                    facultyId: faculty.institutionId,
                     academicYearId: ayId,
+                    programId: programDoc._id,
+                    branchId: branchDoc._id,
+                    courseName: { $regex: new RegExp("^" + escapeRegex(coursename ? coursename.trim() : "") + "$", "i") },
                     courseCode: trimmedCourseCode,
+                    courseType: finalCourseType,
                     section: trimmedSection
                 };
                 if (semesterNumber) query.semesterNumber = semesterNumber;
@@ -253,13 +254,9 @@ const uploadUnifiedResults = async (req, res) => {
 
                 const existing = await FacultySubjectResult.findOne(query);
                 if (existing) {
-                    if (existing.facultyId === faculty.institutionId) {
-                        throw new Error(`Record already exists for Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}' for this Faculty`);
-                    } else {
-                        throw new Error(`Another faculty member (ID: ${existing.facultyId}) is already assigned to Course '${trimmedCourseCode}' Section '${trimmedSection}' in Sem/Year '${semester_or_year}'`);
-                    }
+                    throw new Error(`Record already exists in the database for Faculty: ${faculty.institutionId}, Course: ${trimmedCourseCode}, Section: ${trimmedSection}`);
                 }
-                processedKeys.set(duplicateKey, faculty.institutionId);
+                processedKeys.set(duplicateKey, true);
 
                 results.push({
                     facultyId: faculty.institutionId,
@@ -585,18 +582,27 @@ const updateResult = async (req, res) => {
         }
 
         // Duplicate Check
-        if (updates.courseCode !== undefined || updates.section !== undefined || updates.semesterNumber !== undefined || updates.yearNumber !== undefined || updates.academicYearId !== undefined) {
+        if (updates.courseCode !== undefined || updates.courseName !== undefined || updates.courseType !== undefined || updates.section !== undefined || updates.semesterNumber !== undefined || updates.yearNumber !== undefined || updates.academicYearId !== undefined || updates.programId !== undefined || updates.branchId !== undefined) {
             const existingRecord = await FacultySubjectResult.findById(id);
             if (!existingRecord) return res.status(404).json({ message: "Record not found" });
 
             const code = (updates.courseCode !== undefined ? updates.courseCode : existingRecord.courseCode || "").trim().toUpperCase();
+            const cName = updates.courseName !== undefined ? updates.courseName : existingRecord.courseName;
+            const finalCourseType = updates.courseType !== undefined ? updates.courseType : existingRecord.courseType;
             const sec = (updates.section !== undefined ? updates.section : existingRecord.section || "").trim().toUpperCase();
             const ayId = updates.academicYearId !== undefined ? updates.academicYearId : existingRecord.academicYearId;
+            const progId = updates.programId !== undefined ? updates.programId : existingRecord.programId;
+            const brId = updates.branchId !== undefined ? updates.branchId : existingRecord.branchId;
 
             const query = {
                 _id: { $ne: id },
+                facultyId: existingRecord.facultyId,
                 academicYearId: ayId,
+                programId: progId,
+                branchId: brId,
+                courseName: { $regex: new RegExp("^" + escapeRegex((cName || "").trim()) + "$", "i") },
                 courseCode: code,
+                courseType: finalCourseType,
                 section: sec
             };
 
@@ -608,7 +614,7 @@ const updateResult = async (req, res) => {
 
             const duplicate = await FacultySubjectResult.findOne(query);
             if (duplicate) {
-                return res.status(400).json({ message: `Another record already exists for Course '${code}' Section '${sec}' in this semester/year.` });
+                return res.status(400).json({ message: `Another record already exists for Course '${code}' Section '${sec}' in this semester/year for this Faculty.` });
             }
         }
 
@@ -727,8 +733,13 @@ const createResult = async (req, res) => {
         const sectionClean = (section || "").trim().toUpperCase();
 
         const duplicateQuery = {
+            facultyId: facultyId.trim(),
             academicYearId,
+            programId: resolvedProgramId,
+            branchId: resolvedBranchId,
+            courseName: { $regex: new RegExp("^" + escapeRegex((cName || "").trim()) + "$", "i") },
             courseCode: codeClean,
+            courseType: finalCourseType,
             section: sectionClean
         };
         if (semesterNumber) duplicateQuery.semesterNumber = String(semesterNumber);
@@ -736,7 +747,7 @@ const createResult = async (req, res) => {
 
         const existing = await FacultySubjectResult.findOne(duplicateQuery);
         if (existing) {
-            return res.status(400).json({ message: `Record already exists for Course '${cCode}' Section '${section}' in this semester/year.` });
+            return res.status(400).json({ message: `Record already exists for Course '${cCode}' Section '${section}' in this semester/year for this Faculty.` });
         }
 
         const app = Number(appeared) || 0;

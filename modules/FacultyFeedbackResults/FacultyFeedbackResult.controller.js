@@ -208,22 +208,23 @@ const uploadCSV = async (req, res) => {
                 }
 
                 // Duplicate Check
+                const trimmedSubjectName = (subjectname || "").trim().toUpperCase();
                 const trimmedSubjectCode = subjectcode.trim().toUpperCase();
                 const trimmedSection = (section || "").trim().toUpperCase();
-                const duplicateKey = `${ayId}_${semesterNumber}_${yearNumber}_${trimmedSubjectCode}_${trimmedSection}_${phs}`;
+                const duplicateKey = `${faculty.institutionId}_${ayId}_${programDoc._id}_${branchDoc._id}_${trimmedSubjectName}_${trimmedSubjectCode}_${normalizedSubjType}_${trimmedSection}_${phs}_${semesterNumber}_${yearNumber}`;
 
                 if (processedKeys.has(duplicateKey)) {
-                    const existingFacultyInCsv = processedKeys.get(duplicateKey);
-                    if (existingFacultyInCsv === facultyid.trim()) {
-                        throw new Error(`Duplicate entry for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}' for this Faculty in this CSV`);
-                    } else {
-                        throw new Error(`Duplicate entry in CSV: Another faculty (ID: ${existingFacultyInCsv}) is also assigned to Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}'`);
-                    }
+                    throw new Error(`Duplicate entry found in this CSV for Faculty: ${faculty.institutionId}, Subject: ${trimmedSubjectCode}, Section: ${trimmedSection}, Phase: ${phs}`);
                 }
 
                 const query = {
+                    facultyId: faculty.institutionId,
                     academicYearId: ayId,
+                    programId: programDoc._id,
+                    branchId: branchDoc._id,
+                    subjectName: { $regex: new RegExp("^" + escapeRegex(subjectname ? subjectname.trim() : "") + "$", "i") },
                     subjectCode: trimmedSubjectCode,
+                    subjectType: normalizedSubjType,
                     section: trimmedSection,
                     phase: phs
                 };
@@ -232,13 +233,9 @@ const uploadCSV = async (req, res) => {
 
                 const existing = await FacultyFeedResult.findOne(query);
                 if (existing) {
-                    if (existing.facultyId === faculty.institutionId) {
-                        throw new Error(`Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}' for this Faculty`);
-                    } else {
-                        throw new Error(`Another faculty member (ID: ${existing.facultyId}) is already assigned to Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semester_or_year}'`);
-                    }
+                    throw new Error(`Record already exists in the database for Faculty: ${faculty.institutionId}, Subject: ${trimmedSubjectCode}, Section: ${trimmedSection}, Phase: ${phs}`);
                 }
-                processedKeys.set(duplicateKey, faculty.institutionId);
+                processedKeys.set(duplicateKey, true);
 
                 results.push({
                     facultyId: faculty.institutionId,
@@ -539,19 +536,28 @@ const updateResult = async (req, res) => {
             updates.section = updates.section.trim().toUpperCase();
         }
 
-        if (updates.subjectCode !== undefined || updates.section !== undefined || updates.phase !== undefined || updates.semesterNumber !== undefined || updates.yearNumber !== undefined) {
+        if (updates.subjectCode !== undefined || updates.subjectName !== undefined || updates.subjectType !== undefined || updates.section !== undefined || updates.phase !== undefined || updates.semesterNumber !== undefined || updates.yearNumber !== undefined || updates.academicYearId !== undefined || updates.programId !== undefined || updates.branchId !== undefined) {
             const existingRecord = await FacultyFeedResult.findById(id);
             if (!existingRecord) return res.status(404).json({ message: "Record not found" });
 
             const code = updates.subjectCode !== undefined ? updates.subjectCode.trim().toUpperCase() : existingRecord.subjectCode;
+            const subName = updates.subjectName !== undefined ? updates.subjectName : existingRecord.subjectName;
+            const subType = updates.subjectType !== undefined ? normalizeSubjectType(updates.subjectType) : existingRecord.subjectType;
             const sec = updates.section !== undefined ? updates.section.trim().toUpperCase() : existingRecord.section;
             const phs = updates.phase !== undefined ? Number(updates.phase) : existingRecord.phase;
             const ayId = updates.academicYearId !== undefined ? updates.academicYearId : existingRecord.academicYearId;
+            const progId = updates.programId !== undefined ? updates.programId : existingRecord.programId;
+            const brId = updates.branchId !== undefined ? updates.branchId : existingRecord.branchId;
 
             const query = {
                 _id: { $ne: id },
+                facultyId: existingRecord.facultyId,
                 academicYearId: ayId,
+                programId: progId,
+                branchId: brId,
+                subjectName: { $regex: new RegExp("^" + escapeRegex((subName || "").trim()) + "$", "i") },
                 subjectCode: code,
+                subjectType: subType,
                 section: sec,
                 phase: phs
             };
@@ -670,8 +676,13 @@ const createResult = async (req, res) => {
         const phs = phase ? Number(phase) : undefined;
 
         const query = {
+            facultyId: facultyId.trim(),
             academicYearId,
+            programId,
+            branchId,
+            subjectName: { $regex: new RegExp("^" + escapeRegex((subjectName || "").trim()) + "$", "i") },
             subjectCode: trimmedSubjectCode,
+            subjectType: normalizedSubjType,
             section: trimmedSection,
             phase: phs
         };
@@ -681,11 +692,7 @@ const createResult = async (req, res) => {
         const existing = await FacultyFeedResult.findOne(query);
         if (existing) {
             const semOrYear = semesterNumber || yearNumber || 'unknown';
-            if (existing.facultyId === facultyId.trim()) {
-                return res.status(400).json({ message: `Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semOrYear}' for this Faculty` });
-            } else {
-                return res.status(400).json({ message: `Another faculty member (ID: ${existing.facultyId}) is already assigned to Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semOrYear}'` });
-            }
+            return res.status(400).json({ message: `Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' Phase ${phs} in Sem/Year '${semOrYear}' for this Faculty` });
         }
 
         const record = await FacultyFeedResult.create({
@@ -703,8 +710,8 @@ const createResult = async (req, res) => {
             phase: phase ? Number(phase) : undefined,
             academicYearId,
             semesterTypeId,
-            totalStudents: Number(totalStudents) || 0,
-            givenStudents: Number(givenStudents) || 0,
+            totalStudents: (totalStudents !== undefined && totalStudents !== null && totalStudents !== "") ? Number(totalStudents) : null,
+            givenStudents: (givenStudents !== undefined && givenStudents !== null && givenStudents !== "") ? Number(givenStudents) : null,
             percentage: Number(percentage) || 0,
             uploadedBy: req.user.userId,
         });
