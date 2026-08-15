@@ -636,3 +636,105 @@ exports.getResearchReports = async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+// @desc    Edit details of any research request in-place
+// @route   PUT /api/hod/research-requests/:type/:id
+// @access  Private (Research Dean, Research Coordinator)
+exports.editResearchDetails = async (req, res) => {
+    try {
+        const { type, id } = req.params;
+        const data = { ...req.body };
+
+        // Map type string to mongoose model
+        let Model;
+        switch (type.toLowerCase()) {
+            case 'textbook':
+                Model = Textbook;
+                break;
+            case 'bookchapter':
+            case 'book-chapter':
+                Model = BookChapter;
+                break;
+            case 'journal':
+                Model = Journal;
+                break;
+            case 'patent':
+                Model = Patent;
+                break;
+            case 'fundedproject':
+            case 'funded-project':
+                Model = FundedProject;
+                break;
+            case 'consultancy':
+                Model = Consultancy;
+                break;
+            case 'conference':
+                Model = Conference;
+                break;
+            case 'novelproduct':
+            case 'novel-product':
+                Model = NovelProduct;
+                break;
+            case 'phdscholar':
+            case 'phd-scholar':
+            case 'ph.d. scholar':
+            case 'ph.d.scholar':
+                Model = PhdApplication;
+                break;
+            default:
+                return res.status(400).json({ success: false, message: `Invalid research type: ${type}` });
+        }
+
+        const doc = await Model.findById(id);
+        if (!doc) {
+            return res.status(404).json({ success: false, message: `${type} record not found` });
+        }
+
+        // Exclude critical/read-only fields from direct body modification
+        const excludedFields = ['_id', 'facultyId', 'academicYear', 'createdAt', 'status'];
+        excludedFields.forEach(field => {
+            delete data[field];
+        });
+
+        // Parse complex sub-documents/arrays if passed as JSON strings
+        const arrayFields = ['coAuthors', 'coDevelopers', 'coInvestigators', 'coInventors', 'sdgs'];
+        arrayFields.forEach(field => {
+            if (data[field] && typeof data[field] === 'string') {
+                try {
+                    data[field] = JSON.parse(data[field]);
+                } catch (e) {
+                    console.warn(`[WARNING] Failed to parse JSON for array field '${field}':`, e.message);
+                }
+            }
+        });
+
+        // Handle file uploads if sent in multipart/form-data
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => {
+                data[file.fieldname] = `/uploads/research_docs/${file.filename}`;
+            });
+        }
+
+        // Specific mapping conversions if needed
+        // dateOfFiling / admissionOrAwardDate / sanctionDate conversions
+        if (data.dateOfFiling) data.dateOfFiling = new Date(data.dateOfFiling);
+        if (data.admissionOrAwardDate) data.admissionOrAwardDate = new Date(data.admissionOrAwardDate);
+        if (data.sanctionDate) data.sanctionDate = new Date(data.sanctionDate);
+
+        // Update document fields
+        Object.assign(doc, data);
+
+        // Save updated document
+        const savedDoc = await doc.save();
+
+        res.json({
+            success: true,
+            message: `${type} details updated successfully`,
+            data: savedDoc
+        });
+
+    } catch (error) {
+        console.error("Edit Research Details Error:", error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
