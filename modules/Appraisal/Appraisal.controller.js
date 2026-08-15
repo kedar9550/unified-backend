@@ -44,9 +44,9 @@ const attachEligibilityInfo = (appraisalObj, config) => {
         mins = JSON.parse(JSON.stringify(config.minimumPoints[type]));
     }
     
-    // Adjust minimums for ACET
-    const isACET = appraisalObj.personalInfoSnapshot?.isACET || false;
-    if (isACET) {
+    // Adjust minimums for those without COs
+    const hasCos = appraisalObj.personalInfoSnapshot?.hasCos !== false; // defaults to true
+    if (!hasCos) {
         if (type === "Leadership Team") {
             mins.teaching = 30;
         } else {
@@ -58,11 +58,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     
     const minPoints = mins.total || 0;
 
-    const allowedOrg = [
-        "ugc", "aicte", "iit", "iim", "nit", "mhrd r&d lab", "mhrd r&d labs",
-        "nitttr", "niper", "icmr", "nirf ranked institute (below 200)",
-        "nirf ranked institute (below rank 200)", "govt. university", "government university", "nptel"
-    ];
+    const disallowedOrg = ["other / host institute", "other", "host institute"];
 
     let hasFDP = false;
 
@@ -76,7 +72,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
                 const org = (event.organizingInstitutionCategory || '').toLowerCase().trim();
                 const days = Number(event.numberOfDaysParticipated) || Number(event.daysParticipated) || Number(event.duration) || 0;
 
-                if (cat === 'fdp' && evType === 'fdp participant' && days >= 5 && allowedOrg.includes(org)) {
+                if (cat === 'fdp' && evType === 'fdp participant' && days >= 5 && !disallowedOrg.includes(org)) {
                     if (org.includes("nirf")) {
                         const rank = Number(event.nirfRank);
                         if (!isNaN(rank) && rank > 0 && rank < 200) {
@@ -129,7 +125,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     const aRaw = appraisalObj.administration?.totalClaimed || 0;
     
     const sum1to4 = teachingObtained + researchObtained + v3Obtained + aRaw;
-    const max1to4 = isACET ? 180 : 200;
+    const max1to4 = hasCos ? 200 : 180;
     const capped1to4 = Math.min(max1to4, sum1to4);
     
     // Attach capped 1-4 total to object so UI and Excel can use it if needed
@@ -577,6 +573,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const theoryCO = [];
         let totalCOClaimed = 0;
 
+        // Determine if faculty has Cos for scoring caps
+        let hasCos = faculty.Cos !== "no"; // defaults to yes if not explicitly "no"
+
         subjectResults.forEach(res => {
             if (["THEORY", "INTEGRATED", "Integrated"].includes(res.courseType)) {
                 const semDisplay = res.yearNumber ? `YEAR-${res.yearNumber}` : res.semesterNumber ? `SEM-${res.semesterNumber}` : "";
@@ -596,20 +595,22 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 });
                 totalPPClaimed += ppPoints;
 
-                // CO points
-                let reached = res.noOfCosAttained || 0;
-                if (reached > 5) reached = 5;
-                const coPointsMap = config.teaching.coAttainmentPoints || DEFAULT_CONFIG.teaching.coAttainmentPoints;
-                const coPoints = coPointsMap[reached] || 0;
+                // CO points (only if faculty has COs)
+                if (hasCos) {
+                    let reached = res.noOfCosAttained || 0;
+                    if (reached > 5) reached = 5;
+                    const coPointsMap = config.teaching.coAttainmentPoints || DEFAULT_CONFIG.teaching.coAttainmentPoints;
+                    const coPoints = coPointsMap[reached] || 0;
 
-                theoryCO.push({
-                    courseName: res.courseName,
-                    secBranchSem: secBranchSem,
-                    noOfCos: res.noOfCos || 0,
-                    noOfCosAttained: reached,
-                    pointsClaimed: coPoints
-                });
-                totalCOClaimed += coPoints;
+                    theoryCO.push({
+                        courseName: res.courseName,
+                        secBranchSem: secBranchSem,
+                        noOfCos: res.noOfCos || 0,
+                        noOfCosAttained: reached,
+                        pointsClaimed: coPoints
+                    });
+                    totalCOClaimed += coPoints;
+                }
             }
         });
 
@@ -713,8 +714,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         const proctoringAverage = proctoringItems.length > 0 ? Number((totalProctorPoints / proctoringItems.length).toFixed(2)) : 0;
 
-        // Determine if ACET for scoring caps
-        let isACET = false;
         let schoolId = null;
         let schoolName = "";
         let schoolCode = "";
@@ -725,13 +724,10 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             schoolId = school._id;
             schoolName = school.name || "";
             schoolCode = school.code || "";
-            if (schoolCode.toLowerCase() === 'acet' || schoolName.toLowerCase().includes('engineering and technology')) {
-                isACET = true;
-            }
         }
 
-        // Sum of all Teaching points (capped at 80 normally, 60 for ACET)
-        const teachingMax = isACET ? 60 : 80;
+        // Sum of all Teaching points (capped at 80 normally, 60 for those without Cos)
+        const teachingMax = hasCos ? 80 : 60;
         const totalTeachingPoints = Math.min(teachingMax, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
 
         // --- 2. Research Contributions ---
@@ -1487,7 +1483,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 schoolId: schoolId,
                 schoolName: schoolName,
                 schoolCode: schoolCode,
-                isACET: isACET
+                hasCos: hasCos
             },
             teaching: {
                 passPercentage: { courses: theoryPP, averagePoints: ppAverage },
@@ -1666,7 +1662,7 @@ exports.submitAppraisal = async (req, res) => {
             const type = (r.activityType || '').toLowerCase().trim();
             const org = (r.organizingInstitutionCategory || '').toLowerCase().trim();
             const days = Number(r.numberOfDaysParticipated) || Number(r.daysParticipated) || Number(r.duration) || 0;
-            if (cat === 'fdp' && type === 'fdp participant' && days >= 5 && allowedOrg.includes(org)) {
+            if (cat === 'fdp' && type === 'fdp participant' && days >= 5 && (allowedOrg.includes(org) || org.includes('recognised') || org.includes('recognized'))) {
                 if (org.includes("nirf")) {
                     const rank = Number(r.nirfRank);
                     return !isNaN(rank) && rank > 0 && rank < 200;
@@ -1792,14 +1788,28 @@ exports.evaluateHODAppraisal = async (req, res) => {
             };
             await appraisal.save();
 
-            // NOTE: Individual record statuses (Approved, Rejected, Pending at HOD) are NOT
-            // automatically reverted here. Per the workflow spec, rejected records must NEVER
-            // automatically become Draft. Only when the faculty explicitly edits and saves a
-            // Rejected record does it transition: Rejected → Draft (done in each module's
-            // update controller). Pending at HOD records likewise stay as-is so the HOD can
-            // continue verifying them individually.
+            const facultyId = appraisal.facultyId;
+            const academicYearId = appraisal.academicYearId;
 
-            return res.json({ success: true, message: "Appraisal sent back to faculty.", data: appraisal });
+            // User requested: At the time of rejection, any items in section 3.1 (Resource Utilization),
+            // 3.2 (Expertise Contribution), and 4 (Administration) that are currently "Pending"
+            // should automatically have their status reverted back to "Draft" so the faculty can edit them.
+            await ResourceUtilization.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Pending" },
+                { $set: { status: "Draft" } }
+            );
+
+            await Contribution.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Pending" },
+                { $set: { status: "Draft" } }
+            );
+
+            await FacultyAdministration.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Pending" },
+                { $set: { status: "Draft" } }
+            );
+
+            return res.json({ success: true, message: "Appraisal sent back to faculty. Pending individual items reverted to Draft.", data: appraisal });
         }
 
         if (action === "Approve") {
@@ -2482,7 +2492,7 @@ exports.updateProctoringDuties = async (req, res) => {
         const proctoringAverage = appraisal.teaching.proctoring?.averagePoints || 0;
         const coAverage = appraisal.teaching.coAttainment?.averagePoints || 0;
 
-        const teachingMax = appraisal.personalInfoSnapshot?.isACET ? 60 : 80;
+        const teachingMax = appraisal.personalInfoSnapshot?.hasCos !== false ? 80 : 60;
         appraisal.teaching.totalClaimed = Math.min(teachingMax, Number((ppAverage + feedbackAverage + proctoringAverage + coAverage).toFixed(2)));
 
         await appraisal.save();

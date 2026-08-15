@@ -733,6 +733,7 @@ const bulkRegisterUser = async (req, res) => {
                 const dojRaw = row.dateOfJoining || row['date of joining'] || row.doj;
                 const dojInput = formatDOJ(dojRaw);
                 const defaultRoleInput = (row.defaultRole || row['default role'] || row.DefaultRole || row.role)?.toString().trim();
+                const cosInput = (row.cos || row.Cos || row['cos'])?.toString().trim().toLowerCase() === "no" ? "no" : "yes";
                 
                 
 
@@ -855,7 +856,8 @@ const bulkRegisterUser = async (req, res) => {
                     password,
                     leadership: leadershipInput === 'yes' ? 'yes' : 'no',
                     dateOfJoining: dojInput || ecapDoj,
-                    college: assignedCollege
+                    college: assignedCollege,
+                    Cos: cosInput
                 };
 
 
@@ -1542,7 +1544,7 @@ const downloadBulkTemplate = async (req, res) => {
         // Headers
         const headers = [
             "Institution ID", "Email Address", "Serving Dept Code", 
-            "Parent Dept Code", "Date of Joining", "Leadership", "Default Role",
+            "Parent Dept Code", "Date of Joining", "Leadership", "Default Role", "Cos",
             "Qual 1 Level", "Qual 1 Degree", "Qual 1 Month", "Qual 1 Year",
             "Qual 2 Level", "Qual 2 Degree", "Qual 2 Month", "Qual 2 Year",
             "Qual 3 Level", "Qual 3 Degree", "Qual 3 Month", "Qual 3 Year"
@@ -1559,6 +1561,7 @@ const downloadBulkTemplate = async (req, res) => {
             "Date of Joining": "01-01-2025",
             "Leadership": "no",
             "Default Role": "FACULTY",
+            "Cos": "yes",
             "Qual 1 Level": "UG",
             "Qual 1 Degree": "B.Tech.",
             "Qual 1 Month": "May",
@@ -1579,21 +1582,22 @@ const downloadBulkTemplate = async (req, res) => {
             sheet.getCell(`C${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [deptRange] };
             sheet.getCell(`D${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [deptRange] };
 
-            // Leadership (F), Default Role (G)
+            // Leadership (F), Default Role (G), Cos (H)
             sheet.getCell(`F${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$F$1:$F$2'] };
             sheet.getCell(`G${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$G$1:$G$2'] };
+            sheet.getCell(`H${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$F$1:$F$2'] };
 
-            // Qual 1 Level (H), Qual 1 Degree (I)
-            sheet.getCell(`H${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
-            sheet.getCell(`I${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(H${i})`] };
+            // Qual 1 Level (I), Qual 1 Degree (J)
+            sheet.getCell(`I${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
+            sheet.getCell(`J${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(I${i})`] };
 
-            // Qual 2 Level (L), Qual 2 Degree (M)
-            sheet.getCell(`L${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
-            sheet.getCell(`M${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(L${i})`] };
+            // Qual 2 Level (M), Qual 2 Degree (N)
+            sheet.getCell(`M${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
+            sheet.getCell(`N${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(M${i})`] };
 
-            // Qual 3 Level (P), Qual 3 Degree (Q)
-            sheet.getCell(`P${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
-            sheet.getCell(`Q${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(P${i})`] };
+            // Qual 3 Level (Q), Qual 3 Degree (R)
+            sheet.getCell(`Q${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: ['Lists!$A$1:$A$3'] };
+            sheet.getCell(`R${i}`).dataValidation = { type: 'list', allowBlank: true, formulae: [`INDIRECT(Q${i})`] };
         }
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

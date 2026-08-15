@@ -140,6 +140,12 @@ const EmployeeSchema = new mongoose.Schema({
         default: null
     },
 
+    Cos: {
+        type: String,
+        enum: ["yes", "no"],
+        default: "yes"
+    },
+
     fcmIds: {
         type: [String],
         default: []

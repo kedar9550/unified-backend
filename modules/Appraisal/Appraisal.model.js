@@ -48,7 +48,7 @@ const AppraisalSchema = new mongoose.Schema({
         schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
         schoolName: String,
         schoolCode: String,
-        isACET: { type: Boolean, default: false }
+        hasCos: { type: Boolean, default: true }
     },
 
     // PART-B: Performance Attributes & Points
