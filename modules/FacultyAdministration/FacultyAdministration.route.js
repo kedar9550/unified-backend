@@ -8,7 +8,19 @@ router.post("/", protect, facultyAdministrationController.createOrUpdateEntry);
 router.get("/my-entries", protect, facultyAdministrationController.getMyEntries);
 
 // HOD: View department faculty declarations and Approve/Reject
-router.get("/pending-hod", protect, authorize("HOD", "SCHOOL_DEAN"), facultyAdministrationController.getPendingAtHOD);
-router.put("/hod-action-role/:id", protect, authorize("HOD", "SCHOOL_DEAN"), facultyAdministrationController.hodActionRole);
+const primaryEvaluatorRoles = [
+    "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", 
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS"
+];
+
+router.get("/pending-hod", protect, authorize(...primaryEvaluatorRoles), facultyAdministrationController.getPendingAtHOD);
+router.put("/hod-action-role/:id", protect, authorize(...primaryEvaluatorRoles), facultyAdministrationController.hodActionRole);
 
 module.exports = router;

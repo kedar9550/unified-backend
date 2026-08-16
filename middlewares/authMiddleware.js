@@ -76,11 +76,16 @@ const authorize = (...allowedRoles) => {
             return next(new Error('Access denied: no roles found'));
         }
 
-        // req.user.roles = [{ role: 'EXAM_CELL', app: 'UNIFIED_SYSTEM' }, ...]
-        const userRoleNames = req.user.roles.map(r => r.role?.toUpperCase());
+        // req.user.roles = [{ role: { key: 'HOD', name: 'HOD' }, app: 'UNIFIED_SYSTEM' }, ...]
+        const userRoleNames = req.user.roles.flatMap(r => {
+            const roleName = (r.role?.name || '').toUpperCase().trim();
+            const roleKey = (r.role?.key || '').toUpperCase().trim();
+            const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+            return [roleName, roleKey, roleDirect].filter(Boolean);
+        });
 
         const hasRole = allowedRoles.some(role =>
-            userRoleNames.includes(role.toUpperCase())
+            userRoleNames.includes(role.toUpperCase().trim())
         );
 
         if (!hasRole) {

@@ -14,12 +14,12 @@ const getFacultyCategoryHelper = (fac) => {
     const doct = (fac.doctorate || "").toLowerCase().trim();
 
     if (lead === "yes" || lead === "true") return "Leadership Team";
-    
+
     let hasPhd = false;
     if (fac.qualifications && Array.isArray(fac.qualifications)) {
-        hasPhd = fac.qualifications.some(q => 
-            q.level === "Doctoral" || 
-            (q.qualification || "").toLowerCase().trim().includes("phd") || 
+        hasPhd = fac.qualifications.some(q =>
+            q.level === "Doctoral" ||
+            (q.qualification || "").toLowerCase().trim().includes("phd") ||
             (q.qualification || "").toLowerCase().trim().includes("ph.d")
         );
     } else if (fac.qualification) {
@@ -43,7 +43,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
         // Deep copy to avoid mutating the config
         mins = JSON.parse(JSON.stringify(config.minimumPoints[type]));
     }
-    
+
     // Adjust minimums for those without COs
     const hasCos = appraisalObj.personalInfoSnapshot?.hasCos !== false; // defaults to true
     if (!hasCos) {
@@ -55,7 +55,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
         // Total drops by 20 because max teaching drops from 80 to 60
         mins.total = (mins.total || 0) - 20;
     }
-    
+
     const minPoints = mins.total || 0;
 
     const disallowedOrg = ["other / host institute", "other", "host institute"];
@@ -63,9 +63,9 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     let hasFDP = false;
 
     // 1. Check FDP in Resource Utilization (3.1)
-    const resourceItems = appraisalObj.resourceUtilizationDetails || 
-                          (appraisalObj.valueAddition && appraisalObj.valueAddition.resourceUtilization?.items?.map(i => i.eventId)) || 
-                          [];
+    const resourceItems = appraisalObj.resourceUtilizationDetails ||
+        (appraisalObj.valueAddition && appraisalObj.valueAddition.resourceUtilization?.items?.map(i => i.eventId)) ||
+        [];
 
     for (const event of resourceItems) {
         if (event && event.status !== "Rejected") {
@@ -91,14 +91,14 @@ const attachEligibilityInfo = (appraisalObj, config) => {
 
     // 2. Check Coursera 40hrs in Expertise Contribution (3.2)
     if (!hasFDP) {
-        const contributionItems = appraisalObj.contributionDetails || 
-                                  (appraisalObj.valueAddition && appraisalObj.valueAddition.expertiseContribution?.items?.map(i => i.contributionId)) || 
-                                  [];
-                                  
+        const contributionItems = appraisalObj.contributionDetails ||
+            (appraisalObj.valueAddition && appraisalObj.valueAddition.expertiseContribution?.items?.map(i => i.contributionId)) ||
+            [];
+
         for (const contribution of contributionItems) {
             if (contribution && contribution.category && contribution.status !== "Rejected") {
                 const catCode = typeof contribution.category === 'object' ? contribution.category?.code : parseInt(contribution.category);
-                
+
                 // Assuming Category 12 is Coursera, fallback to name matching if code not present
                 const catName = (contribution.category.name || '').toLowerCase();
                 if ((catCode === 12 || catName.includes('coursera')) && Number(contribution.courseHours) >= 40) {
@@ -116,7 +116,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     let isFulfilled = true;
     if (!hasFDP) isFulfilled = false;
     if (r21Obtained < r21Min) isFulfilled = false;
-    
+
     // In previous frontend it was checked >= 30, but usually it's checked against min config. Let's use >= 30 for consistency with old code or check against mins.interpersonalSkills if exists.
     const iRawMin = mins.interpersonalSkills || 30;
     if (iRaw < iRawMin) isFulfilled = false;
@@ -127,11 +127,11 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     const v32 = appraisalObj.valueAddition?.expertiseContribution?.totalClaimed || 0;
     const v3Obtained = v31 + v32;
     const aRaw = appraisalObj.administration?.totalClaimed || 0;
-    
+
     const sum1to4 = teachingObtained + researchObtained + v3Obtained + aRaw;
     const max1to4 = hasCos ? 200 : 180;
     const capped1to4 = Math.min(max1to4, sum1to4);
-    
+
     // Attach capped 1-4 total to object so UI and Excel can use it if needed
     appraisalObj.cappedTotal1to4 = capped1to4;
 
@@ -522,7 +522,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             const resourceUt = await ResourceUtilization.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } });
             const contributions = await Contribution.find({ facultyId, academicYear: academicYearId, removedFromAppraisal: { $ne: true } }).populate("category");
             const adminRoles = await FacultyAdministration.findOne({ facultyId, academicYear: academicYearId });
-            
+
             // Re-populate required fields for attachEligibilityInfo if not already populated
             await appraisal.populate([
                 {
@@ -720,7 +720,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         let schoolId = null;
         let schoolName = "";
         let schoolCode = "";
-        
+
         const servingDept = faculty.department;
         if (servingDept && servingDept.schoolIds && servingDept.schoolIds.length > 0) {
             const school = servingDept.schoolIds[0]; // Assuming populated
@@ -1055,7 +1055,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             } else {
                 claimStatus = "auto_eligible";
             }
-            
+
             if (isClaimantEligible(n, faculty.institutionId)) {
                 const categoryKey = n.category ? n.category.toLowerCase() : 'developed';
                 pts = config.research.novelProductPoints[categoryKey] || (categoryKey === 'implemented' ? 20 : 10);
@@ -1111,7 +1111,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             } else {
                 claimStatus = "auto_eligible";
             }
-            
+
             if (p.applyingSeedGrant !== "Yes" && p.fundingAgencyAditya !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
                 const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
                 if (statusKey === 'sanctioned') {
@@ -1152,7 +1152,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             } else {
                 claimStatus = "auto_eligible";
             }
-            
+
             if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
                 const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
                 if (statusKey === 'sanctioned') {
@@ -1457,11 +1457,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // Compile updated dynamic snapshot details
         const evaluatedCategory = getFacultyCategoryHelper(faculty);
-        
+
         let deptName = "N/A";
         if (faculty.department) {
-            deptName = (faculty.department.type === 'Central' && faculty.coreDepartment) 
-                ? faculty.coreDepartment.name 
+            deptName = (faculty.department.type === 'Central' && faculty.coreDepartment)
+                ? faculty.coreDepartment.name
                 : faculty.department.name;
         }
 
@@ -1479,8 +1479,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 wosId: faculty.wosId || "",
                 orcidId: faculty.orcidId || "",
                 dateOfJoining: faculty.dateOfJoining || faculty.createdAt, // fallback
-                qualification: (faculty.qualifications && faculty.qualifications.length > 0) 
-                    ? faculty.qualifications.map(q => q.qualification).join(', ') 
+                qualification: (faculty.qualifications && faculty.qualifications.length > 0)
+                    ? faculty.qualifications.map(q => q.qualification).join(', ')
                     : faculty.qualification || "N/A",
                 qualifications: faculty.qualifications || [],
                 schoolId: schoolId,
@@ -1698,10 +1698,10 @@ exports.submitAppraisal = async (req, res) => {
         );
 
         let nextStatus = "Submitted to Dean"; // Default
-        
+
         const designation = (faculty.designation || "").trim();
         const schoolCode = (appraisal.personalInfoSnapshot?.schoolCode || "").toUpperCase();
-        
+
         const designationRoutingMap = {
             "Dean - Research & Consultancy": "Vice Chancellor",
             "Dean - International Relations": "Vice Chancellor",
@@ -1714,7 +1714,7 @@ exports.submitAppraisal = async (req, res) => {
             "Dean - School of Engg.,": "Pro Vice-Chancellor (E & S)",
             "Dean_School of Pharmacy": "Pro Vice-Chancellor (E & S)",
             "Dean_ Student Welfare": "Pro Vice-Chancellor (E & S)",
-            "Associate Dean - School of Computing": "Pro Vice-Chancellor (E & S)",
+            "Assoc.Prof. & Assoc. Dean-School Of Computing": "Pro Vice-Chancellor (E & S)",
             "Associate Dean - School of Sciences": "Pro Vice-Chancellor (E & S)",
             "Associate Dean - FE Dept": "Pro Vice-Chancellor (E & S)",
             "Associate Dean - School of Business": "Pro Vice-Chancellor (S & P)",
@@ -1732,7 +1732,7 @@ exports.submitAppraisal = async (req, res) => {
             const hodRoleIds = ["HOD", "DEPARTMENT HOD", "DEPARTMENT_HOD"];
             const userRoles = (req.user.roles || []).map(r => typeof r === 'string' ? r.toUpperCase() : (r.role?.key?.toUpperCase() || r.role?.toUpperCase() || r.role || ''));
             const isHOD = userRoles.some(role => hodRoleIds.includes(role));
-            
+
             if (isHOD) {
                 nextStatus = "Submitted to Dean";
             } else {
@@ -1781,17 +1781,17 @@ exports.getPendingHODAppraisals = async (req, res) => {
                 { "hodEvaluation.evaluatedBy": { $exists: true } }
             ]
         })
-        .populate("facultyId", "name institutionId coreDepartment department doctorate leadership qualification")
-        .populate("academicYearId", "year")
-        .populate([
-            {
-                path: 'valueAddition.expertiseContribution.items.contributionId',
-                populate: { path: 'category' }
-            },
-            {
-                path: 'valueAddition.resourceUtilization.items.eventId'
-            }
-        ]);
+            .populate("facultyId", "name institutionId coreDepartment department doctorate leadership qualification")
+            .populate("academicYearId", "year")
+            .populate([
+                {
+                    path: 'valueAddition.expertiseContribution.items.contributionId',
+                    populate: { path: 'category' }
+                },
+                {
+                    path: 'valueAddition.resourceUtilization.items.eventId'
+                }
+            ]);
 
         const config = await AppraisalConfig.findOne({ isActive: true }); // Assuming active config or we can match academicYearId from the appraisals
 
@@ -1836,14 +1836,14 @@ exports.evaluateHODAppraisal = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
         }
 
-        const targetRoleName = appraisal.status.startsWith("Submitted to ") 
-                               ? appraisal.status.replace("Submitted to ", "") 
-                               : "HOD";
+        const targetRoleName = appraisal.status.startsWith("Submitted to ")
+            ? appraisal.status.replace("Submitted to ", "")
+            : "HOD";
         const isBypassedHOD = targetRoleName !== "HOD";
 
         if (action === "Reject") {
             appraisal.status = `Rejected by ${targetRoleName}`;
-            
+
             if (!appraisal.rejectionHistory) appraisal.rejectionHistory = [];
             appraisal.rejectionHistory.push({
                 role: isBypassedHOD ? req.user.role : 'HOD',
@@ -1987,7 +1987,7 @@ exports.evaluateHODAppraisal = async (req, res) => {
         } else {
             appraisal.status = "Submitted to Dean";
         }
-        
+
         await appraisal.save();
 
         res.json({ success: true, message: `Appraisal evaluated and ${appraisal.status}.`, data: appraisal });
@@ -2002,17 +2002,17 @@ exports.getPendingRNDAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find({
             status: { $in: ["Pending Research Admin", "Completed"] }
         })
-        .populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college leadership")
-        .populate("academicYearId", "year")
-        .populate([
-            {
-                path: 'valueAddition.expertiseContribution.items.contributionId',
-                populate: { path: 'category' }
-            },
-            {
-                path: 'valueAddition.resourceUtilization.items.eventId'
-            }
-        ]);
+            .populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college leadership")
+            .populate("academicYearId", "year")
+            .populate([
+                {
+                    path: 'valueAddition.expertiseContribution.items.contributionId',
+                    populate: { path: 'category' }
+                },
+                {
+                    path: 'valueAddition.resourceUtilization.items.eventId'
+                }
+            ]);
 
         const AuthorCitations = require('../AuthorCitations/AuthorCitations.model');
         const AppraisalConfig = require('./AppraisalConfig.model');
@@ -2843,20 +2843,44 @@ exports.getAppraisalById = async (req, res) => {
                 { path: 'coreDepartment', select: 'name' }
             ]
         }).populate('research.novelProducts.items.productId')
-          .populate('valueAddition.resourceUtilization.items.eventId')
-          .populate({
-              path: 'valueAddition.expertiseContribution.items.contributionId',
-              populate: { path: 'category' }
-          });
+            .populate('valueAddition.resourceUtilization.items.eventId')
+            .populate({
+                path: 'valueAddition.expertiseContribution.items.contributionId',
+                populate: { path: 'category' }
+            });
 
         if (!appraisal) {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
         }
 
         // Security check for FACULTY role
-        const userRoles = req.user.roles.map(r => r.role?.toUpperCase());
+        let userRoles = (req.user.roles || []).flatMap(r => {
+            const roleName = (r.role?.name || '').toUpperCase().trim();
+            const roleKey = (r.role?.key || '').toUpperCase().trim();
+            const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+            return [roleName, roleKey, roleDirect].filter(Boolean);
+        });
+
+        // Normalize roles that might have different naming conventions in the token
+        userRoles = userRoles.map(role => {
+            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S") {
+                return "PRO VICE-CHANCELLOR (E & S)";
+            }
+            if (role === "VICE_CHANCELLOR") return "VICE CHANCELLOR";
+            if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
+            if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
+            if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
+            return role;
+        });
+
         const isFaculty = userRoles.includes("FACULTY");
-        const isHigherRole = userRoles.some(r => ["UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD", "SCHOOL DEAN", "SCHOOL_DEAN"].includes(r));
+        const higherRoles = [
+            "UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD", "SCHOOL DEAN", "SCHOOL_DEAN",
+            "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR", 
+            "PRO VICE-CHANCELLOR (E & S)", "PRO VICE-CHANCELLOR (A)", "PRO VICE-CHANCELLOR (S & P)",
+            "DEAN - (IQAC)", "DEAN - (ADMISSIONS)", "DEAN"
+        ];
+        const isHigherRole = userRoles.some(r => higherRoles.includes(r));
 
         if (isFaculty && !isHigherRole) {
             const facultyIdStr = appraisal.facultyId?._id?.toString() || appraisal.facultyId?.toString();
@@ -2926,7 +2950,7 @@ exports.getMyAppraisals = async (req, res) => {
 
         const formattedAppraisals = await Promise.all(appraisals.map(async (app) => {
             const config = await AppraisalConfig.findOne({ academicYearId: app.academicYearId._id });
-            
+
             const appObj = app.toObject();
             appObj.facultyId = faculty.toObject();
             const eligibleApp = attachEligibilityInfo(appObj, config);
@@ -3002,8 +3026,31 @@ exports.getPendingManagementAppraisals = async (req, res) => {
         const userEmployee = await Employee.findById(req.user.userId);
         if (!userEmployee) return res.status(404).json({ success: false, message: "User not found" });
 
-        const designation = (userEmployee.designation || "").trim();
+        let designation = (userEmployee.designation || "").trim();
+        if (designation === "Pro Vice-Chancellor (Engg.&Sci.)" || designation === "Pro Vice Chancellor (Engg.&Sci.)") {
+            designation = "Pro Vice-Chancellor (E & S)";
+        }
         let allowedStatuses = [];
+
+        // Extract user roles in uppercase for comparison
+        let userRolesExtracted = (req.user.roles || []).flatMap(r => {
+            const roleName = (r.role?.name || '').toUpperCase().trim();
+            const roleKey = (r.role?.key || '').toUpperCase().trim();
+            const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+            return [roleName, roleKey, roleDirect].filter(Boolean);
+        });
+
+        // Normalize roles
+        userRolesExtracted = userRolesExtracted.map(role => {
+            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S") {
+                return "PRO VICE-CHANCELLOR (E & S)";
+            }
+            if (role === "VICE_CHANCELLOR") return "VICE CHANCELLOR";
+            if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
+            if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
+            if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
+            return role;
+        });
 
         // Check for specific senior management roles
         const specificRoles = [
@@ -3017,11 +3064,13 @@ exports.getPendingManagementAppraisals = async (req, res) => {
             "Dean - (Admissions)"
         ];
 
-        if (specificRoles.includes(designation)) {
-            allowedStatuses.push(`Submitted to ${designation}`);
-            allowedStatuses.push(`Approved by ${designation}`);
-            allowedStatuses.push(`Rejected by ${designation}`);
-        }
+        specificRoles.forEach(role => {
+            if (userRolesExtracted.includes(role.toUpperCase())) {
+                allowedStatuses.push(`Submitted to ${role}`);
+                allowedStatuses.push(`Approved by ${role}`);
+                allowedStatuses.push(`Rejected by ${role}`);
+            }
+        });
 
         // Check if they are a regular School Dean
         // Checking via roles catalog if available, or designation fallback
@@ -3077,12 +3126,12 @@ exports.evaluateManagementAppraisal = async (req, res) => {
     try {
         const { id } = req.params;
         const { action, comments, interpersonalRatings, totalInterpersonalPoints } = req.body; // 'Approve' or 'Reject'
-        
+
         const appraisal = await Appraisal.findById(id);
         if (!appraisal) return res.status(404).json({ success: false, message: "Appraisal not found." });
 
         if (!appraisal.status.startsWith("Submitted to ")) {
-             return res.status(400).json({ success: false, message: "Appraisal is not in a submittable state for management." });
+            return res.status(400).json({ success: false, message: "Appraisal is not in a submittable state for management." });
         }
 
         if (appraisal.status === "Submitted to HOD") {
@@ -3090,12 +3139,12 @@ exports.evaluateManagementAppraisal = async (req, res) => {
         }
 
         let roleName = appraisal.status.replace("Submitted to ", "");
-        
+
         if (action === "Approve") {
             appraisal.status = `Approved by ${roleName}`;
         } else if (action === "Reject") {
             appraisal.status = `Rejected by ${roleName}`;
-            
+
             if (!appraisal.rejectionHistory) appraisal.rejectionHistory = [];
             appraisal.rejectionHistory.push({
                 role: roleName === "Dean" ? "SCHOOL_DEAN" : roleName,
@@ -3104,14 +3153,14 @@ exports.evaluateManagementAppraisal = async (req, res) => {
                 date: new Date(),
                 evaluatedBy: req.user.userId
             });
-            
+
             // Revert any "Pending", "Pending at HOD", or "Approved by HOD" sections to "Draft" to allow corrections
             const facultyId = appraisal.facultyId;
             const academicYearId = appraisal.academicYearId;
             const ResourceUtilization = require("../ResourceUtilization/ResourceUtilization.model");
             const Contribution = require("../Contribution/Contribution.model");
             const FacultyAdministration = require("../FacultyAdministration/FacultyAdministration.model");
-            
+
             await ResourceUtilization.updateMany(
                 { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Pending at HOD", "Approved by HOD"] } },
                 { $set: { status: "Draft" } }
@@ -3130,7 +3179,7 @@ exports.evaluateManagementAppraisal = async (req, res) => {
             // Clear HOD Evaluation so they must re-evaluate and see the Dean's remarks upon resubmission
             appraisal.hodEvaluation = undefined;
         } else {
-             return res.status(400).json({ success: false, message: "Invalid action." });
+            return res.status(400).json({ success: false, message: "Invalid action." });
         }
 
         // If Management acted as the primary evaluator (HOD), save the Interpersonal Ratings

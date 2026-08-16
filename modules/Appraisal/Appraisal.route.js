@@ -80,7 +80,17 @@ router.get("/scopus-data/:academicYearId", protect, authorize("FACULTY", "ADMIN"
 
 // HOD and Dean Appraisal actions
 router.get("/pending-hod", protect, authorize("DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN"), getPendingHODAppraisals);
-router.put("/hod-evaluate/:id", protect, authorize("DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN"), evaluateHODAppraisal);
+router.put("/hod-evaluate/:id", protect, authorize(
+    "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", 
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS"
+), evaluateHODAppraisal);
 
 // Management Appraisal actions (Dean, Pro-VC, VC, Registrar, etc.)
 router.get("/pending-management", protect, getPendingManagementAppraisals);

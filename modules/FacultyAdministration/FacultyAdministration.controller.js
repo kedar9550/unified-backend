@@ -248,7 +248,26 @@ exports.hodActionRole = async (req, res) => {
             (targetFaculty.coreDepartment && targetFaculty.coreDepartment.toString() === deptId.toString())
         );
 
-        if (!hasAccess) {
+        // Allow bypass if the user is a Management Role (Primary Evaluator bypassing HOD)
+        const userRoles = (req.user.roles || []).flatMap(r => {
+            const roleName = (r.role?.name || '').toUpperCase().trim();
+            const roleKey = (r.role?.key || '').toUpperCase().trim();
+            const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+            return [roleName, roleKey, roleDirect].filter(Boolean);
+        });
+        const isManagementRole = userRoles.some(r => [
+            "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+            "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+            "REGISTRAR",
+            "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+            "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+            "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+            "DEAN - (IQAC)", "DEAN_IQAC",
+            "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+            "SCHOOL DEAN", "SCHOOL_DEAN"
+        ].includes(r));
+
+        if (!hasAccess && !isManagementRole) {
             return res.status(403).json({ success: false, message: "Unauthorized: HOD is not authorized to act on declarations for this faculty member." });
         }
 

@@ -32,9 +32,21 @@ const upload = multer({
 // --- Routes ---
 
 // HOD Routes
-router.get('/pending-hod', protect, authorize('HOD', 'SCHOOL_DEAN'), controller.getPendingAtHOD);
-router.put('/hod-action/:id', protect, authorize('HOD', 'SCHOOL_DEAN'), controller.hodAction);
-router.post('/hod-bulk-action', protect, authorize('HOD', 'SCHOOL_DEAN'), controller.bulkHODAction);
+const primaryEvaluatorRoles = [
+    "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", 
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS"
+];
+
+router.get('/pending-hod', protect, authorize(...primaryEvaluatorRoles), controller.getPendingAtHOD);
+router.put('/hod-action/:id', protect, authorize(...primaryEvaluatorRoles), controller.hodAction);
+router.post('/hod-bulk-action', protect, authorize(...primaryEvaluatorRoles), controller.bulkHODAction);
 
 // Faculty Routes
 router.post('/', protect, upload.single('proof'), controller.createContribution);
