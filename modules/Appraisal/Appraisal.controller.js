@@ -1629,7 +1629,7 @@ exports.submitAppraisal = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal draft not found. Initiate it first." });
         }
 
-        if (appraisal.status !== "Draft" && appraisal.status !== "Rejected by HOD") {
+        if (appraisal.status !== "Draft" && !appraisal.status.includes("Rejected")) {
             return res.status(400).json({ success: false, message: "Appraisal has already been submitted." });
         }
 
@@ -1836,13 +1836,24 @@ exports.evaluateHODAppraisal = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal not found." });
         }
 
+        const targetRoleName = appraisal.status.startsWith("Submitted to ") 
+                               ? appraisal.status.replace("Submitted to ", "") 
+                               : "HOD";
+        const isBypassedHOD = targetRoleName !== "HOD";
+
         if (action === "Reject") {
-            appraisal.status = "Rejected by HOD";
-            appraisal.hodEvaluation = {
+            appraisal.status = `Rejected by ${targetRoleName}`;
+            
+            if (!appraisal.rejectionHistory) appraisal.rejectionHistory = [];
+            appraisal.rejectionHistory.push({
+                role: isBypassedHOD ? req.user.role : 'HOD',
+                roleLabel: targetRoleName,
                 comments,
-                evaluatedBy: req.user.userId,
-                evaluationDate: new Date()
-            };
+                date: new Date(),
+                evaluatedBy: req.user.userId
+            });
+            // Clear hodEvaluation so they can start fresh on resubmission, except maybe interpersonalRatings
+            appraisal.hodEvaluation = undefined;
             await appraisal.save();
 
             const facultyId = appraisal.facultyId;
@@ -1970,10 +1981,16 @@ exports.evaluateHODAppraisal = async (req, res) => {
             evaluationDate: new Date()
         };
 
-        appraisal.status = "Submitted to Dean";
+        if (isBypassedHOD) {
+            // Acting as primary evaluator; approval completes both levels in one step.
+            appraisal.status = `Approved by ${targetRoleName}`;
+        } else {
+            appraisal.status = "Submitted to Dean";
+        }
+        
         await appraisal.save();
 
-        res.json({ success: true, message: "Appraisal evaluated by HOD and submitted to Dean.", data: appraisal });
+        res.json({ success: true, message: `Appraisal evaluated and ${appraisal.status}.`, data: appraisal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -3068,6 +3085,10 @@ exports.evaluateManagementAppraisal = async (req, res) => {
              return res.status(400).json({ success: false, message: "Appraisal is not in a submittable state for management." });
         }
 
+        if (appraisal.status === "Submitted to HOD") {
+            return res.status(403).json({ success: false, message: "HOD evaluations must use the dedicated HOD endpoint." });
+        }
+
         let roleName = appraisal.status.replace("Submitted to ", "");
         
         if (action === "Approve") {
@@ -3075,7 +3096,16 @@ exports.evaluateManagementAppraisal = async (req, res) => {
         } else if (action === "Reject") {
             appraisal.status = `Rejected by ${roleName}`;
             
-            // Revert any "Pending" sections to "Draft" to allow corrections
+            if (!appraisal.rejectionHistory) appraisal.rejectionHistory = [];
+            appraisal.rejectionHistory.push({
+                role: roleName === "Dean" ? "SCHOOL_DEAN" : roleName,
+                roleLabel: roleName,
+                comments,
+                date: new Date(),
+                evaluatedBy: req.user.userId
+            });
+            
+            // Revert any "Pending", "Pending at HOD", or "Approved by HOD" sections to "Draft" to allow corrections
             const facultyId = appraisal.facultyId;
             const academicYearId = appraisal.academicYearId;
             const ResourceUtilization = require("../ResourceUtilization/ResourceUtilization.model");
@@ -3083,19 +3113,22 @@ exports.evaluateManagementAppraisal = async (req, res) => {
             const FacultyAdministration = require("../FacultyAdministration/FacultyAdministration.model");
             
             await ResourceUtilization.updateMany(
-                { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Pending at HOD"] } },
+                { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Pending at HOD", "Approved by HOD"] } },
                 { $set: { status: "Draft" } }
             );
 
             await Contribution.updateMany(
-                { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Pending at HOD"] } },
+                { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Pending at HOD", "Approved by HOD"] } },
                 { $set: { status: "Draft" } }
             );
 
             await FacultyAdministration.updateMany(
-                { facultyId, academicYear: academicYearId, status: "Pending" },
-                { $set: { status: "Draft" } }
+                { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Approved by HOD"] } },
+                { $set: { status: "Pending", "roles.$[].status": "Pending" } }
             );
+
+            // Clear HOD Evaluation so they must re-evaluate and see the Dean's remarks upon resubmission
+            appraisal.hodEvaluation = undefined;
         } else {
              return res.status(400).json({ success: false, message: "Invalid action." });
         }
@@ -3111,11 +3144,14 @@ exports.evaluateManagementAppraisal = async (req, res) => {
             };
         }
 
-        // Store comments inside a generic managementEvaluation object
-        appraisal.managementEvaluation = appraisal.managementEvaluation || {};
-        appraisal.managementEvaluation.comments = comments ? (appraisal.managementEvaluation.comments ? appraisal.managementEvaluation.comments + "\n" + comments : comments) : appraisal.managementEvaluation.comments;
-        appraisal.managementEvaluation.evaluatedBy = req.user.userId;
-        appraisal.managementEvaluation.evaluationDate = new Date();
+        // Store comments inside a generic managementEvaluation object ONLY on Approve
+        // On Reject, comments are already in rejectionHistory
+        if (action === "Approve") {
+            appraisal.managementEvaluation = appraisal.managementEvaluation || {};
+            appraisal.managementEvaluation.comments = comments || "";
+            appraisal.managementEvaluation.evaluatedBy = req.user.userId;
+            appraisal.managementEvaluation.evaluationDate = new Date();
+        }
 
         await appraisal.save();
         res.json({ success: true, message: `Appraisal ${action}d successfully.`, data: appraisal });

@@ -684,7 +684,7 @@ exports.getPendingAtHOD = async (req, res) => {
 exports.hodAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment } = req.body;
+        const { action, comment, isFinalApproval } = req.body;
 
         if (!action || !['Approve', 'Reject'].includes(action)) {
             return res.status(400).json({ success: false, message: "Please specify a valid action (Approve or Reject)." });
@@ -695,7 +695,11 @@ exports.hodAction = async (req, res) => {
             return res.status(404).json({ success: false, message: "Record not found." });
         }
 
-        record.status = action === 'Approve' ? 'Approved' : 'Rejected';
+        if (action === 'Approve') {
+            record.status = isFinalApproval ? 'Approved' : 'Approved by HOD';
+        } else {
+            record.status = 'Rejected';
+        }
         record.hodComment = comment || "";
 
         await record.save();
@@ -716,7 +720,7 @@ exports.hodAction = async (req, res) => {
 // @access  Private (HOD)
 exports.bulkHODAction = async (req, res) => {
     try {
-        const { ids, action, comment } = req.body;
+        const { ids, action, comment, isFinalApproval } = req.body;
 
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
             return res.status(400).json({ success: false, message: "A list of entry IDs is required." });
@@ -725,7 +729,13 @@ exports.bulkHODAction = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please specify a valid action (Approve or Reject)." });
         }
 
-        const status = action === 'Approve' ? 'Approved' : 'Rejected';
+        let status;
+        if (action === 'Approve') {
+            status = isFinalApproval ? 'Approved' : 'Approved by HOD';
+        } else {
+            status = 'Rejected';
+        }
+
         const updateData = { status, hodComment: comment || "" };
 
         await Contribution.updateMany(

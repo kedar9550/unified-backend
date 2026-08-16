@@ -271,7 +271,16 @@ const AppraisalSchema = new mongoose.Schema({
         comments: String,
         evaluatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
         evaluationDate: Date
-    }
+    },
+
+    // Track historical rejection remarks
+    rejectionHistory: [{
+        role: String,
+        roleLabel: String,
+        comments: String,
+        date: { type: Date, default: Date.now },
+        evaluatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' }
+    }]
 }, { timestamps: true });
 
 AppraisalSchema.index({ facultyId: 1, academicYearId: 1 }, { unique: true });

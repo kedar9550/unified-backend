@@ -70,7 +70,7 @@ const ResourceUtilizationSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['Draft', 'Pending at HOD', 'Approved', 'Rejected'],
+        enum: ['Draft', 'Pending at HOD', 'Approved by HOD', 'Approved', 'Rejected'],
         default: 'Draft'
     },
     removedFromAppraisal: {

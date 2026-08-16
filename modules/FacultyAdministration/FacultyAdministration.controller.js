@@ -221,7 +221,7 @@ exports.getPendingAtHOD = async (req, res) => {
 exports.hodActionRole = async (req, res) => {
     try {
         const { id } = req.params;
-        const { roleId, action, remarks } = req.body; // action: "Approve" or "Reject"
+        const { roleId, action, remarks, isFinalApproval } = req.body; // action: "Approve" or "Reject"
 
         if (!roleId) {
             return res.status(400).json({ success: false, message: "roleId is required." });
@@ -258,19 +258,24 @@ exports.hodActionRole = async (req, res) => {
             return res.status(404).json({ success: false, message: `Role ID '${roleId}' not found in this entry.` });
         }
 
-        role.status = action === "Approve" ? "Approved" : "Rejected";
+        if (action === "Approve") {
+            role.status = isFinalApproval ? "Approved" : "Approved by HOD";
+        } else {
+            role.status = "Rejected";
+        }
+        
         role.approvedBy = req.user.userId;
         role.approvalDate = new Date();
         role.remarks = remarks || "";
 
         // Calculate and update overall status based on active roles
         const activeRoles = entry.roles.filter(r => r.isResponsible);
-        const allApproved = activeRoles.every(r => r.status === "Approved");
+        const allApproved = activeRoles.every(r => r.status === "Approved" || r.status === "Approved by HOD");
         const anyRejected = activeRoles.some(r => r.status === "Rejected");
         const anyPending = activeRoles.some(r => r.status === "Pending");
 
         if (allApproved) {
-            entry.status = "Approved";
+            entry.status = isFinalApproval ? "Approved" : "Approved by HOD";
         } else if (anyPending) {
             entry.status = "Pending";
         } else if (anyRejected) {

@@ -34,7 +34,7 @@ const AdministrativeRoleSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ["Pending", "Approved", "Rejected"],
+        enum: ["Pending", "Approved by HOD", "Approved", "Rejected"],
         default: "Pending"
     },
     approvedBy: {
@@ -66,7 +66,7 @@ const FacultyAdministrationSchema = new mongoose.Schema({
     roles: [AdministrativeRoleSchema],
     status: {
         type: String,
-        enum: ["Pending", "Approved", "Rejected"],
+        enum: ["Pending", "Approved by HOD", "Approved", "Rejected"],
         default: "Pending"
     },
     approvedBy: {
