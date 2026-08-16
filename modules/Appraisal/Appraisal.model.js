@@ -266,8 +266,8 @@ const AppraisalSchema = new mongoose.Schema({
         evaluationDate: Date
     },
 
-    // R&D Admin input
-    rndEvaluation: {
+    // Management (Dean/Pro-VC/etc) input
+    managementEvaluation: {
         comments: String,
         evaluatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Employee' },
         evaluationDate: Date

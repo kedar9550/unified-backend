@@ -491,7 +491,6 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         if (!faculty.wosId) missingProfileFields.push("Web of Science ID");
         if (!faculty.orcidId) missingProfileFields.push("ORCID ID");
         if (!faculty.designation) missingProfileFields.push("Designation");
-        if (!faculty.coreDepartment) missingProfileFields.push("Parent Department");
 
         const isProfileComplete = missingProfileFields.length === 0;
 
@@ -1730,9 +1729,8 @@ exports.submitAppraisal = async (req, res) => {
         if (designationRoutingMap[designation]) {
             nextStatus = "Submitted to " + designationRoutingMap[designation];
         } else {
-            const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
-            const hodRoleIds = [ADMIN_ROLE_CATALOG.HOD, ADMIN_ROLE_CATALOG.DEPARTMENT_HOD];
-            const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase() || r.role || r);
+            const hodRoleIds = ["HOD", "DEPARTMENT HOD", "DEPARTMENT_HOD"];
+            const userRoles = (req.user.roles || []).map(r => typeof r === 'string' ? r.toUpperCase() : (r.role?.key?.toUpperCase() || r.role?.toUpperCase() || r.role || ''));
             const isHOD = userRoles.some(role => hodRoleIds.includes(role));
             
             if (isHOD) {
@@ -1766,12 +1764,13 @@ exports.getPendingHODAppraisals = async (req, res) => {
 
         const deptIds = await getHODDepartments(req.user);
 
-        // Find all faculty in HOD's department
+        // Find all faculty in HOD's department (EXCLUDE THEMSELVES)
         const facultyIds = await Employee.find({
             $or: [
                 { coreDepartment: { $in: deptIds } },
                 { department: { $in: deptIds } }
-            ]
+            ],
+            _id: { $ne: req.user.userId }
         }).distinct('_id');
 
         const appraisals = await Appraisal.find({
@@ -3003,6 +3002,8 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 
         if (specificRoles.includes(designation)) {
             allowedStatuses.push(`Submitted to ${designation}`);
+            allowedStatuses.push(`Approved by ${designation}`);
+            allowedStatuses.push(`Rejected by ${designation}`);
         }
 
         // Check if they are a regular School Dean
@@ -3013,6 +3014,8 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 
         if (isSchoolDean) {
             allowedStatuses.push("Submitted to Dean");
+            allowedStatuses.push("Approved by Dean");
+            allowedStatuses.push("Rejected by Dean");
         }
 
         if (allowedStatuses.length === 0) {
@@ -3021,7 +3024,7 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 
         let filter = { status: { $in: allowedStatuses } };
 
-        // Ensure School Deans only see "Submitted to Dean" appraisals from their own schools
+        // Ensure School Deans only see appraisals from their own schools
         if (isSchoolDean) {
             const { getHODDepartments } = require("../../utils/hodHelper");
             const deptIds = await getHODDepartments(req.user);
@@ -3033,10 +3036,11 @@ exports.getPendingManagementAppraisals = async (req, res) => {
                 ]
             }).distinct('_id');
 
+            const deanStatuses = ["Submitted to Dean", "Approved by Dean", "Rejected by Dean"];
             filter = {
                 $or: [
-                    { status: "Submitted to Dean", facultyId: { $in: facultyIds } },
-                    { status: { $in: allowedStatuses.filter(s => s !== "Submitted to Dean") } }
+                    { status: { $in: deanStatuses }, facultyId: { $in: facultyIds } },
+                    { status: { $in: allowedStatuses.filter(s => !deanStatuses.includes(s)) } }
                 ]
             };
         }
@@ -3055,7 +3059,7 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 exports.evaluateManagementAppraisal = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comments } = req.body; // 'Approve' or 'Reject'
+        const { action, comments, interpersonalRatings, totalInterpersonalPoints } = req.body; // 'Approve' or 'Reject'
         
         const appraisal = await Appraisal.findById(id);
         if (!appraisal) return res.status(404).json({ success: false, message: "Appraisal not found." });
@@ -3070,15 +3074,48 @@ exports.evaluateManagementAppraisal = async (req, res) => {
             appraisal.status = `Approved by ${roleName}`;
         } else if (action === "Reject") {
             appraisal.status = `Rejected by ${roleName}`;
+            
+            // Revert any "Pending" sections to "Draft" to allow corrections
+            const facultyId = appraisal.facultyId;
+            const academicYearId = appraisal.academicYearId;
+            const ResourceUtilization = require("../ResourceUtilization/ResourceUtilization.model");
+            const Contribution = require("../Contribution/Contribution.model");
+            const FacultyAdministration = require("../FacultyAdministration/FacultyAdministration.model");
+            
+            await ResourceUtilization.updateMany(
+                { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Pending at HOD"] } },
+                { $set: { status: "Draft" } }
+            );
+
+            await Contribution.updateMany(
+                { facultyId, academicYear: academicYearId, status: { $in: ["Pending", "Pending at HOD"] } },
+                { $set: { status: "Draft" } }
+            );
+
+            await FacultyAdministration.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Pending" },
+                { $set: { status: "Draft" } }
+            );
         } else {
              return res.status(400).json({ success: false, message: "Invalid action." });
         }
 
-        // Store comments inside a generic managementEvaluation object if needed
-        appraisal.rndEvaluation = appraisal.rndEvaluation || {};
-        appraisal.rndEvaluation.comments = comments ? (appraisal.rndEvaluation.comments ? appraisal.rndEvaluation.comments + "\n" + comments : comments) : appraisal.rndEvaluation.comments;
-        appraisal.rndEvaluation.evaluatedBy = req.user.userId;
-        appraisal.rndEvaluation.evaluationDate = new Date();
+        // If Management acted as the primary evaluator (HOD), save the Interpersonal Ratings
+        if (interpersonalRatings && interpersonalRatings.length > 0) {
+            appraisal.hodEvaluation = {
+                interpersonalRatings,
+                totalInterpersonalPoints: totalInterpersonalPoints || 0,
+                comments: "",
+                evaluatedBy: req.user.userId,
+                evaluationDate: new Date()
+            };
+        }
+
+        // Store comments inside a generic managementEvaluation object
+        appraisal.managementEvaluation = appraisal.managementEvaluation || {};
+        appraisal.managementEvaluation.comments = comments ? (appraisal.managementEvaluation.comments ? appraisal.managementEvaluation.comments + "\n" + comments : comments) : appraisal.managementEvaluation.comments;
+        appraisal.managementEvaluation.evaluatedBy = req.user.userId;
+        appraisal.managementEvaluation.evaluationDate = new Date();
 
         await appraisal.save();
         res.json({ success: true, message: `Appraisal ${action}d successfully.`, data: appraisal });
