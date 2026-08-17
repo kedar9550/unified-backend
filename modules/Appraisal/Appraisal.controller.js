@@ -1479,9 +1479,18 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 wosId: faculty.wosId || "",
                 orcidId: faculty.orcidId || "",
                 dateOfJoining: faculty.dateOfJoining || faculty.createdAt, // fallback
-                qualification: (faculty.qualifications && faculty.qualifications.length > 0)
-                    ? faculty.qualifications.map(q => q.qualification).join(', ')
-                    : faculty.qualification || "N/A",
+                qualification: (() => {
+                    if (faculty.qualifications && faculty.qualifications.length > 0) {
+                        const weight = { "Doctoral": 3, "PG": 2, "UG": 1 };
+                        const sortedQuals = [...faculty.qualifications].sort((a, b) => (weight[b.level] || 0) - (weight[a.level] || 0));
+                        const hq = sortedQuals[0];
+                        if (hq && hq.qualification) {
+                            const dateStr = [hq.completedMonth, hq.completedYear].filter(Boolean).join(', ');
+                            return dateStr ? `${hq.qualification} (${dateStr})` : hq.qualification;
+                        }
+                    }
+                    return faculty.qualification || "N/A";
+                })(),
                 qualifications: faculty.qualifications || [],
                 schoolId: schoolId,
                 schoolName: schoolName,
@@ -3219,10 +3228,12 @@ exports.evaluateManagementAppraisal = async (req, res) => {
         // Store comments inside a generic managementEvaluation object ONLY on Approve
         // On Reject, comments are already in rejectionHistory
         if (action === "Approve") {
-            appraisal.managementEvaluation = appraisal.managementEvaluation || {};
-            appraisal.managementEvaluation.comments = comments || "";
-            appraisal.managementEvaluation.evaluatedBy = req.user.userId;
-            appraisal.managementEvaluation.evaluationDate = new Date();
+            appraisal.managementEvaluation = {
+                comments: comments || "",
+                evaluatedBy: req.user.userId,
+                evaluationDate: new Date()
+            };
+            appraisal.markModified('managementEvaluation');
         }
 
         await appraisal.save();
