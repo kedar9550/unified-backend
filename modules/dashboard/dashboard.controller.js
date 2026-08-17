@@ -950,7 +950,7 @@ exports.getFacultyDashboardData = async (req, res, next) => {
         if (req.query.academicYear) {
             ayQuery = { year: req.query.academicYear };
         } else {
-            ayQuery = { isGlobalActive: true };
+            ayQuery = { active: true };
         }
         let ayDoc = await AcademicYear.findOne(ayQuery);
         if (!ayDoc) {
