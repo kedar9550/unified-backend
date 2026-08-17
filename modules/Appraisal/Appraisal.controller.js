@@ -1703,27 +1703,27 @@ exports.submitAppraisal = async (req, res) => {
         const schoolCode = (appraisal.personalInfoSnapshot?.schoolCode || "").toUpperCase();
 
         const designationRoutingMap = {
-            "Dean - Research & Consultancy": "Vice Chancellor",
-            "Dean - International Relations": "Vice Chancellor",
-            "Controller of Examinations": "Vice Chancellor",
-            "Dean - (IQAC)": "Vice Chancellor",
-            "Dean-Career Development": "Vice Chancellor",
-            "Dean - (Admissions)": "Dy. Pro Chancellor",
-            "Dean - Administration": "Registrar",
-            "Dean Students Affairs": "Registrar",
-            "Dean - School of Engg.,": "Pro Vice-Chancellor (E & S)",
-            "Dean_School of Pharmacy": "Pro Vice-Chancellor (E & S)",
-            "Dean_ Student Welfare": "Pro Vice-Chancellor (E & S)",
+            "Professor & Dean - Research & Consultancy": "Vice Chancellor",
+            "Professor & Dean (International Relations)": "Vice Chancellor",
+            "Asst.Professor & Controller Of Examinations": "Vice Chancellor",
+            "Professor & Dean (IQAC)": "Vice Chancellor",
+            "Professor & Dean (Career Development)": "Vice Chancellor",
+            "Assoc. Professor Of Physics & Dean(Admissions)": "Dy. Pro Chancellor",
+            "Asst. Prof. Dean Administration": "Registrar",
+            "Assoc.Prof. & Dean (Students Affairs)": "Registrar",
+            "Professor & Dean-School Of Engg.": "Pro Vice-Chancellor (E & S)",
+            "Professor & Dean School Of Pharmacy": "Pro Vice-Chancellor (E & S)",
+            "Professor & Dean - Student Welfar": "Pro Vice-Chancellor (E & S)",
             "Assoc.Prof. & Assoc. Dean-School Of Computing": "Pro Vice-Chancellor (E & S)",
-            "Associate Dean - School of Sciences": "Pro Vice-Chancellor (E & S)",
-            "Associate Dean - FE Dept": "Pro Vice-Chancellor (E & S)",
-            "Associate Dean - School of Business": "Pro Vice-Chancellor (S & P)",
-            "Associate Dean (IQAC)": "Dean - (IQAC)",
-            "Associate Dean-Admissions": "Dean - (Admissions)",
-            "Associate Dean-Academics": "Pro Vice-Chancellor (A)",
-            "Assoc.Prof. & Asst. Registrar_Statutory ECE": "Registrar",
-            "Asst.Prof. -Maths & Asst. Registrar_Ad FE": "Registrar",
-            "Asst.Prof., Head IT Applications": "Registrar"
+            "Asst. Prof. & Assoc. Dean-School Of Sciences": "Pro Vice-Chancellor (E & S)",
+            "Assoc. Professor & Assoc. Dean-Freshmen Engg.": "Pro Vice-Chancellor (E & S)",
+            "Asst. Prof. & Assoc. Dean-School Of Business": "Pro Vice-Chancellor (S & P)",
+            "Asst. Professor  Of Maths & Assoc. Dean (IQAC)": "Dean - (IQAC)",
+            "Assoc. Professor & Assoc. Dean-Admissions": "Dean - (Admissions)",
+            "Assoc. Professor & Assoc.Dean-Academics": "Pro Vice-Chancellor (A)",
+            "Assoc. Professor & Asst. Registrar": "Registrar",
+            "Asst. Professor & Asst. Registrar": "Registrar",
+            "Asst.Prof. & Head Of IT Applications": "Registrar"
         };
 
         if (designationRoutingMap[designation]) {
@@ -2876,7 +2876,7 @@ exports.getAppraisalById = async (req, res) => {
         const isFaculty = userRoles.includes("FACULTY");
         const higherRoles = [
             "UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD", "SCHOOL DEAN", "SCHOOL_DEAN",
-            "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR", 
+            "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR",
             "PRO VICE-CHANCELLOR (E & S)", "PRO VICE-CHANCELLOR (A)", "PRO VICE-CHANCELLOR (S & P)",
             "DEAN - (IQAC)", "DEAN - (ADMISSIONS)", "DEAN"
         ];
@@ -3142,6 +3142,29 @@ exports.evaluateManagementAppraisal = async (req, res) => {
 
         if (action === "Approve") {
             appraisal.status = `Approved by ${roleName}`;
+
+            const facultyId = appraisal.facultyId;
+            const academicYearId = appraisal.academicYearId;
+            const ResourceUtilization = require("../ResourceUtilization/ResourceUtilization.model");
+            const Contribution = require("../Contribution/Contribution.model");
+            const FacultyAdministration = require("../FacultyAdministration/FacultyAdministration.model");
+
+            // Promote "Approved by HOD" entries to "Approved"
+            await ResourceUtilization.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Approved by HOD" },
+                { $set: { status: "Approved" } }
+            );
+
+            await Contribution.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Approved by HOD" },
+                { $set: { status: "Approved" } }
+            );
+
+            await FacultyAdministration.updateMany(
+                { facultyId, academicYear: academicYearId, status: "Approved by HOD" },
+                { $set: { status: "Approved", "roles.$[elem].status": "Approved" } },
+                { arrayFilters: [{ "elem.status": "Approved by HOD" }] }
+            );
         } else if (action === "Reject") {
             appraisal.status = `Rejected by ${roleName}`;
 
