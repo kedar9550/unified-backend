@@ -1258,17 +1258,17 @@ const getAllEmployees = async (req, res) => {
 };
 
 /**
- * Get all staff in the HOD's department(s) based on coreDepartment
+ * Get all staff in the HOD's department(s) based on department (serving department)
  */
 const getHODStaff = async (req, res) => {
     try {
         const deptIds = await getHODDepartments(req.user);
         if (!deptIds || deptIds.length === 0) {
-            return res.status(200).json([]);
+            return res.status(200).json({ staff: [], canAddStaff: false });
         }
 
         const staff = await Employee.find({
-            coreDepartment: { $in: deptIds },
+            department: { $in: deptIds },
             isActive: true
         })
             .select('-password -otp -otpExpiry')
@@ -1277,7 +1277,33 @@ const getHODStaff = async (req, res) => {
             .sort({ name: 1 })
             .lean();
 
-        res.status(200).json(staff);
+        let canAddStaff = false;
+        const userRoleNames = (req.user.roles || []).flatMap(r => {
+            const roleName = (r.role?.name || '').toUpperCase().trim();
+            const roleKey = (r.role?.key || '').toUpperCase().trim();
+            const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+            return [roleName, roleKey, roleDirect].filter(Boolean);
+        });
+
+        const isHOD = userRoleNames.includes('HOD');
+        const isDean = userRoleNames.includes('SCHOOL_DEAN');
+
+        if (isHOD) {
+            canAddStaff = true;
+        } else if (isDean) {
+            const hodRoleDoc = await Role.findOne({ $or: [{ key: 'HOD' }, { name: 'HOD' }], app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
+            if (hodRoleDoc) {
+                const hodExists = await UserAppRole.exists({
+                    role: hodRoleDoc._id,
+                    departments: { $in: deptIds }
+                });
+                canAddStaff = !hodExists;
+            } else {
+                canAddStaff = true;
+            }
+        }
+
+        res.status(200).json({ staff, canAddStaff });
     } catch (error) {
         console.error('Error fetching HOD staff:', error);
         res.status(500).json({ message: error.message });
@@ -1285,7 +1311,7 @@ const getHODStaff = async (req, res) => {
 };
 
 /**
- * Add a staff member to HOD's department (only change their coreDepartment to HOD's coreDepartment)
+ * Add a staff member to HOD's department (only change their department to HOD's department)
  */
 const addHODStaff = async (req, res) => {
     try {
@@ -1300,32 +1326,38 @@ const addHODStaff = async (req, res) => {
             return res.status(404).json({ message: "HOD user not found" });
         }
 
-        let hodCoreDept = hod.coreDepartment;
-
-        // Safety check: verify if coreDepartment is valid and exists in DB
+        let hodCoreDept = null;
         let isCoreDeptValid = false;
-        if (hodCoreDept && mongoose.Types.ObjectId.isValid(hodCoreDept)) {
-            const coreDeptExists = await Department.exists({ _id: hodCoreDept });
-            if (coreDeptExists) {
+
+        // 1. Try HOD's first managed department ID from role mapping (department they actually manage)
+        const deptIds = await getHODDepartments(req.user);
+        if (deptIds && deptIds.length > 0) {
+            hodCoreDept = deptIds[0];
+            const deptExists = await Department.exists({ _id: hodCoreDept });
+            if (deptExists) {
                 isCoreDeptValid = true;
             }
         }
 
+        // 2. Fallback to HOD's coreDepartment
         if (!isCoreDeptValid) {
-            // Fallback 1: Try HOD's department field
-            if (hod.department && mongoose.Types.ObjectId.isValid(hod.department)) {
-                const deptExists = await Department.exists({ _id: hod.department });
-                if (deptExists) {
-                    hodCoreDept = hod.department;
+            const coreDept = hod.coreDepartment;
+            if (coreDept && mongoose.Types.ObjectId.isValid(coreDept)) {
+                const coreDeptExists = await Department.exists({ _id: coreDept });
+                if (coreDeptExists) {
+                    hodCoreDept = coreDept;
                     isCoreDeptValid = true;
                 }
             }
+        }
 
-            // Fallback 2: Try HOD's first managed department ID from role mapping
-            if (!isCoreDeptValid) {
-                const deptIds = await getHODDepartments(req.user);
-                if (deptIds && deptIds.length > 0) {
-                    hodCoreDept = deptIds[0];
+        // 3. Fallback to HOD's department field
+        if (!isCoreDeptValid) {
+            const dept = hod.department;
+            if (dept && mongoose.Types.ObjectId.isValid(dept)) {
+                const deptExists = await Department.exists({ _id: dept });
+                if (deptExists) {
+                    hodCoreDept = dept;
                     isCoreDeptValid = true;
                 }
             }
@@ -1341,8 +1373,8 @@ const addHODStaff = async (req, res) => {
             return res.status(404).json({ message: "Staff member not found" });
         }
 
-        // 3. Update the staff member's coreDepartment to HOD's coreDepartment
-        staffMember.coreDepartment = hodCoreDept;
+        // 3. Update the staff member's department (serving department) to HOD's department
+        staffMember.department = hodCoreDept;
         await staffMember.save();
 
         res.status(200).json({
