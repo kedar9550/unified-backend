@@ -1778,6 +1778,20 @@ exports.getPendingHODAppraisals = async (req, res) => {
         const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const { getHODDepartments } = require("../../utils/hodHelper");
 
+        const potentialInstId = req.user.institutionId || req.user.userId || req.user.id;
+        const currentEmployee = await Employee.findOne({ 
+            $or: [
+                { institutionId: potentialInstId },
+                ...(mongoose.Types.ObjectId.isValid(potentialInstId) ? [{ _id: potentialInstId }] : [])
+            ]
+        }).select('_id institutionId');
+        
+        let facultyObjectId = req.user.userId;
+        if (currentEmployee) {
+            facultyObjectId = currentEmployee._id;
+            req.user.userId = facultyObjectId;
+        }
+
         const deptIds = await getHODDepartments(req.user);
 
         // Find all faculty in HOD's department (EXCLUDE THEMSELVES)
@@ -1786,7 +1800,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
                 { coreDepartment: { $in: deptIds } },
                 { department: { $in: deptIds } }
             ],
-            _id: { $ne: req.user.userId }
+            _id: { $ne: facultyObjectId }
         }).distinct('_id');
 
         const appraisals = await Appraisal.find({
@@ -2844,7 +2858,28 @@ exports.getAllAppraisals = async (req, res) => {
         const isHOD = userRoles.some(r => ["HOD", "DEPARTMENT HOD", "DEPARTMENT_HOD"].includes(r));
 
         const routingMapEmpIds = Object.keys(designationRoutingMap);
-        const facultyId = req.user.userId;
+
+        // Resolve both the actual Employee ObjectId and the institutionId (emp id)
+        let facultyObjectId = req.user._id;
+        const potentialInstId = req.user.institutionId || req.user.userId || req.user.id;
+        let userInstitutionId = req.user.institutionId;
+
+        const currentEmployee = await Employee.findOne({
+            $or: [
+                { institutionId: potentialInstId },
+                // Only use _id lookup if the string is a valid 24 hex char ObjectId
+                ...(mongoose.Types.ObjectId.isValid(potentialInstId) ? [{ _id: potentialInstId }] : [])
+            ]
+        });
+
+        if (currentEmployee) {
+            facultyObjectId = currentEmployee._id;
+            userInstitutionId = currentEmployee.institutionId;
+            // Also ensure req.user has the correct ObjectId for getHODDepartments
+            req.user.userId = currentEmployee._id;
+        } else if (!userInstitutionId) {
+            userInstitutionId = potentialInstId;
+        }
 
         if (isUnrestricted) {
             // No additional filters
@@ -2854,8 +2889,8 @@ exports.getAllAppraisals = async (req, res) => {
             if (isDeanAdmissions) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Dean - (Admissions)"));
             if (isControllerOfExams) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Controller of Examinations"));
 
-            const allowedEmployees = await Employee.find({ institutionId: { $in: allowedEmpIds } }).select('_id');
-            filterQuery.facultyId = { $in: allowedEmployees.map(e => e._id) };
+            // Filter directly by the maintained emp id (institutionId) in the Appraisal snapshot
+            filterQuery["personalInfoSnapshot.institutionId"] = { $in: allowedEmpIds };
 
         } else if (isSchoolDean) {
             const schoolDeanRole = (req.user.roles || []).find(r => {
@@ -2868,22 +2903,27 @@ exports.getAllAppraisals = async (req, res) => {
 
             if (schoolId) {
                 filterQuery["personalInfoSnapshot.schoolId"] = schoolId;
-                const excludedEmployees = await Employee.find({ institutionId: { $in: routingMapEmpIds } }).select('_id');
-                const excludedFacultyIds = excludedEmployees.map(e => e._id);
-                excludedFacultyIds.push(facultyId); // Exclude self
-                filterQuery.facultyId = { $nin: excludedFacultyIds };
+
+                const excludedInstIds = [...routingMapEmpIds];
+                if (userInstitutionId) excludedInstIds.push(userInstitutionId.toString()); // Exclude self
+
+                filterQuery["personalInfoSnapshot.institutionId"] = { $nin: excludedInstIds };
             } else {
                 return res.json({ success: true, data: [] });
             }
 
         } else if (isHOD) {
-            const employee = await Employee.findById(facultyId);
-            if (employee && employee.department) {
-                const deptEmployees = await Employee.find({ department: employee.department }).select('_id institutionId');
-                const deptFacultyIds = deptEmployees
-                    .filter(e => !routingMapEmpIds.includes(e.institutionId) && e._id.toString() !== facultyId.toString())
-                    .map(e => e._id);
-                filterQuery.facultyId = { $in: deptFacultyIds };
+            const { getHODDepartments } = require("../../utils/hodHelper");
+            const deptIds = await getHODDepartments(req.user);
+
+            if (deptIds && deptIds.length > 0) {
+                // Fetch employees in these departments, but use their institutionId for filtering
+                const deptEmployees = await Employee.find({ department: { $in: deptIds } }).select('institutionId');
+                const deptInstIds = deptEmployees
+                    .map(e => e.institutionId)
+                    .filter(id => !routingMapEmpIds.includes(id) && id?.toString() !== userInstitutionId?.toString());
+
+                filterQuery["personalInfoSnapshot.institutionId"] = { $in: deptInstIds };
             } else {
                 return res.json({ success: true, data: [] });
             }

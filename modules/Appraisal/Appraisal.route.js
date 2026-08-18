@@ -110,7 +110,10 @@ router.get("/all/:academicYearId", protect, authorize(
     "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
     "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
     "DEAN - (IQAC)", "DEAN_IQAC",
-    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS"
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+    "CONTROLLER OF EXAMINATIONS", "CONTROLLER_OF_EXAMINATIONS",
+    "SCHOOL DEAN", "SCHOOL_DEAN",
+    "HOD", "DEPARTMENT HOD", "DEPARTMENT_HOD"
 ), getAllAppraisals);
 router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY"), getAppraisalById);
 
