@@ -100,8 +100,18 @@ router.put("/management-evaluate/:id", protect, evaluateManagementAppraisal);
 router.get("/pending-rnd", protect, authorize("ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR"), getPendingRNDAppraisals);
 router.put("/rnd-evaluate/:id", protect, authorize("ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR"), evaluateRNDAppraisal);
 
-// All Appraisals (UNIPRIME)
-router.get("/all/:academicYearId", protect, authorize("UNIPRIME"), getAllAppraisals);
+// All Appraisals (UNIPRIME & Management)
+router.get("/all/:academicYearId", protect, authorize(
+    "UNIPRIME",
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS"
+), getAllAppraisals);
 router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY"), getAppraisalById);
 
 // PDF Generation

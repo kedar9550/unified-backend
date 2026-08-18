@@ -1138,3 +1138,78 @@ exports.getFacultyDashboardData = async (req, res, next) => {
         next(error);
     }
 };
+
+exports.getLeadershipDashboardData = async (req, res, next) => {
+    try {
+        const role = req.user.role; // Primary role
+        
+        // Special mappings because some roles have specific capitalization in the model
+        const roleToModelStringMap = {
+            "VICE CHANCELLOR": "Vice Chancellor",
+            "DY. PRO CHANCELLOR": "Dy. Pro Chancellor",
+            "REGISTRAR": "Registrar",
+            "PRO VICE-CHANCELLOR (E & S)": "Pro Vice-Chancellor (E & S)",
+            "PRO VICE-CHANCELLOR (A)": "Pro Vice-Chancellor (A)",
+            "PRO VICE-CHANCELLOR (S & P)": "Pro Vice-Chancellor (S & P)",
+            "DEAN - (IQAC)": "Dean - (IQAC)",
+            "DEAN - (ADMISSIONS)": "Dean - (Admissions)"
+        };
+
+        const toTitleCase = (str) => {
+            if (!str) return '';
+            return str.replace(
+                /\w\S*/g,
+                function(txt) {
+                    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+                }
+            );
+        };
+
+        const mappedRoleStr = roleToModelStringMap[role] || toTitleCase(role);
+
+        const pendingStatus = `Submitted to ${mappedRoleStr}`;
+        const approvedStatus = `Approved by ${mappedRoleStr}`;
+        const rejectedStatus = `Rejected by ${mappedRoleStr}`;
+
+        // Fetch counts
+        const [pendingCount, approvedCount, rejectedCount] = await Promise.all([
+            Appraisal.countDocuments({ status: pendingStatus }),
+            Appraisal.countDocuments({ status: approvedStatus }),
+            Appraisal.countDocuments({ status: rejectedStatus })
+        ]);
+
+        const totalHandled = pendingCount + approvedCount + rejectedCount;
+
+        // Fetch recently submitted appraisals (pending this role)
+        const recentSubmissions = await Appraisal.find({ status: pendingStatus })
+            .populate('facultyId', 'name designation department profileImage institutionId')
+            .sort({ updatedAt: -1 })
+            .limit(10)
+            .lean();
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                role: mappedRoleStr,
+                pendingCount,
+                approvedCount,
+                rejectedCount,
+                totalHandled,
+                recentSubmissions: recentSubmissions.map(app => ({
+                    _id: app._id,
+                    facultyName: app.facultyId?.name || app.personalInfoSnapshot?.name || 'Unknown',
+                    institutionId: app.facultyId?.institutionId || app.personalInfoSnapshot?.institutionId || 'N/A',
+                    designation: app.facultyId?.designation || app.personalInfoSnapshot?.designation || 'Unknown',
+                    department: app.facultyId?.department || app.personalInfoSnapshot?.departmentName || 'Unknown',
+                    profileImage: app.facultyId?.profileImage || '',
+                    updatedAt: app.updatedAt,
+                    status: app.status
+                }))
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching Leadership dashboard data:', error);
+        next(error);
+    }
+};

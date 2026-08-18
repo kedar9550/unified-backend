@@ -2808,7 +2808,40 @@ exports.getAllAppraisals = async (req, res) => {
             return res.status(404).json({ success: false, message: "Academic Year not found." });
         }
 
-        const appraisals = await Appraisal.find({ academicYearId })
+        let userRolesExtracted = (req.user.roles || []).flatMap(r => {
+            const roleName = (r.role?.name || '').toUpperCase().trim();
+            const roleKey = (r.role?.key || '').toUpperCase().trim();
+            const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+            return [roleName, roleKey, roleDirect].filter(Boolean);
+        });
+
+        const isUniprime = userRolesExtracted.includes("UNIPRIME");
+        const hasDeanIQAC = userRolesExtracted.includes("DEAN_IQAC") || userRolesExtracted.includes("DEAN - (IQAC)");
+        const hasDeanAdmissions = userRolesExtracted.includes("DEAN_ADMISSIONS") || userRolesExtracted.includes("DEAN - (ADMISSIONS)");
+
+        const isOtherLeadership = userRolesExtracted.some(role => [
+            "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR",
+            "PRO VICE-CHANCELLOR (ENGG.&SCI.)", "PRO VICE CHANCELLOR (ENGG.&SCI.)", "PRO_VICE_CHANCELLOR_E_S", "PRO VICE-CHANCELLOR (E & S)",
+            "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+            "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P"
+        ].includes(role));
+
+        let query = { academicYearId };
+
+        if (!isUniprime && !isOtherLeadership) {
+            if (hasDeanIQAC && !hasDeanAdmissions) {
+                query.status = { $in: ["Submitted to Dean - (IQAC)", "Approved by Dean - (IQAC)", "Rejected by Dean - (IQAC)"] };
+            } else if (hasDeanAdmissions && !hasDeanIQAC) {
+                query.status = { $in: ["Submitted to Dean - (Admissions)", "Approved by Dean - (Admissions)", "Rejected by Dean - (Admissions)"] };
+            } else if (hasDeanIQAC && hasDeanAdmissions) {
+                query.status = { $in: [
+                    "Submitted to Dean - (IQAC)", "Approved by Dean - (IQAC)", "Rejected by Dean - (IQAC)",
+                    "Submitted to Dean - (Admissions)", "Approved by Dean - (Admissions)", "Rejected by Dean - (Admissions)"
+                ]};
+            }
+        }
+
+        const appraisals = await Appraisal.find(query)
             .populate({
                 path: 'facultyId',
                 select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership',
