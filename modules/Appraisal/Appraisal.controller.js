@@ -2894,33 +2894,19 @@ exports.getAllAppraisals = async (req, res) => {
             // Filter directly by the maintained emp id (institutionId) in the Appraisal snapshot
             filterQuery["personalInfoSnapshot.institutionId"] = { $in: allowedEmpIds };
 
-        } else if (isSchoolDean) {
-            const schoolDeanRole = (req.user.roles || []).find(r => {
-                const rName = (r.role?.name || '').toUpperCase().trim();
-                const rKey = (r.role?.key || '').toUpperCase().trim();
-                const rDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
-                return ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rName) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rKey) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rDirect);
-            });
-            const schoolId = schoolDeanRole?.schoolId || schoolDeanRole?.school?._id || schoolDeanRole?.school;
-
-            if (schoolId) {
-                filterQuery["personalInfoSnapshot.schoolId"] = schoolId;
-
-                const excludedInstIds = [...routingMapEmpIds];
-                if (userInstitutionId) excludedInstIds.push(userInstitutionId.toString()); // Exclude self
-
-                filterQuery["personalInfoSnapshot.institutionId"] = { $nin: excludedInstIds };
-            } else {
-                return res.json({ success: true, data: [] });
-            }
-
-        } else if (isHOD) {
+        } else if (isSchoolDean || isHOD) {
             const { getHODDepartments } = require("../../utils/hodHelper");
             const deptIds = await getHODDepartments(req.user);
 
             if (deptIds && deptIds.length > 0) {
                 // Fetch employees in these departments, but use their institutionId for filtering
-                const deptEmployees = await Employee.find({ department: { $in: deptIds } }).select('institutionId');
+                const deptEmployees = await Employee.find({ 
+                    $or: [
+                        { coreDepartment: { $in: deptIds } },
+                        { department: { $in: deptIds } }
+                    ]
+                }).select('institutionId');
+                
                 const deptInstIds = deptEmployees
                     .map(e => e.institutionId)
                     .filter(id => !routingMapEmpIds.includes(id) && id?.toString() !== userInstitutionId?.toString());
