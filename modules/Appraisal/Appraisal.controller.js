@@ -1283,7 +1283,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         };
 
         resourceUt.forEach(r => {
-            if (r.status === "Approved" || r.status === "Pending at HOD") {
+            if (r.status === "Approved" || r.status === "Pending at HOD" || r.status === "Draft") {
                 let pts = 0;
                 const activityRole = (r.activityType || '').toLowerCase();
                 const activityCat = (r.activityCategory || '').toLowerCase();
@@ -1343,7 +1343,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         };
 
         contributions.forEach(c => {
-            if (c.status === "Approved" || c.status === "Pending at HOD") {
+            if (c.status === "Approved" || c.status === "Pending at HOD" || c.status === "Draft") {
                 let pts = 5; // default fallback
                 let activityName = "Expertise / Recognition Activity";
 
@@ -1572,7 +1572,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             await appraisal.save();
         } else {
             // Update the draft with the latest live calculations
-            Object.assign(appraisal, updatedAppraisalData);
+            appraisal.set(updatedAppraisalData);
             await appraisal.save();
         }
 
