@@ -1708,35 +1708,41 @@ exports.submitAppraisal = async (req, res) => {
 
         let nextStatus = "Submitted to Dean"; // Default
 
-        const designation = (faculty.designation || "").trim();
         const schoolCode = (appraisal.personalInfoSnapshot?.schoolCode || "").toUpperCase();
+        const empId = (faculty.institutionId || "").trim().toUpperCase();
 
         const designationRoutingMap = {
-            "Professor & Dean - Research & Consultancy": "Vice Chancellor",
-            "Professor & Dean (International Relations)": "Vice Chancellor",
-            "Asst.Professor & Controller Of Examinations": "Vice Chancellor",
-            "Professor & Dean (IQAC)": "Vice Chancellor",
-            "Professor & Dean (Career Development)": "Vice Chancellor",
-            "Assoc. Professor Of Physics & Dean(Admissions)": "Dy. Pro Chancellor",
-            "Asst. Prof. Dean Administration": "Registrar",
-            "Assoc.Prof. & Dean (Students Affairs)": "Registrar",
-            "Professor & Dean-School Of Engg.": "Pro Vice-Chancellor (E & S)",
-            "Professor & Dean School Of Pharmacy": "Pro Vice-Chancellor (E & S)",
-            "Professor & Dean - Student Welfar": "Pro Vice-Chancellor (E & S)",
-            "Assoc.Prof. & Assoc. Dean-School Of Computing": "Pro Vice-Chancellor (E & S)",
-            "Asst. Prof. & Assoc. Dean-School Of Sciences": "Pro Vice-Chancellor (E & S)",
-            "Assoc. Professor & Assoc. Dean-Freshmen Engg.": "Pro Vice-Chancellor (E & S)",
-            "Asst. Prof. & Assoc. Dean-School Of Business": "Pro Vice-Chancellor (S & P)",
-            "Asst. Professor  Of Maths & Assoc. Dean (IQAC)": "Dean - (IQAC)",
-            "Assoc. Professor & Assoc. Dean-Admissions": "Dean - (Admissions)",
-            "Assoc. Professor & Assoc.Dean-Academics": "Pro Vice-Chancellor (A)",
-            "Assoc. Professor & Asst. Registrar": "Registrar",
-            "Asst. Professor & Asst. Registrar": "Registrar",
-            "Asst.Prof. & Head Of IT Applications": "Registrar"
+            "3541": "Vice Chancellor", // Professor & Dean - Research & Consultancy
+            "4117": "Vice Chancellor", // Professor & Dean (International Relations)
+            "79": "Vice Chancellor", // Asst.Professor & Controller Of Examinations
+            "190": "Vice Chancellor", // Professor & Dean (IQAC)
+            "5150": "Vice Chancellor", // Professor & Dean (Career Development)
+            "497": "Dy. Pro Chancellor", // Assoc. Professor Of Physics & Dean(Admissions)
+            "159": "Registrar", // Asst. Prof. Dean Administration
+            "710": "Registrar", // Assoc.Prof. & Dean (Students Affairs)
+            "286": "Pro Vice-Chancellor (E & S)", // Professor & Dean-School Of Engg.
+            "1353": "Pro Vice-Chancellor (E & S)", // Professor & Dean School Of Pharmacy
+            "1957": "Pro Vice-Chancellor (E & S)", // Professor & Dean - Student Welfar
+            "514": "Pro Vice-Chancellor (E & S)", // Assoc.Prof. & Assoc. Dean-School Of Computing
+            "5480": "Pro Vice-Chancellor (E & S)", // Asst. Prof. & Assoc. Dean-School Of Sciences
+            "666": "Pro Vice-Chancellor (E & S)", // Assoc. Professor & Assoc. Dean-Freshmen Engg.
+            "6048": "Pro Vice-Chancellor (S & P)", // Asst. Prof. & Assoc. Dean-School Of Business
+            "114": "Dean - (IQAC)", // Asst. Professor  Of Maths & Assoc. Dean (IQAC)
+            "497": "Dean - (Admissions)", // Assoc. Professor & Assoc. Dean-Admissions
+            "5177": "Pro Vice-Chancellor (A)", // Assoc. Professor & Assoc.Dean-Academics
+            "6120": "Registrar", // Assoc. Professor & Asst. Registrar
+            "1565": "Registrar", // Asst. Professor & Asst. Registrar
+            "1275": "Registrar", // Asst.Prof. & Head Of IT Applications
+            "2225": 'Pro Vice-Chancellor (E & S)', // ACET DEAN
+            "deputyce1": 'Controlelr of Examinations', //deputycontrolelrexam1
+            "deputyce2": 'Controlelr of Examinations',//deputycontrolelrexam2
+            "deputyce3": 'Controlelr of Examinations',//deputycontrolelrexam3
+            "deputyce4": 'Controlelr of Examinations',//deputycontrolelrexam4
+
         };
 
-        if (designationRoutingMap[designation]) {
-            nextStatus = "Submitted to " + designationRoutingMap[designation];
+        if (designationRoutingMap[empId]) {
+            nextStatus = "Submitted to " + designationRoutingMap[empId];
         } else {
             const hodRoleIds = ["HOD", "DEPARTMENT HOD", "DEPARTMENT_HOD"];
             const userRoles = (req.user.roles || []).map(r => typeof r === 'string' ? r.toUpperCase() : (r.role?.key?.toUpperCase() || r.role?.toUpperCase() || r.role || ''));
