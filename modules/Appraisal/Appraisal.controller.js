@@ -2853,10 +2853,10 @@ exports.getAllAppraisals = async (req, res) => {
             if (isDeanIqac) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Dean - (IQAC)"));
             if (isDeanAdmissions) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Dean - (Admissions)"));
             if (isControllerOfExams) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Controller of Examinations"));
-            
+
             const allowedEmployees = await Employee.find({ institutionId: { $in: allowedEmpIds } }).select('_id');
             filterQuery.facultyId = { $in: allowedEmployees.map(e => e._id) };
-            
+
         } else if (isSchoolDean) {
             const schoolDeanRole = (req.user.roles || []).find(r => {
                 const rName = (r.role?.name || '').toUpperCase().trim();
@@ -2865,7 +2865,7 @@ exports.getAllAppraisals = async (req, res) => {
                 return ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rName) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rKey) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rDirect);
             });
             const schoolId = schoolDeanRole?.schoolId || schoolDeanRole?.school?._id || schoolDeanRole?.school;
-            
+
             if (schoolId) {
                 filterQuery["personalInfoSnapshot.schoolId"] = schoolId;
                 const excludedEmployees = await Employee.find({ institutionId: { $in: routingMapEmpIds } }).select('_id');
@@ -2875,7 +2875,7 @@ exports.getAllAppraisals = async (req, res) => {
             } else {
                 return res.json({ success: true, data: [] });
             }
-            
+
         } else if (isHOD) {
             const employee = await Employee.findById(facultyId);
             if (employee && employee.department) {

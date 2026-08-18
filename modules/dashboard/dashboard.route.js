@@ -10,5 +10,10 @@ router.get('/hod', protect, authorize('HOD'), dashboardController.getHODDashboar
 router.get('/school-dean', protect, authorize('SCHOOL_DEAN'), dashboardController.getHODDashboardData);
 router.get('/research-dean', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), dashboardController.getResearchDeanDashboardData);
 router.get('/faculty', protect, authorize('FACULTY', 'STAFF'), dashboardController.getFacultyDashboardData);
+router.get('/leadership', protect, authorize(
+    "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR", 
+    "PRO VICE-CHANCELLOR (E & S)", "PRO VICE-CHANCELLOR (A)", "PRO VICE-CHANCELLOR (S & P)",
+    "DEAN - (IQAC)", "DEAN - (ADMISSIONS)"
+), dashboardController.getLeadershipDashboardData);
 
 module.exports = router;
