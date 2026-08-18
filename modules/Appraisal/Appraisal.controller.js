@@ -5,6 +5,37 @@ const AppraisalConfig = require("./AppraisalConfig.model");
 const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
 const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
 
+const designationRoutingMap = {
+    "3541": "Vice Chancellor", // Professor & Dean - Research & Consultancy
+    "4117": "Vice Chancellor", // Professor & Dean (International Relations)
+    "79": "Vice Chancellor", // Asst.Professor & Controller Of Examinations
+    "190": "Vice Chancellor", // Professor & Dean (IQAC)
+    "5150": "Vice Chancellor", // Professor & Dean (Career Development)
+    "497": "Dy. Pro Chancellor", // Assoc. Professor Of Physics & Dean(Admissions)
+    "159": "Registrar", // Asst. Prof. Dean Administration
+    "710": "Registrar", // Assoc.Prof. & Dean (Students Affairs)
+    "286": "Pro Vice-Chancellor (E & S)", // Professor & Dean-School Of Engg.
+    "1353": "Pro Vice-Chancellor (E & S)", // Professor & Dean School Of Pharmacy
+    "1957": "Pro Vice-Chancellor (E & S)", // Professor & Dean - Student Welfar
+    "514": "Pro Vice-Chancellor (E & S)", // Assoc.Prof. & Assoc. Dean-School Of Computing
+    "5480": "Pro Vice-Chancellor (E & S)", // Asst. Prof. & Assoc. Dean-School Of Sciences
+    "666": "Pro Vice-Chancellor (E & S)", // Assoc. Professor & Assoc. Dean-Freshmen Engg.
+    "6048": "Pro Vice-Chancellor (S & P)", // Asst. Prof. & Assoc. Dean-School Of Business
+    "114": "Dean - (IQAC)", // Asst. Professor  Of Maths & Assoc. Dean (IQAC)
+    "497": "Dean - (Admissions)", // Assoc. Professor & Assoc. Dean-Admissions
+    "5177": "Pro Vice-Chancellor (A)", // Assoc. Professor & Assoc.Dean-Academics
+    "6120": "Registrar", // Assoc. Professor & Asst. Registrar
+    "1565": "Registrar", // Asst. Professor & Asst. Registrar
+    "1275": "Registrar", // Asst.Prof. & Head Of IT Applications
+    "2225": 'Pro Vice-Chancellor (E & S)', // ACET DEAN
+    "deputyce1": 'Controlelr of Examinations', //deputycontrolelrexam1
+    "deputyce2": 'Controlelr of Examinations',//deputycontrolelrexam2
+    "deputyce3": 'Controlelr of Examinations',//deputycontrolelrexam3
+    "deputyce4": 'Controlelr of Examinations',//deputycontrolelrexam4
+};
+
+exports.designationRoutingMap = designationRoutingMap;
+
 // Import all related models
 const Employee = require("../employee/employee.model");
 

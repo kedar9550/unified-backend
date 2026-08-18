@@ -13,7 +13,9 @@ router.get('/faculty', protect, authorize('FACULTY', 'STAFF'), dashboardControll
 router.get('/leadership', protect, authorize(
     "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR", 
     "PRO VICE-CHANCELLOR (E & S)", "PRO VICE-CHANCELLOR (A)", "PRO VICE-CHANCELLOR (S & P)",
-    "DEAN - (IQAC)", "DEAN - (ADMISSIONS)"
+    "DEAN - (IQAC)", "DEAN - (ADMISSIONS)",
+    "PRO_VICE_CHANCELLOR_E_S", "PRO_VICE_CHANCELLOR_A", "PRO_VICE_CHANCELLOR_S_P",
+    "VICE_CHANCELLOR", "DY_PRO_CHANCELLOR", "DEAN_IQAC", "DEAN_ADMISSIONS"
 ), dashboardController.getLeadershipDashboardData);
 
 module.exports = router;
