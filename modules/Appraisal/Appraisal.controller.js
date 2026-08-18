@@ -39,6 +39,37 @@ exports.designationRoutingMap = designationRoutingMap;
 // Import all related models
 const Employee = require("../employee/employee.model");
 
+const designationRoutingMap = {
+    "3541": "Vice Chancellor", // Professor & Dean - Research & Consultancy
+    "4117": "Vice Chancellor", // Professor & Dean (International Relations)
+    "79": "Vice Chancellor", // Asst.Professor & Controller Of Examinations
+    "190": "Vice Chancellor", // Professor & Dean (IQAC)
+    "5150": "Vice Chancellor", // Professor & Dean (Career Development)
+    "497": "Dy. Pro Chancellor", // Assoc. Professor Of Physics & Dean(Admissions)
+    "159": "Registrar", // Asst. Prof. Dean Administration
+    "710": "Registrar", // Assoc.Prof. & Dean (Students Affairs)
+    "286": "Pro Vice-Chancellor (E & S)", // Professor & Dean-School Of Engg.
+    "1353": "Pro Vice-Chancellor (E & S)", // Professor & Dean School Of Pharmacy
+    "1957": "Pro Vice-Chancellor (E & S)", // Professor & Dean - Student Welfar
+    "514": "Pro Vice-Chancellor (E & S)", // Assoc.Prof. & Assoc. Dean-School Of Computing
+    "5480": "Pro Vice-Chancellor (E & S)", // Asst. Prof. & Assoc. Dean-School Of Sciences
+    "666": "Pro Vice-Chancellor (E & S)", // Assoc. Professor & Assoc. Dean-Freshmen Engg.
+    "6048": "Pro Vice-Chancellor (S & P)", // Asst. Prof. & Assoc. Dean-School Of Business
+    "114": "Dean - (IQAC)", // Asst. Professor  Of Maths & Assoc. Dean (IQAC)
+    "497": "Dean - (Admissions)", // Assoc. Professor & Assoc. Dean-Admissions
+    "5177": "Pro Vice-Chancellor (A)", // Assoc. Professor & Assoc.Dean-Academics
+    "6120": "Registrar", // Assoc. Professor & Asst. Registrar
+    "1565": "Registrar", // Asst. Professor & Asst. Registrar
+    "1275": "Registrar", // Asst.Prof. & Head Of IT Applications
+    "2225": "Pro Vice-Chancellor (E & S)", // ACET DEAN
+    "784": "Controller of Examinations", //deputycontrolelrexam1
+    "1130": "Controller of Examinations",//deputycontrolelrexam2
+    "1504": "Controller of Examinations",//deputycontrolelrexam3
+    "2991": "Controller of Examinations",//deputycontrolelrexam4
+    "2206": "Controller of Examinations",//deputycontrolelrexam5
+    "2940": "Controller of Examinations",//deputycontrolelrexam6
+};
+
 const getFacultyCategoryHelper = (fac) => {
     if (!fac) return "Non-Doctorate Faculty";
     const lead = (fac.leadership || "").toLowerCase().trim();
@@ -1742,8 +1773,6 @@ exports.submitAppraisal = async (req, res) => {
         const schoolCode = (appraisal.personalInfoSnapshot?.schoolCode || "").toUpperCase();
         const empId = (faculty.institutionId || "").trim().toUpperCase();
 
-
-
         if (designationRoutingMap[empId]) {
             nextStatus = "Submitted to " + designationRoutingMap[empId];
         } else {
@@ -1780,6 +1809,20 @@ exports.getPendingHODAppraisals = async (req, res) => {
         const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const { getHODDepartments } = require("../../utils/hodHelper");
 
+        const potentialInstId = req.user.institutionId || req.user.userId || req.user.id;
+        const currentEmployee = await Employee.findOne({ 
+            $or: [
+                { institutionId: potentialInstId },
+                ...(mongoose.Types.ObjectId.isValid(potentialInstId) ? [{ _id: potentialInstId }] : [])
+            ]
+        }).select('_id institutionId');
+        
+        let facultyObjectId = req.user.userId;
+        if (currentEmployee) {
+            facultyObjectId = currentEmployee._id;
+            req.user.userId = facultyObjectId;
+        }
+
         const deptIds = await getHODDepartments(req.user);
 
         // Find all faculty in HOD's department (EXCLUDE THEMSELVES)
@@ -1788,7 +1831,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
                 { coreDepartment: { $in: deptIds } },
                 { department: { $in: deptIds } }
             ],
-            _id: { $ne: req.user.userId }
+            _id: { $ne: facultyObjectId }
         }).distinct('_id');
 
         const appraisals = await Appraisal.find({
@@ -2817,40 +2860,109 @@ exports.getAllAppraisals = async (req, res) => {
             return res.status(404).json({ success: false, message: "Academic Year not found." });
         }
 
-        let userRolesExtracted = (req.user.roles || []).flatMap(r => {
+        let filterQuery = { academicYearId };
+
+        let userRoles = (req.user.roles || []).flatMap(r => {
             const roleName = (r.role?.name || '').toUpperCase().trim();
             const roleKey = (r.role?.key || '').toUpperCase().trim();
             const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
             return [roleName, roleKey, roleDirect].filter(Boolean);
         });
 
-        const isUniprime = userRolesExtracted.includes("UNIPRIME");
-        const hasDeanIQAC = userRolesExtracted.includes("DEAN_IQAC") || userRolesExtracted.includes("DEAN - (IQAC)");
-        const hasDeanAdmissions = userRolesExtracted.includes("DEAN_ADMISSIONS") || userRolesExtracted.includes("DEAN - (ADMISSIONS)");
-
-        const isOtherLeadership = userRolesExtracted.some(role => [
-            "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR",
-            "PRO VICE-CHANCELLOR (ENGG.&SCI.)", "PRO VICE CHANCELLOR (ENGG.&SCI.)", "PRO_VICE_CHANCELLOR_E_S", "PRO VICE-CHANCELLOR (E & S)",
-            "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
-            "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P"
-        ].includes(role));
-
-        let query = { academicYearId };
-
-        if (!isUniprime && !isOtherLeadership) {
-            if (hasDeanIQAC && !hasDeanAdmissions) {
-                query.status = { $in: ["Submitted to Dean - (IQAC)", "Approved by Dean - (IQAC)", "Rejected by Dean - (IQAC)"] };
-            } else if (hasDeanAdmissions && !hasDeanIQAC) {
-                query.status = { $in: ["Submitted to Dean - (Admissions)", "Approved by Dean - (Admissions)", "Rejected by Dean - (Admissions)"] };
-            } else if (hasDeanIQAC && hasDeanAdmissions) {
-                query.status = { $in: [
-                    "Submitted to Dean - (IQAC)", "Approved by Dean - (IQAC)", "Rejected by Dean - (IQAC)",
-                    "Submitted to Dean - (Admissions)", "Approved by Dean - (Admissions)", "Rejected by Dean - (Admissions)"
-                ]};
+        userRoles = userRoles.map(role => {
+            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S") {
+                return "PRO VICE-CHANCELLOR (E & S)";
             }
+            if (role === "VICE_CHANCELLOR") return "VICE CHANCELLOR";
+            if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
+            if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
+            if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
+            if (role === "CONTROLELR OF EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
+            return role;
+        });
+
+        const isUnrestricted = userRoles.some(r => ["UNIPRIME", "ADMIN", "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR", "PRO VICE-CHANCELLOR (E & S)", "PRO VICE-CHANCELLOR (A)", "PRO VICE-CHANCELLOR (S & P)"].includes(r));
+        const isDeanIqac = userRoles.includes("DEAN - (IQAC)");
+        const isDeanAdmissions = userRoles.includes("DEAN - (ADMISSIONS)");
+        const isControllerOfExams = userRoles.includes("CONTROLLER OF EXAMINATIONS");
+        const isSchoolDean = userRoles.some(r => ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(r));
+        const isHOD = userRoles.some(r => ["HOD", "DEPARTMENT HOD", "DEPARTMENT_HOD"].includes(r));
+
+        const routingMapEmpIds = Object.keys(designationRoutingMap);
+
+        // Resolve both the actual Employee ObjectId and the institutionId (emp id)
+        let facultyObjectId = req.user._id;
+        const potentialInstId = req.user.institutionId || req.user.userId || req.user.id;
+        let userInstitutionId = req.user.institutionId;
+
+        const currentEmployee = await Employee.findOne({
+            $or: [
+                { institutionId: potentialInstId },
+                // Only use _id lookup if the string is a valid 24 hex char ObjectId
+                ...(mongoose.Types.ObjectId.isValid(potentialInstId) ? [{ _id: potentialInstId }] : [])
+            ]
+        });
+
+        if (currentEmployee) {
+            facultyObjectId = currentEmployee._id;
+            userInstitutionId = currentEmployee.institutionId;
+            // Also ensure req.user has the correct ObjectId for getHODDepartments
+            req.user.userId = currentEmployee._id;
+        } else if (!userInstitutionId) {
+            userInstitutionId = potentialInstId;
         }
 
-        const appraisals = await Appraisal.find(query)
+        if (isUnrestricted) {
+            // No additional filters
+        } else if (isDeanIqac || isDeanAdmissions || isControllerOfExams) {
+            let allowedEmpIds = [];
+            if (isDeanIqac) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Dean - (IQAC)"));
+            if (isDeanAdmissions) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Dean - (Admissions)"));
+            if (isControllerOfExams) allowedEmpIds.push(...Object.keys(designationRoutingMap).filter(k => designationRoutingMap[k] === "Controller of Examinations"));
+
+            // Filter directly by the maintained emp id (institutionId) in the Appraisal snapshot
+            filterQuery["personalInfoSnapshot.institutionId"] = { $in: allowedEmpIds };
+
+        } else if (isSchoolDean) {
+            const schoolDeanRole = (req.user.roles || []).find(r => {
+                const rName = (r.role?.name || '').toUpperCase().trim();
+                const rKey = (r.role?.key || '').toUpperCase().trim();
+                const rDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+                return ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rName) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rKey) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rDirect);
+            });
+            const schoolId = schoolDeanRole?.schoolId || schoolDeanRole?.school?._id || schoolDeanRole?.school;
+
+            if (schoolId) {
+                filterQuery["personalInfoSnapshot.schoolId"] = schoolId;
+
+                const excludedInstIds = [...routingMapEmpIds];
+                if (userInstitutionId) excludedInstIds.push(userInstitutionId.toString()); // Exclude self
+
+                filterQuery["personalInfoSnapshot.institutionId"] = { $nin: excludedInstIds };
+            } else {
+                return res.json({ success: true, data: [] });
+            }
+
+        } else if (isHOD) {
+            const { getHODDepartments } = require("../../utils/hodHelper");
+            const deptIds = await getHODDepartments(req.user);
+
+            if (deptIds && deptIds.length > 0) {
+                // Fetch employees in these departments, but use their institutionId for filtering
+                const deptEmployees = await Employee.find({ department: { $in: deptIds } }).select('institutionId');
+                const deptInstIds = deptEmployees
+                    .map(e => e.institutionId)
+                    .filter(id => !routingMapEmpIds.includes(id) && id?.toString() !== userInstitutionId?.toString());
+
+                filterQuery["personalInfoSnapshot.institutionId"] = { $in: deptInstIds };
+            } else {
+                return res.json({ success: true, data: [] });
+            }
+        } else {
+            return res.json({ success: true, data: [] });
+        }
+
+        const appraisals = await Appraisal.find(filterQuery)
             .populate({
                 path: 'facultyId',
                 select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership',
