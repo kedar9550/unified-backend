@@ -25,6 +25,7 @@ const Contribution = require('../Contribution/Contribution.model');
 const { getHODDepartments } = require('../../utils/hodHelper');
 const ProctorMapping = require('../ProctorMapping/ProctorMapping.model');
 const Appraisal = require('../Appraisal/Appraisal.model');
+const { designationRoutingMap } = require('../Appraisal/Appraisal.controller');
 
 exports.getUniprimeDashboardData = async (req, res, next) => {
     try {
@@ -1141,18 +1142,28 @@ exports.getFacultyDashboardData = async (req, res, next) => {
 
 exports.getLeadershipDashboardData = async (req, res, next) => {
     try {
-        const role = req.user.role; // Primary role
+        console.log("req.headers['active-role']:", req.headers['active-role']);
+        console.log("req.user.role:", req.user.role);
+        const role = req.headers['active-role'] || req.user.role; // Use active role if available, fallback to primary role
+        console.log("Resolved role:", role);
         
         // Special mappings because some roles have specific capitalization in the model
         const roleToModelStringMap = {
             "VICE CHANCELLOR": "Vice Chancellor",
+            "VICE_CHANCELLOR": "Vice Chancellor",
             "DY. PRO CHANCELLOR": "Dy. Pro Chancellor",
+            "DY_PRO_CHANCELLOR": "Dy. Pro Chancellor",
             "REGISTRAR": "Registrar",
             "PRO VICE-CHANCELLOR (E & S)": "Pro Vice-Chancellor (E & S)",
+            "PRO_VICE_CHANCELLOR_E_S": "Pro Vice-Chancellor (E & S)",
             "PRO VICE-CHANCELLOR (A)": "Pro Vice-Chancellor (A)",
+            "PRO_VICE_CHANCELLOR_A": "Pro Vice-Chancellor (A)",
             "PRO VICE-CHANCELLOR (S & P)": "Pro Vice-Chancellor (S & P)",
+            "PRO_VICE_CHANCELLOR_S_P": "Pro Vice-Chancellor (S & P)",
             "DEAN - (IQAC)": "Dean - (IQAC)",
-            "DEAN - (ADMISSIONS)": "Dean - (Admissions)"
+            "DEAN_IQAC": "Dean - (IQAC)",
+            "DEAN - (ADMISSIONS)": "Dean - (Admissions)",
+            "DEAN_ADMISSIONS": "Dean - (Admissions)"
         };
 
         const toTitleCase = (str) => {
@@ -1166,6 +1177,7 @@ exports.getLeadershipDashboardData = async (req, res, next) => {
         };
 
         const mappedRoleStr = roleToModelStringMap[role] || toTitleCase(role);
+        console.log("mappedRoleStr:", mappedRoleStr);
 
         const pendingStatus = `Submitted to ${mappedRoleStr}`;
         const approvedStatus = `Approved by ${mappedRoleStr}`;
@@ -1177,12 +1189,43 @@ exports.getLeadershipDashboardData = async (req, res, next) => {
             Appraisal.countDocuments({ status: approvedStatus }),
             Appraisal.countDocuments({ status: rejectedStatus })
         ]);
+        
+        console.log("Counts:", pendingCount, approvedCount, rejectedCount);
 
         const totalHandled = pendingCount + approvedCount + rejectedCount;
 
+        // Calculate expected appraisals based on designationRoutingMap
+        let expectedEmployeeIds = [];
+        if (designationRoutingMap) {
+            for (const [empId, mappedRole] of Object.entries(designationRoutingMap)) {
+                if (mappedRole === mappedRoleStr) {
+                    expectedEmployeeIds.push(empId);
+                }
+            }
+        }
+        
+        console.log("expectedEmployeeIds:", expectedEmployeeIds);
+        
+        let totalExpectedAppraisals = 0;
+        if (expectedEmployeeIds.length > 0) {
+            totalExpectedAppraisals = await Employee.countDocuments({
+                institutionId: { $in: expectedEmployeeIds },
+                isActive: true
+            });
+        }
+        
+        console.log("totalExpectedAppraisals:", totalExpectedAppraisals);
+
         // Fetch recently submitted appraisals (pending this role)
         const recentSubmissions = await Appraisal.find({ status: pendingStatus })
-            .populate('facultyId', 'name designation department profileImage institutionId')
+            .populate({
+                path: 'facultyId',
+                select: 'name designation department profileImage institutionId',
+                populate: {
+                    path: 'department',
+                    select: 'name'
+                }
+            })
             .sort({ updatedAt: -1 })
             .limit(10)
             .lean();
@@ -1195,12 +1238,15 @@ exports.getLeadershipDashboardData = async (req, res, next) => {
                 approvedCount,
                 rejectedCount,
                 totalHandled,
+                totalExpectedAppraisals,
                 recentSubmissions: recentSubmissions.map(app => ({
                     _id: app._id,
                     facultyName: app.facultyId?.name || app.personalInfoSnapshot?.name || 'Unknown',
                     institutionId: app.facultyId?.institutionId || app.personalInfoSnapshot?.institutionId || 'N/A',
                     designation: app.facultyId?.designation || app.personalInfoSnapshot?.designation || 'Unknown',
-                    department: app.facultyId?.department || app.personalInfoSnapshot?.departmentName || 'Unknown',
+                    department: (app.facultyId?.department && app.facultyId.department.name) 
+                        ? app.facultyId.department.name 
+                        : (app.personalInfoSnapshot?.departmentName || 'Unknown'),
                     profileImage: app.facultyId?.profileImage || '',
                     updatedAt: app.updatedAt,
                     status: app.status
