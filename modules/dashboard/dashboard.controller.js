@@ -1163,7 +1163,9 @@ exports.getLeadershipDashboardData = async (req, res, next) => {
             "DEAN - (IQAC)": "Dean - (IQAC)",
             "DEAN_IQAC": "Dean - (IQAC)",
             "DEAN - (ADMISSIONS)": "Dean - (Admissions)",
-            "DEAN_ADMISSIONS": "Dean - (Admissions)"
+            "DEAN_ADMISSIONS": "Dean - (Admissions)",
+            "CONTROLLER OF EXAMINATIONS": "Controller of Examinations",
+            "CONTROLLER_OF_EXAMINATIONS": "Controller of Examinations"
         };
 
         const toTitleCase = (str) => {
