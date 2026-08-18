@@ -1796,13 +1796,13 @@ exports.getPendingHODAppraisals = async (req, res) => {
 
         const deptIds = await getHODDepartments(req.user);
 
-        // Find all faculty in HOD's department (EXCLUDE THEMSELVES)
+        const routingMapEmpIds = Object.keys(designationRoutingMap);
+
+        // Find all faculty in HOD's department (EXCLUDE THEMSELVES and Routing Map Emps)
         const facultyIds = await Employee.find({
-            $or: [
-                { coreDepartment: { $in: deptIds } },
-                { department: { $in: deptIds } }
-            ],
-            _id: { $ne: facultyObjectId }
+            department: { $in: deptIds },
+            _id: { $ne: facultyObjectId },
+            institutionId: { $nin: routingMapEmpIds }
         }).distinct('_id');
 
         const appraisals = await Appraisal.find({
@@ -2901,10 +2901,7 @@ exports.getAllAppraisals = async (req, res) => {
             if (deptIds && deptIds.length > 0) {
                 // Fetch employees in these departments, but use their institutionId for filtering
                 const deptEmployees = await Employee.find({ 
-                    $or: [
-                        { coreDepartment: { $in: deptIds } },
-                        { department: { $in: deptIds } }
-                    ]
+                    department: { $in: deptIds } 
                 }).select('institutionId');
                 
                 const deptInstIds = deptEmployees
