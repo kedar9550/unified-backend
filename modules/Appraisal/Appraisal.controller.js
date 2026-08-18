@@ -28,10 +28,12 @@ const designationRoutingMap = {
     "1565": "Registrar", // Asst. Professor & Asst. Registrar
     "1275": "Registrar", // Asst.Prof. & Head Of IT Applications
     "2225": 'Pro Vice-Chancellor (E & S)', // ACET DEAN
-    "deputyce1": 'Controlelr of Examinations', //deputycontrolelrexam1
-    "deputyce2": 'Controlelr of Examinations',//deputycontrolelrexam2
-    "deputyce3": 'Controlelr of Examinations',//deputycontrolelrexam3
-    "deputyce4": 'Controlelr of Examinations',//deputycontrolelrexam4
+    "784": 'Controlelr of Examinations', //deputycontrolelrexam1
+    "1130": 'Controlelr of Examinations',//deputycontrolelrexam2
+    "1504": 'Controlelr of Examinations',//deputycontrolelrexam3
+    "2991": 'Controlelr of Examinations',//deputycontrolelrexam4
+    "2206": 'Controlelr of Examinations',//deputycontrolelrexam5
+    "2940": 'Controlelr of Examinations',//deputycontrolelrexam6
 };
 
 exports.designationRoutingMap = designationRoutingMap;
@@ -1779,13 +1781,13 @@ exports.getPendingHODAppraisals = async (req, res) => {
         const { getHODDepartments } = require("../../utils/hodHelper");
 
         const potentialInstId = req.user.institutionId || req.user.userId || req.user.id;
-        const currentEmployee = await Employee.findOne({ 
+        const currentEmployee = await Employee.findOne({
             $or: [
                 { institutionId: potentialInstId },
                 ...(mongoose.Types.ObjectId.isValid(potentialInstId) ? [{ _id: potentialInstId }] : [])
             ]
         }).select('_id institutionId');
-        
+
         let facultyObjectId = req.user.userId;
         if (currentEmployee) {
             facultyObjectId = currentEmployee._id;
