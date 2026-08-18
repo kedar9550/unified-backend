@@ -2008,7 +2008,7 @@ exports.evaluateHODAppraisal = async (req, res) => {
         appraisal.hodEvaluation = {
             interpersonalRatings,
             totalInterpersonalPoints: totalInter,
-            comments,
+            comments: isBypassedHOD ? "" : comments,
             evaluatedBy: req.user.userId,
             evaluationDate: new Date()
         };
@@ -2016,6 +2016,11 @@ exports.evaluateHODAppraisal = async (req, res) => {
         if (isBypassedHOD) {
             // Acting as primary evaluator; approval completes both levels in one step.
             appraisal.status = `Approved by ${targetRoleName}`;
+            appraisal.managementEvaluation = {
+                comments,
+                evaluatedBy: req.user.userId,
+                evaluationDate: new Date()
+            };
         } else {
             appraisal.status = "Submitted to Dean";
         }
