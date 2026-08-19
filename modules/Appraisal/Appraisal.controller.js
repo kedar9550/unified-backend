@@ -1283,7 +1283,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         };
 
         resourceUt.forEach(r => {
-            if (r.status === "Approved" || r.status === "Pending at HOD") {
+            if (r.status === "Approved" || r.status === "Pending at HOD" || r.status === "Draft") {
                 let pts = 0;
                 const activityRole = (r.activityType || '').toLowerCase();
                 const activityCat = (r.activityCategory || '').toLowerCase();
@@ -1343,7 +1343,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         };
 
         contributions.forEach(c => {
-            if (c.status === "Approved" || c.status === "Pending at HOD") {
+            if (c.status === "Approved" || c.status === "Pending at HOD" || c.status === "Draft") {
                 let pts = 5; // default fallback
                 let activityName = "Expertise / Recognition Activity";
 
@@ -1572,7 +1572,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             await appraisal.save();
         } else {
             // Update the draft with the latest live calculations
-            Object.assign(appraisal, updatedAppraisalData);
+            appraisal.set(updatedAppraisalData);
             await appraisal.save();
         }
 
@@ -1796,13 +1796,13 @@ exports.getPendingHODAppraisals = async (req, res) => {
 
         const deptIds = await getHODDepartments(req.user);
 
-        // Find all faculty in HOD's department (EXCLUDE THEMSELVES)
+        const routingMapEmpIds = Object.keys(designationRoutingMap);
+
+        // Find all faculty in HOD's department (EXCLUDE THEMSELVES and Routing Map Emps)
         const facultyIds = await Employee.find({
-            $or: [
-                { coreDepartment: { $in: deptIds } },
-                { department: { $in: deptIds } }
-            ],
-            _id: { $ne: facultyObjectId }
+            department: { $in: deptIds },
+            _id: { $ne: facultyObjectId },
+            institutionId: { $nin: routingMapEmpIds }
         }).distinct('_id');
 
         const appraisals = await Appraisal.find({
@@ -2008,7 +2008,7 @@ exports.evaluateHODAppraisal = async (req, res) => {
         appraisal.hodEvaluation = {
             interpersonalRatings,
             totalInterpersonalPoints: totalInter,
-            comments,
+            comments: isBypassedHOD ? "" : comments,
             evaluatedBy: req.user.userId,
             evaluationDate: new Date()
         };
@@ -2016,6 +2016,11 @@ exports.evaluateHODAppraisal = async (req, res) => {
         if (isBypassedHOD) {
             // Acting as primary evaluator; approval completes both levels in one step.
             appraisal.status = `Approved by ${targetRoleName}`;
+            appraisal.managementEvaluation = {
+                comments,
+                evaluatedBy: req.user.userId,
+                evaluationDate: new Date()
+            };
         } else {
             appraisal.status = "Submitted to Dean";
         }
@@ -2894,33 +2899,16 @@ exports.getAllAppraisals = async (req, res) => {
             // Filter directly by the maintained emp id (institutionId) in the Appraisal snapshot
             filterQuery["personalInfoSnapshot.institutionId"] = { $in: allowedEmpIds };
 
-        } else if (isSchoolDean) {
-            const schoolDeanRole = (req.user.roles || []).find(r => {
-                const rName = (r.role?.name || '').toUpperCase().trim();
-                const rKey = (r.role?.key || '').toUpperCase().trim();
-                const rDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
-                return ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rName) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rKey) || ["SCHOOL DEAN", "SCHOOL_DEAN"].includes(rDirect);
-            });
-            const schoolId = schoolDeanRole?.schoolId || schoolDeanRole?.school?._id || schoolDeanRole?.school;
-
-            if (schoolId) {
-                filterQuery["personalInfoSnapshot.schoolId"] = schoolId;
-
-                const excludedInstIds = [...routingMapEmpIds];
-                if (userInstitutionId) excludedInstIds.push(userInstitutionId.toString()); // Exclude self
-
-                filterQuery["personalInfoSnapshot.institutionId"] = { $nin: excludedInstIds };
-            } else {
-                return res.json({ success: true, data: [] });
-            }
-
-        } else if (isHOD) {
+        } else if (isSchoolDean || isHOD) {
             const { getHODDepartments } = require("../../utils/hodHelper");
             const deptIds = await getHODDepartments(req.user);
 
             if (deptIds && deptIds.length > 0) {
                 // Fetch employees in these departments, but use their institutionId for filtering
-                const deptEmployees = await Employee.find({ department: { $in: deptIds } }).select('institutionId');
+                const deptEmployees = await Employee.find({ 
+                    department: { $in: deptIds } 
+                }).select('institutionId');
+                
                 const deptInstIds = deptEmployees
                     .map(e => e.institutionId)
                     .filter(id => !routingMapEmpIds.includes(id) && id?.toString() !== userInstitutionId?.toString());
