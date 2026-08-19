@@ -123,7 +123,7 @@ const EmployeeSchema = new mongoose.Schema({
     },
     college: {
         type: String,
-        enum: ["Aditya University", "Aditya College of Engineering and Technology", "Aditya College of Pharmacy", ""],
+        enum: ["Aditya University", "Aditya College of Engineering and Technology", "Aditya College of Pharmacy", "Freshman Engineering", "School of Business"],
         default: ""
     },
 
@@ -156,11 +156,11 @@ const EmployeeSchema = new mongoose.Schema({
 // hash password
 EmployeeSchema.pre("save", async function () {
     if (this.isModified("qualifications")) {
-        const hasDoctorate = this.qualifications && this.qualifications.some(q => 
-            q.level === "Doctoral" || 
-            (q.qualification || "").toUpperCase().trim() === "PHD" || 
+        const hasDoctorate = this.qualifications && this.qualifications.some(q =>
+            q.level === "Doctoral" ||
+            (q.qualification || "").toUpperCase().trim() === "PHD" ||
             (q.qualification || "").toUpperCase().trim() === "PH.D." ||
-            (q.qualification || "").toUpperCase().trim() === "PHARMD" || 
+            (q.qualification || "").toUpperCase().trim() === "PHARMD" ||
             (q.qualification || "").toUpperCase().trim() === "PHARM.D."
         );
         this.doctorate = hasDoctorate ? "yes" : "no";
@@ -174,11 +174,11 @@ EmployeeSchema.pre("save", async function () {
 EmployeeSchema.pre("findOneAndUpdate", function () {
     const update = this.getUpdate();
     if (update.$set && update.$set.qualifications) {
-        const hasDoctorate = update.$set.qualifications.some(q => 
-            q.level === "Doctoral" || 
-            (q.qualification || "").toUpperCase().trim() === "PHD" || 
+        const hasDoctorate = update.$set.qualifications.some(q =>
+            q.level === "Doctoral" ||
+            (q.qualification || "").toUpperCase().trim() === "PHD" ||
             (q.qualification || "").toUpperCase().trim() === "PH.D." ||
-            (q.qualification || "").toUpperCase().trim() === "PHARMD" || 
+            (q.qualification || "").toUpperCase().trim() === "PHARMD" ||
             (q.qualification || "").toUpperCase().trim() === "PHARM.D."
         );
         update.$set.doctorate = hasDoctorate ? "yes" : "no";
