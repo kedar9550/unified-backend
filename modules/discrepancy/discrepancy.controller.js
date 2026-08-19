@@ -208,13 +208,10 @@ const resolveDiscrepancy = async (req, res) => {
             return res.json({ message: "Discrepancy rejected.", discrepancy: disc });
         }
 
-        // ── RESOLVE flow ────────────────────────────────────────────
-        if (!req.file) {
-            return res.status(400).json({ message: "Proof document is required to resolve a discrepancy." });
-        }
+
 
         // Limit proof document to 500kb for EXAMSECTION or UNIPRIME role
-        if ((disc.assignedRole === "EXAMSECTION" || disc.assignedRole === "UNIPRIME") && req.file.size > 500 * 1024) {
+        if (req.file && (disc.assignedRole === "EXAMSECTION" || disc.assignedRole === "UNIPRIME") && req.file.size > 500 * 1024) {
             try {
                 fs.unlinkSync(req.file.path);
             } catch (err) {
@@ -229,7 +226,9 @@ const resolveDiscrepancy = async (req, res) => {
 
         disc.resolvedBy = req.user.userId;
         disc.resolutionNote = resolutionNote || "";
-        disc.proofDocument = req.file.filename;
+        if (req.file) {
+            disc.proofDocument = req.file.filename;
+        }
         disc.status = "RESOLVED";
 
         await disc.save();

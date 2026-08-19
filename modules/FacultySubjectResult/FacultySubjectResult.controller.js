@@ -681,7 +681,8 @@ const createResult = async (req, res) => {
         const {
             facultyId, facultyName, courseName, subjectName, courseCode, subjectCode, courseType, branch,
             academicYearId, semesterTypeId, semester, section,
-            noOfCos, noOfCosAttained, appeared, passed
+            noOfCos, noOfCosAttained, appeared, passed,
+            programId, branchId
         } = req.body;
 
         const cName = courseName || subjectName;
