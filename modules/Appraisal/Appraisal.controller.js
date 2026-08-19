@@ -28,6 +28,7 @@ const designationRoutingMap = {
     "1565": "Registrar", // Asst. Professor & Asst. Registrar
     "1275": "Registrar", // Asst.Prof. & Head Of IT Applications
     "2225": 'Pro Vice-Chancellor (E & S)', // ACET DEAN
+    "97": 'Pro Vice-Chancellor (E & S)', // ACET DEAN
     "784": 'Controller of Examinations', //deputycontrolelrexam1
     "1130": 'Controller of Examinations',//deputycontrolelrexam2
     "1504": 'Controller of Examinations',//deputycontrolelrexam3

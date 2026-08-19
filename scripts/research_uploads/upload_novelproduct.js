@@ -88,7 +88,7 @@ async function processCSV() {
 
                     // 4. Process Co-Developers
                     const coDevelopers = [];
-                    const appraisalClaimants = [faculty._id.toString()];
+                    const appraisalClaimants = [faculty.institutionId];
                     for (let pos = 1; pos <= 8; pos++) {
                         const coEmpId = row[`co${pos}EmpId`] ? row[`co${pos}EmpId`].trim() : null;
                         const coRoleInput = row[`co${pos}Role`] ? row[`co${pos}Role`].trim().toLowerCase() : '';
@@ -96,14 +96,13 @@ async function processCSV() {
                         if (coEmpId) {
                             let empName = `Employee ${coEmpId}`;
                             let affiliation = 'Aditya University';
-                            let validEmployeeId = null;
+                            let validEmployeeId = coEmpId;
                             
                             const coEmp = await Employee.findOne({ institutionId: coEmpId });
                             if (coEmp) {
                                 empName = coEmp.name;
                                 affiliation = coEmp.college || 'Aditya University';
-                                validEmployeeId = coEmp._id;
-                                appraisalClaimants.push(coEmp._id.toString());
+                                appraisalClaimants.push(coEmp.institutionId);
                             } else {
                                 try {
                                     const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/staffdata/${coEmpId}`);
@@ -133,7 +132,7 @@ async function processCSV() {
                             coDevelopers.push({
                                 role: role,
                                 affiliationType: 'AUS',
-                                employeeId: validEmployeeId || null,
+                                employeeId: validEmployeeId,
                                 name: empName,
                                 affiliation: affiliation,
                                 principalInvestigator: isPI,
