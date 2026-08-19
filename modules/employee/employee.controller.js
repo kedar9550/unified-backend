@@ -648,7 +648,13 @@ const bulkRegisterUser = async (req, res) => {
                 } else {
                     const rowData = {};
                     row.values.slice(1).forEach((val, index) => {
-                        rowData[empHeaders[index]] = val;
+                        let cellValue = val;
+                        if (val && typeof val === 'object') {
+                            if (val.text) cellValue = val.text;
+                            else if (val.result !== undefined) cellValue = val.result;
+                            else if (val.richText) cellValue = val.richText.map(rt => rt.text).join('');
+                        }
+                        rowData[empHeaders[index]] = cellValue;
                     });
                     employeesData.push(rowData);
                 }
@@ -663,7 +669,13 @@ const bulkRegisterUser = async (req, res) => {
                     } else {
                         const rowData = {};
                         row.values.slice(1).forEach((val, index) => {
-                            rowData[qualHeaders[index]] = val;
+                            let cellValue = val;
+                            if (val && typeof val === 'object') {
+                                if (val.text) cellValue = val.text;
+                                else if (val.result !== undefined) cellValue = val.result;
+                                else if (val.richText) cellValue = val.richText.map(rt => rt.text).join('');
+                            }
+                            rowData[qualHeaders[index]] = cellValue;
                         });
 
                         const instId = (rowData['institution id'] || rowData['id'] || rowData['institutionid'])?.toString().trim();
