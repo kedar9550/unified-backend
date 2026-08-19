@@ -49,8 +49,6 @@ const uploadUnifiedResults = async (req, res) => {
             "semester_or_year",
             "appeared",
             "passed",
-            "noofcos",
-            "noofcosattained",
             "section"
         ];
 
@@ -115,21 +113,31 @@ const uploadUnifiedResults = async (req, res) => {
                 if (semester_or_year === undefined || semester_or_year === "") throw new Error("Semester/Year is missing");
                 if (appeared === undefined || appeared === "") throw new Error("Appeared count is missing");
                 if (passed === undefined || passed === "") throw new Error("Passed count is missing");
-                if (noofcos === undefined || noofcos === "") throw new Error("No. of COs is missing");
-                if (noofcosattained === undefined || noofcosattained === "") throw new Error("No. of COs Attained is missing");
                 if (!section) throw new Error("Section is missing");
 
                 const app = Number(appeared);
                 const pas = Number(passed);
-                const cos = Number(noofcos);
-                const cosA = Number(noofcosattained);
+                
+                let cos = undefined;
+                let cosA = undefined;
 
                 if (isNaN(app)) throw new Error(`Invalid Appeared count: ${appeared}`);
                 if (isNaN(pas)) throw new Error(`Invalid Passed count: ${passed}`);
                 if (pas > app) throw new Error(`Passed (${pas}) cannot be more than Appeared (${app})`);
-                if (isNaN(cos)) throw new Error(`Invalid No. of COs: ${noofcos}`);
-                if (isNaN(cosA)) throw new Error(`Invalid No. of COs Attained: ${noofcosattained}`);
-                if (cosA > cos) throw new Error(`COs Attained (${cosA}) cannot be more than Total COs (${cos})`);
+
+                if (noofcos !== undefined && String(noofcos).trim() !== "") {
+                    cos = Number(noofcos);
+                    if (isNaN(cos)) throw new Error(`Invalid No. of COs: ${noofcos}`);
+                }
+                
+                if (noofcosattained !== undefined && String(noofcosattained).trim() !== "") {
+                    cosA = Number(noofcosattained);
+                    if (isNaN(cosA)) throw new Error(`Invalid No. of COs Attained: ${noofcosattained}`);
+                }
+
+                if (cos !== undefined && cosA !== undefined) {
+                    if (cosA > cos) throw new Error(`COs Attained (${cosA}) cannot be more than Total COs (${cos})`);
+                }
 
                 // 2. Resolve Program
                 let programDoc = programCache[programName];
@@ -282,7 +290,10 @@ const uploadUnifiedResults = async (req, res) => {
 
                 successCount++;
             } catch (err) {
-                errors.push({ row: rowNum, message: err.message });
+                const fId = facultyid || 'N/A';
+                const cCode = coursecode || 'N/A';
+                const identifier = (fId !== 'N/A' || cCode !== 'N/A') ? `[Faculty: ${fId}, Course: ${cCode}] ` : '';
+                errors.push({ row: rowNum, message: `${identifier}${err.message}` });
             }
         }
 
