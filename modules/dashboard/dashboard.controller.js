@@ -443,8 +443,18 @@ exports.getHODDashboardData = async (req, res, next) => {
         }
 
         // 2. Fetch department details
-        const depts = await Department.find({ _id: { $in: deptIds } }).select('name code').lean();
+        const depts = await Department.find({ _id: { $in: deptIds } }).populate('schoolIds').select('name code schoolIds').lean();
         const deptNames = depts.map(d => d.name);
+        
+        let schoolNames = [];
+        depts.forEach(d => {
+            if (d.schoolIds && Array.isArray(d.schoolIds)) {
+                d.schoolIds.forEach(s => {
+                    if (s && s.name) schoolNames.push(s.name);
+                });
+            }
+        });
+        schoolNames = [...new Set(schoolNames)];
 
         // 3. Find all active faculty members under HOD's departments
         const facultyDocs = await Employee.find({
@@ -457,13 +467,26 @@ exports.getHODDashboardData = async (req, res, next) => {
 
         const facultyIds = facultyDocs.map(f => f._id);
 
+        const routingMapEmpIds = Object.keys(designationRoutingMap);
+        const userInstitutionId = req.user.institutionId || req.user.userId || req.user.id;
+        
+        let expectedAppraisalsCount = 0;
+        facultyDocs.forEach(f => {
+            const fInstId = f.institutionId?.toString();
+            if (!routingMapEmpIds.includes(fInstId) && fInstId !== userInstitutionId?.toString()) {
+                expectedAppraisalsCount++;
+            }
+        });
+
         if (facultyIds.length === 0) {
             return res.status(200).json({
                 status: 'success',
                 data: {
                     totalFaculty: 0,
+                    expectedAppraisals: 0,
                     totalPrograms: depts.length,
                     departments: deptNames,
+                    schools: schoolNames,
                     pendingCounts: {
                         research: 0,
                         proctoring: 0,
@@ -688,8 +711,10 @@ exports.getHODDashboardData = async (req, res, next) => {
             status: 'success',
             data: {
                 totalFaculty: facultyDocs.length,
+                expectedAppraisals: expectedAppraisalsCount,
                 totalPrograms: depts.length,
                 departments: deptNames,
+                schools: schoolNames,
                 pendingCounts: {
                     research: pendingResearchCount,
                     proctoring: pendingProctoring,
