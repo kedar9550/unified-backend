@@ -42,15 +42,19 @@ exports.handleResearchUpload = async (req, res, next) => {
                 });
             }
 
-            // Parse the stdout to extract the number of skipped rows and errors
+            // Parse the stdout and stderr to extract the number of skipped rows and errors
             let skips = 0;
             let errs = 0;
             let skipReasons = new Set();
+            let errorReasons = new Set();
             
-            if (stdout) {
-                const lines = stdout.split('\n');
+            const combinedOutput = (stdout || '') + '\n' + (stderr || '');
+            if (combinedOutput) {
+                const lines = combinedOutput.split('\n');
                 lines.forEach(line => {
                     const skipMatch = line.match(/Skipping row \d+:\s*(.*)/i);
+                    const errorMatch = line.match(/Error processing row \d+:\s*(.*)/i);
+                    
                     if (skipMatch) {
                         skips++;
                         let reason = skipMatch[1].trim();
@@ -58,26 +62,48 @@ exports.handleResearchUpload = async (req, res, next) => {
                         reason = reason.replace(/ID \S+ not found/gi, "Faculty not found");
                         reason = reason.replace(/Year \S+ not found/gi, "Academic Year not found");
                         skipReasons.add(reason);
-                    }
-                    if (line.toLowerCase().includes('error processing row')) {
+                    } else if (errorMatch) {
+                        errs++;
+                        let reason = errorMatch[1].trim();
+                        if (reason.includes('E11000 duplicate key error')) {
+                            if (reason.includes('isbn')) {
+                                reason = 'Duplicate ISBN found';
+                            } else if (reason.includes('title')) {
+                                reason = 'Duplicate Title found';
+                            } else {
+                                reason = 'Duplicate Entry found';
+                            }
+                        } else if (reason === '') {
+                            reason = 'Unknown processing error';
+                        }
+                        errorReasons.add(reason);
+                    } else if (line.toLowerCase().includes('error processing row')) {
                         errs++;
                     }
                 });
             }
 
             let message = `${type} data uploaded and processed successfully!`;
+            let isSuccess = true;
             
             if (skips > 0 || errs > 0) {
+                isSuccess = false;
                 message = `${type} upload completed with issues. Skipped: ${skips}, Errors: ${errs}.`;
-                if (skipReasons.size > 0) {
-                    message += ` Skip Reasons: ${Array.from(skipReasons).join('; ')}`;
+                
+                let combinedReasons = [];
+                if (skipReasons.size > 0) combinedReasons.push(`Skips: ${Array.from(skipReasons).join(', ')}`);
+                if (errorReasons.size > 0) combinedReasons.push(`Errors: ${Array.from(errorReasons).join(', ')}`);
+                
+                if (combinedReasons.length > 0) {
+                    message += ` Details: ${combinedReasons.join(' | ')}`;
                 }
             } else if (stdout && stdout.toLowerCase().includes('error')) {
-                message += " (Note: Some rows may have had errors. Check the server logs).";
+                isSuccess = false;
+                message = `${type} upload had some errors. Check the server logs.`;
             }
 
-            res.status(200).json({
-                success: true,
+            res.status(isSuccess ? 200 : 400).json({
+                success: isSuccess,
                 message: message,
                 logs: stdout
             });

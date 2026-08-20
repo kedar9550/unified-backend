@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const CoInvestigatorSchema = new mongoose.Schema({
     role: { type: String }, // "Principal Investigator" or "Co-Investigator"
-    affiliationType: { type: String, enum: ['AUS', 'Others'] },
+    affiliationType: { type: String },
     employeeId: { type: String, default: null },
     name: { type: String },
     affiliation: { type: String, default: null },

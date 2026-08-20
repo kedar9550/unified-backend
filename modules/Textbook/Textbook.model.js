@@ -11,7 +11,6 @@ const AuthorSchema = new mongoose.Schema({
     },
     affiliationType: {
         type: String,
-        enum: ['Aditya University', 'Others'],
         required: true
     },
     employeeId: {
