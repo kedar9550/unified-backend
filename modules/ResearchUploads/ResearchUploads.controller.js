@@ -52,31 +52,35 @@ exports.handleResearchUpload = async (req, res, next) => {
             if (combinedOutput) {
                 const lines = combinedOutput.split('\n');
                 lines.forEach(line => {
-                    const skipMatch = line.match(/Skipping row \d+:\s*(.*)/i);
-                    const errorMatch = line.match(/Error processing row \d+:\s*(.*)/i);
+                    const skipMatch = line.match(/Skipping row (\d+):\s*(.*)/i);
+                    const errorMatch = line.match(/Error processing row (\d+):\s*(.*)/i);
                     
                     if (skipMatch) {
                         skips++;
-                        let reason = skipMatch[1].trim();
+                        let rowNum = skipMatch[1];
+                        let reason = skipMatch[2].trim();
                         // Group reasons by removing specific IDs
                         reason = reason.replace(/ID \S+ not found/gi, "Faculty not found");
                         reason = reason.replace(/Year \S+ not found/gi, "Academic Year not found");
-                        skipReasons.add(reason);
+                        skipReasons.add(`Row ${rowNum}: ${reason}`);
                     } else if (errorMatch) {
                         errs++;
-                        let reason = errorMatch[1].trim();
+                        let rowNum = errorMatch[1];
+                        let reason = errorMatch[2].trim();
                         if (reason.includes('E11000 duplicate key error')) {
                             if (reason.includes('isbn')) {
                                 reason = 'Duplicate ISBN found';
                             } else if (reason.includes('title')) {
                                 reason = 'Duplicate Title found';
+                            } else if (reason.includes('doi')) {
+                                reason = 'Duplicate DOI found';
                             } else {
                                 reason = 'Duplicate Entry found';
                             }
                         } else if (reason === '') {
                             reason = 'Unknown processing error';
                         }
-                        errorReasons.add(reason);
+                        errorReasons.add(`Row ${rowNum}: ${reason}`);
                     } else if (line.toLowerCase().includes('error processing row')) {
                         errs++;
                     }

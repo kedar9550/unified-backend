@@ -97,6 +97,10 @@ async function processCSV() {
                     }
 
                     // 4. Prepare Conference Object
+                    let rawScope = (row['level'] || 'National').trim();
+                    if (rawScope.toLowerCase() === 'international') rawScope = 'International';
+                    else if (rawScope.toLowerCase() === 'national') rawScope = 'National';
+
                     const conferenceData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
@@ -104,7 +108,7 @@ async function processCSV() {
                         title: row['title'] || 'Unknown Title',
                         doi: row['doi'] || 'N/A',
                         conferenceName: row['conferenceName'] || 'Unknown Conference',
-                        scope: row['level'] || 'National',
+                        scope: rawScope,
                         year: row['yearOfPublication'] || yearStr.split('-')[0],
                         month: row['month'] || 'JAN',
                         issnIsbn: row['issnIsbn'] || '',

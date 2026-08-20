@@ -1,4 +1,255 @@
 ﻿Faculty Employee ID,Faculty Name,Academic Year,Roll Number,Student Name,Course,Branch,"Scholar Status
 (Pursuing/Awarded)","Scholar Type
 (Full-Time / Part-Time)",University,Admission Or Award Date
-5741,k,2025-2026,25B11cs001,Ravi kumar,Ph.D,CSE,Pursuing,Full-Time,Aditya university,17-05-2025
+5142,Dr. B. Krishna Kanth,2025-2026,24P31AG001,Gayam Sujatha,Ph.D,AgE,Pursuing,Part-Time,Aditya university,01-08-2024
+5150,Dr. G. Sanjiv Rao,2025-2026,21022P0556,N Madhuri,Ph.D,AIML,Pursuing,Part-Time,JNTUK,01-04-2022
+5150,Dr. G. Sanjiv Rao,2025-2026,22022P0556,J S Narendra Kumar,Ph.D,AIML,Pursuing,Part-Time,JNTUK,01-01-2023
+4891,Dr. M. Venkatesh,2025-2026,24P31CS008,Karuturi Kavya Ramyasree,Ph.D,AIML,Pursuing,Part-Time,Aditya university,01-08-2024
+4891,Dr. M. Venkatesh,2025-2026,24P31CS016,P V V S D Nagendrudu,Ph.D,AIML,Pursuing,Part-Time,Aditya university,01-08-2024
+4891,Dr. M. Venkatesh,2025-2026,24P31CS109,Marni Srinu,Ph.D,AIML,Pursuing,Part-Time,Aditya university,01-01-2025
+5150,Dr. G. Sanjiv Rao,2025-2026,25P31CS104,Guru Kumar Vundamatla,Ph.D,AIML,Pursuing,Part-Time,Aditya university,01-01-2026
+6233,Dr. M. Rama Krishna Reddy,2025-2026,25P31CS110,Nethi V V Krishna Saran Kumar,Ph.D,AIML,Pursuing,Part-Time,Aditya university,01-01-2026
+5234,Dr. K.K. Yaswanth,2025-2026,24P31CE001,B. Maheswar Rao,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-08-2024
+4974,Dr. S. Anandha Kumar,2025-2026,24P31CE002,Gaddam Dinesh,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-08-2024
+4974,Dr. S. Anandha Kumar,2025-2026,24P31CE003,George Fernandez Raj A,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-08-2024
+4993,Dr. B. Ramamohana Reddy,2025-2026,24P31CE004,G. Gowtham Kumar,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-08-2024
+4805,Dr. S. Pachaiappan,2025-2026,24P31CE005,N. Anusha,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-08-2024
+5365,Dr. P. Laxmi Narayana,2025-2026,24P31CE006,P. Rohit,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-08-2024
+5365,Dr. P. Laxmi Narayana,2025-2026,25P31CE101,Alluri Satya Sunitha,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-01-2026
+5375,Dr. R. Anjali,2025-2026,24P31CE008,Varupula Satish,Ph.D,CE,Pursuing,Part-Time,Aditya university,01-08-2024
+4993,Dr. B. Ramamohana Reddy,2025-2026,24P41CE001,T. Shankar ,Ph.D,CE,Pursuing,Full-Time,Aditya university,01-08-2024
+5785,Dr. Ch. Ajay,2025-2026,25P41CE001,Kola Karunakar Sai,Ph.D,CE,Pursuing,Full-Time,Aditya university,01-07-2025
+4483,Dr. S. Govindarajan,2025-2026,25P41CE101,Ch. Srinivas,Ph.D,CE,Pursuing,Full-Time,Aditya university,01-01-2026
+4939,Dr. Chokkareddy Rajasekhar Reddy,2025-2026,19150538,N M Xhakaza,Ph.D,Chemistry,Pursuing,Full-Time,Durban University of Technology,25-02-2019
+6013,Dr. Naresh Babu Gatchakayala,2025-2026,24P31CH001,Damayanthi Atti,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-08-2024
+1206,Dr. S Aruna Kumari,2025-2026,24P31CH002,Koppisetty V V M Rao,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-08-2024
+1206,Dr. S Aruna Kumari,2025-2026,24P31CH003,Narava V V D Prasad,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-08-2024
+5339,Dr Lakshmi Lavanya A,2025-2026,24P31CH004,Sita Ramayya Enakoti,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-08-2024
+5339,Dr Lakshmi Lavanya A,2025-2026,24P31CH005,Swarna Latha Shanmugam,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-08-2024
+5372,Dr. Prakash Gadipelli,2025-2026,24P31CH101,Nanduri H Eswara Prasad,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-01-2025
+5339,Dr Lakshmi Lavanya A,2025-2026,24P31CH102,Ranadheer Cheerla,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-01-2025
+6013,Dr. Naresh Babu Gatchakayala,2025-2026,24P31CH103,Thalatam Siva Rama Krishna,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-01-2025
+5372,Dr. Prakash Gadipelli,2025-2026,24P41CH001,Attili Naga Devi,Ph.D,Chemistry,Pursuing,Full-Time,Aditya University,01-08-2024
+1206,Dr. S Aruna Kumari,2025-2026,24P41CH101,Kota Satish Kumar,Ph.D,Chemistry,Pursuing,Full-Time,Aditya University,01-01-2025
+4939,Dr. Chokkareddy Rajasekhar Reddy,2025-2026,25P31CH001,Boddeti T Veera Babu,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-07-2025
+4650,Dr. Muralasetti Nookaraju,2025-2026,25P31CH002,Pragada V Nageswararao,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-07-2025
+4939,Dr. Chokkareddy Rajasekhar Reddy,2025-2026,25P31CH101,Indukuri A Narasimharaju,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-01-2026
+4650,Dr. Muralasetti Nookaraju,2025-2026,25P31CH102,Krishna Atluri,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-01-2026
+5612,Dr. E. Rajesh,2025-2026,25P31CH103,Suri Babu B,Ph.D,Chemistry,Pursuing,Part-Time,Aditya University,01-01-2026
+4939,Dr. Chokkareddy Rajasekhar Reddy,2025-2026,25P41CH101,Muchakarala Maha Lakshmi,Ph.D,Chemistry,Pursuing,Full-Time,Aditya University,01-01-2026
+6190,DR. V VAITHEESHWARAN,2025-2026,24P31CS102,Chinnari Mrudula Pothula,Ph.D,CSE,Pursuing,Part-Time,Aditya University,01-01-2025
+6488,DR. P RAJAMOHAN ,2025-2026,25P31CS005,Garapati Sandhya Devi,Ph.D,CSE,Pursuing,Part-Time,Aditya University,01-01-2025
+211, Dr Ramesh NSVSC Sripada,2025-2026,25P31CS103,Chitimireddy Veera Gayathri ,Ph.D,CSE,Pursuing,Part-Time,Aditya University,01-01-2026
+5567,Dr. Tatapudi Prabhakara Rao,2025-2026,22022PO587,Ms. S. Divya,Ph.D,CSE,Pursuing,Part-Time,JNTUK,01-03-2023
+5038,Dr.M.Vamsi Krishna,2025-2026,24P31CS001,Chalamala Harika Divya,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+5567,Dr.T.Prabhakara Rao,2025-2026,24P31CS002,Chappa Bhanu Kumar,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+212,Dr. S Rama Sree ,2025-2026,24P31CS003,Chatla Prasada Rao,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+5567,Dr. T.Prabhakara Rao ,2025-2026,24P31CS004,Daivala Satya Vara Prasad,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+6099,Dr Subba Rao Polamuri,2025-2026,24P31CS005,Durga Bhavani Alanka,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+6137,Dr.Hari Jyothula,2025-2026,24P31CS006,Ganni Aparna,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+514,Dr. M V Rajesh,2025-2026,24P31CS007,Gunnam Srinivas,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+666,Dr. A. Vanathi  ,2025-2026,24P31CS009,Kasichainula Vydehi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+2200,Dr. G.S.N.Murthy ,2025-2026,24P31CS010,Kota Kalyana Venkata Satyanarayana,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+6099,Dr Subba Rao Polamuri,2025-2026,24P31CS011,Lakshmi Kranthi G,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+5567,Dr. T.Prabhakara Rao ,2025-2026,24P31CS012,Madhu Babu Mogali,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+514,Dr. M V Rajesh,2025-2026,24P31CS013,Nallamilli V K Reddi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+6137,Dr.Hari Jyothula,2025-2026,24P31CS015,P V Kishore Kumar,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+212,Dr. S Rama Sree ,2025-2026,24P31CS017,Ummidisetti Veera Ramesh,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+1330,Dr. K.Naga Bhargavi ,2025-2026,24P31CS019,Yadavalli Suresh Kumar,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+5038,Dr.M.Vamsikrishna,2025-2026,24P31CS020,Nagavenkata Srinivas Kale,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-08-2024
+666,Dr. A.Vanathi  ,2025-2026,24P31CS021,Surya Prasad K V,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+6099,Dr. Subba Rao Polamuri,2025-2026,24P31CS101,Chilli Bhanu Prakash,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+666,Dr. A Vanathi,2025-2026,24P31CS103,Jagadeswari Suddapalli,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+5567,Dr. Tatapudi Prabhakara Rao,2025-2026,24P31CS104,Kamalakara Rao Vankala,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+5038,Dr. M Vamsi Krishna,2025-2026,24P31CS105,Kancharla Nagababu,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+5038,Dr. M Vamsi Krishna,2025-2026,24P31CS107,Lavanya Kumari Pithani,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+5150,Dr. Godla Sanjiv Rao,2025-2026,24P31CS108,Mallipeddi Nvga Deepti,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+6137,Dr. Hari Jyothula,2025-2026,24P31CS111,Nekkanti Renu,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+6099,Dr Subba Rao Polamuri,2025-2026,24P31CS112,Nimmalapudi Sindhuja,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+5734,Dr. MVB Murali Krishna,2025-2026,24P31CS113,Parameswarakumar Gottala,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+212,Dr. S Rama Sree,2025-2026,24P31CS114,Peruri Sudheshna,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+212,Dr. S Rama Sree,2025-2026,24P31CS115,S M Krishna Reddy Padala,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+6247,Dr. K. Chandra Sekhar,2025-2026,24P31CS117,Sitaramaprasad Vydarsi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2025
+1008,Dr. Chakka S V V S N Murty,2025-2026,25P31CS001,Arnepalli Bhagya Lakshmi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-07-2025
+361,Dr. R.V.S. Lalitha,2025-2026,25P31CS003,Choppa Manikanta Kalyan,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-07-2025
+4721,Dr. Bhattiprolu Srinivas,2025-2026,25P31CS004,Gadi Lava Raju,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-07-2025
+2209,Dr. Bollu Manikyala Rao,2025-2026,25P31CS008,Metta Swathi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-07-2025
+2225,Dr. Pullela S V V S R Kumar,2025-2026,25P31CS010,Yeluri Pujitha Sri Sai Vyshnavi Mohana ,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-07-2025
+4721,Dr. B. Srinivas,2025-2026,25P31CS101,B Bhavana Sravanthi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+391,Dr. T. Sudha Rani,2025-2026,25P31CS102,Bogani Rama Devi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+1008,Dr. Ch S V V S N Murty,2025-2026,25P31CS105,Kondapalli Ashok,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+6247,Dr. K. Chandra Sekhar,2025-2026,25P31CS107,Kurella Venkata Yamini Radha Sri,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+2225,Dr. Pullela S V V S Ravi Kumar,2025-2026,25P31CS111,Padala Srikavitha,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+361,Dr. R V S Lalitha,2025-2026,25P31CS112,Palla Himabindu,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+117,Dr. M Anil Kumar,2025-2026,25P31CS113,Raja Sunita Mallipudi,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+2209,Dr. Bollu Manikyala Rao,2025-2026,25P31CS114,Ramakrushna Chokkapu,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+1330,Dr. Kovvuri N Bhargavi,2025-2026,25P31CS117,Venkata Bala Annapurna P,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+2209,Dr. Bollu Manikyala Rao,2025-2026,25P31CS118,Kesava Siva Prasad Dasari,Ph.D,CSE,Pursuing,Part-Time,Aditya university,01-01-2026
+6505,"Dr.Chukka.Rajasekhar                  
+(Co-Supervisor)",2025-2026,122060404518,Chinthagada Naveen Kumar,Ph.D,ECE,Pursuing,Part-Time,GITAM (Deemed To Be University),31-07-2021
+710,Dr. D. Kishore,2025-2026, 23022P0422,Janaki Sreeram  ,Ph.D,ECE,Pursuing,Part-Time,JNTUK, 18-10-2024
+1441,Dr.G.A.Arun Kumar,2025-2026, 23022P0423,L.Keerthi,Ph.D,ECE,Pursuing,Part-Time,JNTUK,16-10-2024
+4293,Dr. R. Raman,2025-2026, 23022P0424,M. Sudheer Kumar Reddy,Ph.D,ECE,Pursuing,Part-Time,JNTUK,16-10-2024 
+2667,Dr. R Anil Kumar,2025-2026, 23022P0427,J. Phanimala,Ph.D,ECE,Pursuing,Part-Time,JNTUK, 16-10-2024 
+706,Dr. V Vijayasri Bolisetty,2025-2026,21022P0432,R. Lokesh Babu,Ph.D,ECE,Pursuing,Part-Time,JNTUK,26-04-2022
+5337,Dr. P. Sunitha,2025-2026,21022P0442,B. Prakruthi,Ph.D,ECE,Pursuing,Part-Time,JNTUK,30-04-2022
+4204,Dr. U Rajyalakshmi,2025-2026,21022P0447,R. Prasanthi,Ph.D,ECE,Pursuing,Part-Time,JNTUK,26-04-2022
+729,Dr. R V V Krishna,2025-2026,21022P0451,P. Srinivas,Ph.D,ECE,Pursuing,Part-Time,JNTUK ,30-04-2022
+4204,Dr. U Rajyalakshmi,2025-2026,23022P0425,Ch. Krishna Chaitanya Sai,Ph.D,ECE,Pursuing,Part-Time,JNTUK,15-11-2024
+729,Dr. R V V Krishna,2025-2026,23022P0426,R.Bheema Sankaram,Ph.D,ECE,Pursuing,Part-Time,JNTUK,16-10-2024
+5655,Dr. Sanjeev Kumar,2025-2026,23022P0428,Cherukurt Kameswara Rao,Ph.D,ECE,Pursuing,Part-Time,JNTUK,19-10-2024
+111,Dr.N.Radha,2025-2026,24P31EC001,Choudalla Saila Ram,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5604,Dr.Mahesh Kumar Singh,2025-2026,24P31EC003,Kodi Suma,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5229,Dr.D.V.N.Koteswara Rao  ,2025-2026,24P31EC004,Lakshmi Sirisha Karuturi,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5337,Dr.P.Sunitha,2025-2026,24P31EC005,Lavanya Nadella,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+190,Dr. G.Ramakrishna,2025-2026,24P31EC006,Mahesh Babu Ketha,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5288,Dr.A.Tathababu,2025-2026,24P31EC007,N V P R Teja Srinivasula,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5655,Dr.Sanjeev Kumar,2025-2026,24P31EC008,Samana Vinaya Kumar,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5598,Dr.Mohammad Taj,2025-2026,24P31EC009,Trinadh Rajanala,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5577,Dr.Ch.V.Ravisankar,2025-2026,24P31EC010,Yadla Sai Prasanna,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-08-2024
+5539,Dr. P. Vijaya Kumar,2025-2026,24P31EC101,Praveen Kumar Bathula,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-01-2025
+6133,Dr. Akash Kumar Gupta,2025-2026,24P31EC102,Seelam Naga Bhargavi,Ph.D,ECE,Pursuing,Part-Time,Aditya university,31-01-2025
+5143,Dr. G. Suresh,2025-2026,24P41EC001,Patarapalli Yada Vani,Ph.D,ECE,Pursuing,Full-Time,Aditya university,31-08-2024
+815,Dr. M Venkateswarlu,2025-2026,24P41EC101,Nimmaganti Sankar Sachin,Ph.D,ECE,Pursuing,Full-Time,Aditya university,31-01-2025
+729,Dr. R V V Krishna,2025-2026,24SDEC01,Ramesh Kumar,Ph.D,ECE,Pursuing,Part-Time,GIET,01-09-2024
+6354,Dr. Manumula Srinubabu                           (Co-Supervisor),2025-2026,2503C50025,Padakanti Swapna,Ph.D,ECE,Pursuing,Part-Time,SR-University,05-06-2026
+6112,Dr. B.M.R Manasa,2025-2026,25P31EC001,Raj Kumar N,Ph.D,ECE,Pursuing,Part-Time,Aditya university,28-07-2025
+710,Dr. D. Kishore,2025-2026,25P31EC002,Venkata Satish Dhulipudi,Ph.D,ECE,Pursuing,Part-Time,Aditya university,28-07-2025
+1441,Dr.G.A.Arun Kumar,2025-2026,25P31EC003,Yejju Jyothi,Ph.D,ECE,Pursuing,Part-Time,Aditya university,28-07-2025
+5144,Dr. Narla Venkata Lalitha,2025-2026,25P31EC101,Reshma Ponnekanti,Ph.D,ECE,Pursuing,Part-Time,Aditya university,05-02-2026
+6120,Dr. Allapate Lakshmi Narayana ,2025-2026,25P41EC001,Soorni Suresh Kumar ,Ph.D,ECE,Pursuing,Full-Time,Aditya university,28-07-2025
+286,Dr. G.Sridevi,2025-2026,25P41EC101,Siddana Pavan Kumar,Ph.D,ECE,Pursuing,Full-Time,Aditya university,05-02-2026
+6505,Dr.Chukka.Rajasekhar                            (Co-Supervisor),2025-2026,VR21ECEN0114013,Devendra satyavarapu,Ph.D,ECE,Pursuing,Part-Time,GITAM (Deemed To Be University),06-06-2022
+6505,Dr.Chukka.Rajasekhar                            (Co-Supervisor),2025-2026,VR21ECEN0114020,Kolli V Jayalakhmi ,Ph.D,ECE,Pursuing,Part-Time,GITAM (Deemed To Be University),06-06-2022
+1922,Dr. K.V.S. R Murthy,2025-2026,14022P0210,Mr. P.Srihari Datta Bhimaraju,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-08-2014
+4210,Dr.  K. Bapayya Naidu,2025-2026,19022P0227,Mr. Azra Zeinab,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-09-2020
+4301,Dr.Manam Ravindra,2025-2026,21022P0202,Mr.Satyanarayana Raju,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-04-2022
+4210,Dr.  K. Bapayya Naidu,2025-2026,21022P0223,Mr. Murali Krishna Raju K,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-08-2022
+7,Dr. A. Ramesh,2025-2026,23022P0221,Mrs. T.Himaja,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-01-2025
+4301,Dr.Manam Ravindra,2025-2026,23022P0222,Mr.I Pramod Kumar,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-01-2025
+778,Dr.KRKV Prasad,2025-2026,23022P0224,Mr. M P Subbaraju,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-10-2024
+5803,Dr. Sirisha Narkedamilli,2025-2026,23022P0225,Mr. Kondala Rao Parasa ,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-10-2024
+4455,Dr.B.Rajani,2025-2026,23022P0226,Mrs.Sana Vani,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-10-2024
+1922,Dr. K.V.S. R Murthy,2025-2026,24P31EE001,Mr. Govinda Chukka,Ph.D,EEE,Pursuing,Part-Time,AUS,01-08-2024
+5225,Dr. N. Ram Babu,2025-2026,24P31EE002,Mrs. K.Sandhya Rani,Ph.D,EEE,Pursuing,Part-Time,AUS,01-08-2024
+4210,Dr.  K. Bapayya Naidu,2025-2026,24P31EE003,Mrs. P Vijaya Prasuna,Ph.D,EEE,Pursuing,Part-Time,AUS,01-08-2024
+1922,Dr. K.V.S. R Murthy,2025-2026,24P31EE102,Mr.Rambabu Kagitha,Ph.D,EEE,Pursuing,Part-Time,AUS,01-01-2025
+4210,Dr.  K. Bapayya Naidu,2025-2026,PC2613005013002,Mrs. K. Bhanu Priya,Ph.D,EEE,Pursuing,Part-Time,SRM University Chennai,26-01-2026
+7,Dr. A. Ramesh,2025-2026,12345,Mr Kurivella N S K Santhosh,Ph.D,EEE,Pursuing,Part-Time,Godavari Global University,01-10-2024
+1922,Dr. K.V.S. R Murthy,2025-2026,12346,Mr. Alti Siva Prakasa Rao,Ph.D,EEE,Pursuing,Part-Time,AUS,01-09-2020
+1427,Dr. V. Srinivasa Rao,2025-2026,12347,Mr. K. S.V. V. Prasada Rao,Ph.D,EEE,Pursuing,Part-Time,Annamalai University,01-01-2020
+1427,Dr. V. Srinivasa Rao,2025-2026,12348,V.Sudhakar,Ph.D,EEE,Pursuing,Part-Time,JNTUK,16-07-2024
+1427,Dr. V. Srinivasa Rao,2025-2026,12349,Mr. Veerababu Sunkara,Ph.D,EEE,Pursuing,Part-Time,Annamalai University,01-07-2019
+778,Dr.KRKV Prasad,2025-2026,12350,Mr. Palisetty Mohan Krishna,Ph.D,EEE,Pursuing,Part-Time,JNTUK,01-10-2024
+4000,Dr. Jillella M Kanthi Thilaka ,2025-2026,23WPHEN-OO1,D Kantha Rao,Ph.D,English,Pursuing,Part-Time,GIET- Gunupur,01-03-2024
+5556,Dr. Kotagiri Suvarnalakshmi ,2025-2026,24P31EN001,J BALA RAJASEKHAR,Ph.D,English,Pursuing,Part-Time,Aditya university,16-08-2024
+5996,Dr. Pettela Ramesh ,2025-2026,24P31EN002,S Raghavendra N,Ph.D,English,Pursuing,Part-Time,Aditya university,31-08-2024
+5556,Dr. Kotagiri Suvarnalakshmi ,2025-2026,24P31EN003,P. Tripureswari,Ph.D,English,Pursuing,Part-Time,Aditya university,16-08-2024
+5996,Dr. Pettela Ramesh,2025-2026,24P31EN004,V. Jayasri Suma,Ph.D,English,Pursuing,Part-Time,Aditya university,31-08-2024
+5996,Dr. Pettela Ramesh,2025-2026,24P31EN101,Anuradha Sangam,Ph.D,English,Pursuing,Part-Time,Aditya university,17-02-2025
+5556,Dr. Kotagiri Suvarnalakshmi ,2025-2026,24P31EN102,R. SRAVANI ROJA,Ph.D,English,Pursuing,Part-Time,Aditya university,17-02-2025
+4000,Dr. Jillella M Kanthi Thilaka ,2025-2026,24P31EN104,Venkata Ramanaiah G,Ph.D,English,Pursuing,Part-Time,Aditya university,17-02-2025
+4000,Dr. Jillella M Kanthi Thilaka ,2025-2026,25P31EN001,G. Gowri Shankar,Ph.D,English,Pursuing,Part-Time,Aditya university,17-07-2025
+4000,Dr. Jillella M Kanthi Thilaka ,2025-2026,25P31EN002,J Bala Chandrodhaya,Ph.D,English,Pursuing,Part-Time,Aditya university,17-07-2025
+5556,Dr. Kotagiri Suvarnalakshmi ,2025-2026,25P31EN003,N. Uma Subrahmanyeswari,Ph.D,English,Pursuing,Part-Time,Aditya university,17-07-2025
+823,Dr. Telugu Neelima ,2025-2026,25P41EN101,P.Priyanka,Ph.D,English,Pursuing,Full-Time,Aditya university,05-01-2026
+5996,Dr. Pettela Ramesh ,2025-2026,26A9ENPT01,Chandra Sekhar,Ph.D,English,Pursuing,Part-Time,Aditya university,11-07-2026
+823,Dr. Telugu Neelima ,2025-2026,26A9ENPT02 ,A.Prameela ,Ph.D,English,Pursuing,Part-Time,Aditya university,11-07-2026
+514,Dr.M.V.Rajesh,2025-2026,162319131,Mr.P.Pattabhirama Mohan,Ph.D,CSE,Pursuing,Part-Time,Saveetha Institute of  Medical and Technical Sciences,24-11-2023
+4362,Dr. Chaluvadi  V Raghavendran,2025-2026,19022P0561,Shaik Sikindar,Ph.D,CSE,Pursuing,Part-Time,JNTUK,09-11-2020
+4362,Dr. Chaluvadi  V Raghavendran,2025-2026,22022P0540,Ms. N Chaitanya,Ph.D,CSE,Pursuing,Part-Time,JNTUK,23-02-2023
+2200,Dr.G.S.N Murthy,2025-2026,22022P0566,Mandala Ramesh,Ph.D,CSE,Pursuing,Part-Time,JNTUK,25-01-2023
+514,Dr.M.V.Rajesh,2025-2026,22022P0567,Mr.Prathap Adimoolam,Ph.D,CSE,Pursuing,Part-Time,JNTUK,25-01-2023
+5528,Dr. A Vikram  ,2025-2026,23022P0522,Ms Monikadevi Gottipalli,Ph.D,CSE,Pursuing,Part-Time,JNTUK,14-10-2024
+2200,Dr.G.S.N Murthy,2025-2026,23022P0523,V. Surya LakshmiKantham,Ph.D,CSE,Pursuing,Part-Time,JNTUK,18-10-2024
+5528,Dr. A Vikram  ,2025-2026,24P31CS014,Mr Nollu Hari Sathish Kumar,Ph.D,CSE,Pursuing,Part-Time,Aditya University,17-09-2024
+4765,Dr. Annamneedi Lakshmana Rao,2025-2026,24P31CS018,Vengalapudi Appalakonda,Ph.D,CSE,Pursuing,Part-Time,Aditya University,15-05-2026
+514,Dr.M.V.Rajesh,2025-2026,24P31CS106,Kolli Srinu,Ph.D,CSE,Pursuing,Part-Time,Aditya University,31-01-2025
+5528,Dr. A Vikram  ,2025-2026,24P31CS110,Ms Mocherla Radha,Ph.D,CSE,Pursuing,Part-Time,Aditya University,31-01-2025
+514,Dr.M.V.Rajesh,2025-2026,24P41CS101,Mr.Mhymood Khan,Ph.D,CSE,Pursuing,Full-Time,Aditya University,31-01-2025
+1067,Dr. Makineedi Rajababu,2025-2026,25P31CS006,Jagdish Babu,Ph.D,CSE,Pursuing,Part-Time,Aditya University,08-01-2025
+4765,Dr. Annamneedi Lakshmana Rao,2025-2026,25P31CS007,Mr.Jala Prasadarao,Ph.D,CSE,Pursuing,Part-Time,Aditya University,15-06-2025
+4362,Dr. Chaluvadi  V Raghavendran,2025-2026,25P31CS009,Mr. S Nagendra,Ph.D,CSE,Pursuing,Part-Time,Aditya University,30-07-2025
+2200,Dr.G.S.N Murthy,2025-2026,25P31CS106,K.Tejaswini,Ph.D,CSE,Pursuing,Part-Time,Aditya University,06-02-2026
+4362,Dr. Chaluvadi  V Raghavendran,2025-2026,25P31CS108,M Mownika Rayudu,Ph.D,CSE,Pursuing,Part-Time,Aditya University,06-02-2026
+1067,Dr. Makineedi Rajababu,2025-2026,25P31CS109,Karumudi Nagamani,Ph.D,CSE,Pursuing,Part-Time,Aditya University,02-06-2026
+4765,Dr. Annamneedi Lakshmana Rao,2025-2026,25P31CS115,S B Deepthi kakaraparthi,Ph.D,CSE,Pursuing,Part-Time,Aditya University,10-03-2026
+6589,Dr. Karnam Sreenu,2025-2026,25P31CS116,Ch Solomon Raju,Ph.D,CSE,Pursuing,Part-Time,Aditya University,06-02-2026
+6589,Dr. Karnam Sreenu,2025-2026,26P31CS001,Adduri Harika,Ph.D,CSE,Pursuing,Part-Time,Aditya University,07-11-2026
+4765,Dr. Annamneedi Lakshmana Rao,2025-2026,26P31CS005,G V Ram Mohan,Ph.D,CSE,Pursuing,Part-Time,Aditya University,07-11-2026
+6393,Dr.M.Sreerama Raju,2025-2026,21WPH-MB-010,Gatti Subhadra Sahithi,Ph.D,Management,Pursuing,Part-Time,"GIET University, Gunupur",26-04-2022
+6164,Dr. M.Veera Krishna,2025-2026,25P31MS001,Bhargava Urlankula,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6360,Dr. Kahmeera Shaik,2025-2026,25P31MS002,Vijaya Lakshmi D.,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6360,Dr. Kahmeera Shaik,2025-2026,25P31MS003,Dommeti Nikhil ,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6393,Dr.T.Suresh,2025-2026,25P31MS004,Guttula Venkata Lakshmi,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6328,Dr.T.Durga Prasad ,2025-2026,25P31MS005,M. Goverdhana Reddy,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6383,Dr.M.Sreerama Raju,2025-2026,25P31MS006,Prathyusha Meenavalli,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6164,Dr. M.Veera Krishna ,2025-2026,25P31MS007,Srinivasarao Desilla ,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6393,Dr.T.Suresh,2025-2026,25P31MS008,Tulasi V S Rama Krishna,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-07-2025
+6383,Dr. Sreerama Raju Malladi,2025-2026,25P31MS101,Avik Kumar Ghosh,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-01-2026
+6328,Dr. Durga Prasad Tapeswarapu,2025-2026,25P31MS103,Kase Chetan Kumar,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-01-2026
+2462,Dr. K. Shailaja Rao,2025-2026,25P31MS106,Sowjanya Sripathy,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-01-2026
+6150,Dr. C. Kiranmayi,2025-2026,25P31MS107,Syed Ghousia Sultana,Ph.D,MS,Pursuing,Part-Time,Aditya university,01-01-2026
+6328,Dr.T.Durga Prasad ,2025-2026,25P41MS001,Garapati Pavani,Ph.D,MS,Pursuing,Full-Time,Aditya university,01-07-2025
+6383,Dr.M.Sreerama Raju,2025-2026,25P41MS003,Ravi Subhakar,Ph.D,MS,Pursuing,Full-Time,Aditya university,01-07-2025
+6407,Dr. Ravi Thangjam,2025-2026,25P41MS101,Kovvuri Kavya,Ph.D,MS,Pursuing,Full-Time,Aditya university,01-01-2026
+6390,Dr P R Sobhana Babu,2025-2026,244R010004,S S R Bhargava ,Ph.D,Mathematics,Pursuing,Part-Time,GGU,20-10-2024
+5050,Dr. D. Srinivasa Rao,2025-2026,24P31MT001,Chada L A Manga Tayaru,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,31-08-2024
+4943,Dr. G. Balaji Prakash,2025-2026,24P31MT002,Ch. Himabindu,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,31-08-2024
+2249,Dr.B.Krishnaveni,2025-2026,24P31MT003,D.Sandhya Saraswati,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,24-09-2024
+6106,Dr D.N.Purnima,2025-2026,24P31MT004,N.Ravi Krishna,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,24-09-2024
+1233,Dr. G.V. Ramana,2025-2026,24P31MT005,Divya Pithani,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,31-08-2024
+930,Dr. M. Bala Prabhakar,2025-2026,24P31MT101,S. Nagalakshmi Alekhya,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,17-02-2025
+4055,Dr.N.SelvaMalar,2025-2026,24P41MT001 ,P.Narayana,Ph.D,Mathematics,Pursuing,Full-Time,Aditya university,25-08-2024
+6390,Dr P R Sobhana Babu,2025-2026,25P31MT001,N.Ravindra,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,01-07-2025
+605,Dr. P.Satish,2025-2026,25P31MT002,T. Venkata Lakshmi,Ph.D,Mathematics,Pursuing,Part-Time,Aditya university,01-08-2025
+2237,Dr. V. Venkata Kumar,2025-2026,25P41MT101,Krishna Kaleshriya,Ph.D,Mathematics,Pursuing,Full-Time,Aditya university,05-02-2026
+1233,Dr. G.V. Ramana,2025-2026,25P41MT102,Mayana Shahin Taj ,Ph.D,Mathematics,Pursuing,Full-Time,Aditya university,07-02-2026
+4711,Dr. Elumalai P V,2025-2026,2132060001,Mr. Sartaj Patel,Ph.D,ME,Pursuing,Part-Time,Annamalai University,11-01-2022
+4711,Dr. Elumalai P V,2025-2026,2132060003,Ms. Anusha Mylavarapu,Ph.D,ME,Pursuing,Part-Time,Annamalai University,11-01-2022
+4711,Dr. Elumalai P V,2025-2026,2132060004,Ms. Sanipina Anjani Devi,Ph.D,ME,Pursuing,Part-Time,Annamalai University,11-01-2022
+4711,Dr. Elumalai P V,2025-2026,2132060005,Mr. Kadupu Rakesh Varma,Ph.D,ME,Pursuing,Part-Time,Annamalai University,11-01-2022
+4711,Dr. Elumalai P V,2025-2026,2132060006,Mr. Adduri S S M Sitaramamurthy,Ph.D,ME,Pursuing,Part-Time,Annamalai University,11-01-2022
+4711,Dr. Elumalai P V,2025-2026,2337130001,Mr. Chikkam China Subbarao,Ph.D,Chemical Engineering,Pursuing,Part-Time,Annamalai University,02-09-2024
+4117,Dr. P. S. Ranjit,2025-2026,19022P0309,Mr. J D Venkatesh ,Ph.D,ME,Pursuing,Part-Time,JNTUK,05-09-2020
+4265,Dr. Bh. Varaprasad,2025-2026,21022P0341,Mr.G.Raju,Ph.D,ME,Pursuing,Part-Time,JNTUK,28-04-2022
+4117,Dr. P. S. Ranjit,2025-2026,23022P0316,Mr. P Uma Maheswara Rao,Ph.D,ME,Pursuing,Part-Time,JNTUK,10-12-2024
+4351,DR DVSSSV PRASAD,2025-2026,23022P0318,Ratnala Prasad,Ph.D,ME,Pursuing,Part-Time,"JNTUK, Kakinada",01-09-2024
+1,Dr.M.Sreenivasa Reddy,2025-2026,24EG10AP02,Mr.Ashok Christopher,Ph.D,ME,Pursuing,Part-Time,Vinayaka Mission's Research Foundation,15-06-2022
+4841,Dr. Itha Veeranjaneyulu,2025-2026,24P31ME001,Mr. G. Venkateswarulu,Ph.D,ME,Pursuing,Part-Time,Aditya University,31-08-2024
+4761,Dr. Mohammed Zubairuddin,2025-2026,24P31ME002,Mr. Pandiri Jaikishan,Ph.D,ME,Pursuing,Part-Time,Aditya University,31-08-2024
+5333,Dr. Uzwalkiran Rokkala,2025-2026,24P31ME101,Mr. Rajasunilnataraj Mukku,Ph.D,ME,Pursuing,Part-Time,Aditya University,31-01-2025
+4265,Dr. Bh. Varaprasad,2025-2026,24P31ME102,Mr. Ramprasad Chitturi,Ph.D,ME,Pursuing,Part-Time,Aditya University,31-01-2025
+3541,Dr. A. Saravanan,2025-2026,24P41ME001,Mr. K. Ratnaraj,Ph.D,ME,Pursuing,Full-Time,Aditya University,31-08-2024
+4757,Dr. Sandip Kunar,2025-2026,25P31ME001,Ms. Gunnam Snehalatha,Ph.D,ME,Pursuing,Part-Time,Aditya University,01-08-2025
+4277,Dr. Akhilesh Kumar Singh,2025-2026,25P31ME003,Mr. Rajesh Divvala,Ph.D,ME,Pursuing,Part-Time,Aditya University,01-08-2025
+2605,Dr. S D V V S Bhimeshwar Reddy,2025-2026,25P41ME001,Mr. Malluvalasa Eswara Ramesh,Ph.D,ME,Pursuing,Full-Time,Aditya University,28-07-2025
+4447,Dr. N. Bhanu Teja ,2025-2026,25P41ME101,Mr. Yalla Satya Durga Prasad,Ph.D,ME,Pursuing,Full-Time,Aditya University,02-05-2026
+4277,Dr. Akhilesh Kumar Singh,2025-2026,R11223,Srinath R,Ph.D,ME,Pursuing,Part-Time,Annamalai University,10-10-2019
+4351,DR DVSSSV PRASAD,2025-2026,25P31ME002,Pediredla Mouli,Ph.D,ME,Pursuing,Part-Time,"Aditya University, Surampalem",01-08-2025
+5031,Dr. Ch. S. Phani Kumar,2025-2026,2909380282,Ramakurthi Kundharaju,Ph.D,Pharmaceutical Sciences,Awarded,Part-Time,Bir Tikendrajit University,01-08-2025
+1353,Dr. D. Sathis Kumar,2025-2026,25P31PY102,Balla Sujiya,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+1044,Dr. S. Nageswara Rao,2025-2026,25P31PY103,Chaithanya A,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+4753,Dr. P. S. S. Sai Kiran,2025-2026,25P31PY104,Gurajapu Sai Sandhya,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+5201,Dr. P. Bhaskara Rao,2025-2026,25P31PY105,Hema P. M.,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+849,Dr. T. Uday Kumar,2025-2026,25P31PY106,Karthik M,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+1044,Dr. S. Nageswara Rao,2025-2026,25P31PY107,Koduri Sri Sailakshmi Ramya,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+5201,Dr. P. Bhaskara Rao,2025-2026,25P31PY108,Kola Vijay Kumar,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+5031,Dr. Ch. S. Phani Kumar,2025-2026,25P31PY109,Mohammed Khalid,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+5031,Dr. Ch. S. Phani Kumar,2025-2026,25P31PY110,Pedapati Sri Veeramani Deepika,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+4753,Dr. P. S. S. Sai Kiran,2025-2026,25P31PY112,Singineedi Sruthi,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+5031,Dr. Ch. S. Phani Kumar,2025-2026,25P31PY113,Suneetha Devi Alajangi,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+1353,Dr. D. Sathis Kumar,2025-2026,25P31PY115,Tetali Samanvai,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+849,Dr. T. Uday Kumar,2025-2026,25P31PY116,Vissapragada Ratnaravali,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+1353,Dr. D. Sathis Kumar,2025-2026,25P41PY101,Adhikari Sravya,Ph.D,Pharmaceutical Sciences,Pursuing,Part-Time,Aditya University,26-01-2026
+4753,Dr. P. S. S. Sai Kiran,2025-2026,25P41PY102,Bunga Amarendra Babu,Ph.D,Pharmaceutical Sciences,Pursuing,Full-Time,Aditya University,26-01-2026
+1353,Dr. D. Sathis Kumar,2025-2026,25P41PY103,Rutendo Moleen Mautsa,Ph.D,Pharmaceutical Sciences,Pursuing,Full-Time,Aditya University,26-01-2026
+1244,Dr G Chinna Ram,2025-2026,24P31PH001,Channamsetti Sushma,Ph.D,Physics,Pursuing,Part-Time,Aditya university,2024-2025
+6157,Dr.A.Rajesh,2025-2026,24P31PH002,Phani Kumar Chunduri,Ph.D,Physics,Pursuing,Part-Time,Aditya university,2024-2025
+3721,N.Rajeswara rao,2025-2026,24P31PH003,Venkata Venugopal Nemalapuri,Ph.D,Physics,Pursuing,Part-Time,Aditya university,2024-2025
+6157,Dr.A.Rajesh,2025-2026,24P31PH101,Mohandass Gandhi A,Ph.D,Physics,Pursuing,Part-Time,Aditya university,2025-2026
+52,Dr. T. Narendrudu,2025-2026,25P31PH002,Veerabrahmam Sreekakulam,Ph.D,Physics,Pursuing,Part-Time,Aditya university,22-02-2025
+4378,Dr.Abhishek kumar Tripathi,2025-2026,24P31MN001,Mr.V. Vijay Kumar,Ph.D,Min.E,Pursuing,Part-Time,Aditya university,30-08-2024
+4378,Dr.Abhishek kumar Tripathi,2025-2026,24P31MN101,Manoj Kumar,Ph.D,Min.E,Pursuing,Part-Time,Aditya university,01-01-2025
+3557,Dr. T ANIL KUMAR,2025-2026,24P31PE001,D. Jaswanth Roy,Ph.D,PT,Pursuing,Part-Time,Aditya university,31-08-2024
+3557,Dr. T ANIL KUMAR,2025-2026,25P31PE101,Mr. V. V. Srimannarayana,Ph.D,PT,Pursuing,Part-Time,Aditya university,21-01-2026
