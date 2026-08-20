@@ -39,17 +39,14 @@ exports.createTextbook = async (req, res) => {
         }
 
         const existingRecord = await Textbook.findOne({
-            $or: [
-                { isbn: data.isbn },
-                { title: new RegExp(`^${escapeRegex(data.title.trim())}$`, 'i') }
-            ],
+            isbn: data.isbn,
             status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
         });
 
         if (existingRecord) {
             return res.status(400).json({ 
                 success: false, 
-                message: "A textbook with this ISBN or Title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+                message: "A textbook with this ISBN already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
             });
         }
 
@@ -139,7 +136,7 @@ exports.createTextbook = async (req, res) => {
         console.error("Create Textbook Error:", err);
         if (err.code === 11000) {
             const field = Object.keys(err.keyValue)[0];
-            const message = `A textbook with this ${field === 'title' ? 'Title' : 'ISBN'} already exists.`;
+            const message = `A textbook with this ${field} already exists.`;
             return res.status(400).json({ success: false, message });
         }
         res.status(500).json({ success: false, message: err.message });

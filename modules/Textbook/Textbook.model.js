@@ -51,7 +51,7 @@ const TextbookSchema = new mongoose.Schema({
     title: {
         type: String,
         required: true,
-        unique: true,
+        index: true,
         maxlength: 200 // Increased maxlength to accommodate real textbook titles
     },
     publisher: {
