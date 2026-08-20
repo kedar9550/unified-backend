@@ -25,7 +25,7 @@ const ConsultancySchema = new mongoose.Schema({
     },
     college: { type: String },
     panNumber: { type: String },
-    
+
     title: { type: String, required: true, unique: true },
     fundingAgency: { type: String },
     fundingAdityaUniversity: { type: String, enum: ['Yes', 'No'] },
@@ -60,7 +60,7 @@ const ConsultancySchema = new mongoose.Schema({
         type: String,
         default: null
     },
-    
+
     status: {
         type: String,
         enum: ['Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
@@ -69,10 +69,10 @@ const ConsultancySchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
-    
+
 });
 
-ConsultancySchema.pre('save', function() {
+ConsultancySchema.pre('save', function () {
     if (!this.fundingAgency && this.organization) {
         this.fundingAgency = this.organization;
     }

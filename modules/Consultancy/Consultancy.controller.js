@@ -17,18 +17,7 @@ exports.createConsultancy = async (req, res) => {
 
         const trimmedTitle = data.title.trim();
 
-        // 2. Duplicate Validation
-        const existingRecord = await Consultancy.findOne({
-            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
-        });
 
-        if (existingRecord) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "A consultancy entry with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
-            });
-        }
 
         // 3. Numeric Fields Validation
         const numAmount = Number(data.amount);
@@ -85,9 +74,6 @@ exports.createConsultancy = async (req, res) => {
         res.status(201).json({ success: true, data: consultancy });
     } catch (err) {
         console.error("Create Consultancy Error:", err);
-        if (err.code === 11000) {
-            return res.status(400).json({ success: false, message: "A consultancy entry with this title already exists." });
-        }
         res.status(500).json({ success: false, message: err.message });
     }
 };

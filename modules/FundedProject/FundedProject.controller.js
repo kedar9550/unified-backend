@@ -30,19 +30,6 @@ exports.createProject = async (req, res) => {
 
         const trimmedTitle = data.title.trim();
 
-        // 2. Duplicate Validation
-        const existingRecord = await FundedProject.findOne({
-            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
-        });
-
-        if (existingRecord) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "A funded project entry with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
-            });
-        }
-
         // 3. Numeric Fields Validation
         if (data.duration) {
             const numDuration = Number(data.duration);
@@ -111,9 +98,6 @@ exports.createProject = async (req, res) => {
         res.status(201).json({ success: true, data: project });
     } catch (err) {
         console.error("Create Funded Project Error:", err);
-        if (err.code === 11000) {
-            return res.status(400).json({ success: false, message: "A funded project with this title already exists." });
-        }
         res.status(500).json({ success: false, message: err.message });
     }
 };
