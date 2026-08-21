@@ -3,3 +3,4 @@ config/firebase-service-account.json
 
 .env
 uploads/
+scripts/research_uploads/*.csv
