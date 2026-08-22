@@ -1114,6 +1114,10 @@ const adminUpdateEmployee = async (req, res) => {
         });
     } catch (error) {
         console.error("Admin Update Employee Error:", error);
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(err => err.message);
+            return res.status(400).json({ success: false, message: messages.join(', ') });
+        }
         res.status(500).json({ success: false, message: "Internal server error" });
     }
 };
