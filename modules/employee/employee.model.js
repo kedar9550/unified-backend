@@ -103,7 +103,7 @@ const EmployeeSchema = new mongoose.Schema({
         default: "",
         validate: {
             validator: function (v) {
-                return !v || /^\d{4}-\d{4}-\d{4}-\d{3}[\dX]$/.test(v);
+                return !v || /^[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}-[A-Za-z0-9]{4}$/.test(v);
             },
             message: "Invalid ORCID format"
         }
