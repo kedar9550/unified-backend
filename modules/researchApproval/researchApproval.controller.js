@@ -29,7 +29,7 @@ exports.getResearchRequests = async (req, res) => {
         // Check if user has research management roles
         const userRoleNames = req.user.roles?.map(r => r.role?.toUpperCase()) || [];
         const isResearchAdmin = userRoleNames.includes('RESEARCH_DEAN') || userRoleNames.includes('RESEARCH_COORDINATOR');
-        const isHOD = userRoleNames.includes('HOD');
+        const isHOD = userRoleNames.includes('HOD') || userRoleNames.includes('SCHOOL_DEAN') || userRoleNames.includes('SCHOOL DEAN');
 
         console.log(`[DEBUG] Research Approval Access - User: ${req.user.userId}, isResearchAdmin: ${isResearchAdmin}`);
 
