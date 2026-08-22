@@ -286,7 +286,7 @@ const notifyApprovers = async (nextStatus, faculty, appraisalId) => {
 
         if (recipientId) {
             let notifLink = `/appraisal/management-evaluate`;
-            if (targetRoleName === 'HOD' || targetRoleName === 'SCHOOL_DEAN') {
+            if (targetRoleName === 'HOD') {
                 notifLink = `/hod/appraisal-verification`;
             } else if (targetRoleName === 'RESEARCH_DEAN' || targetRoleName === 'RESEARCH_COORDINATOR') {
                 notifLink = `/research-dean/appraisal-finalization`;

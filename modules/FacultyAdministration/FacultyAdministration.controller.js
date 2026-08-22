@@ -221,7 +221,7 @@ exports.getPendingAtHOD = async (req, res) => {
 exports.hodActionRole = async (req, res) => {
     try {
         const { id } = req.params;
-        const { roleId, action, remarks, isFinalApproval } = req.body; // action: "Approve" or "Reject"
+        const { roleId, roleLabel, action, remarks, isFinalApproval } = req.body; // action: "Approve" or "Reject"
 
         if (!roleId) {
             return res.status(400).json({ success: false, message: "roleId is required." });
@@ -272,7 +272,7 @@ exports.hodActionRole = async (req, res) => {
         }
 
         // Find and update the role in roles array
-        const role = entry.roles.find(r => r.roleId === roleId);
+        const role = entry.roles.find(r => r.roleId === roleId && (roleLabel ? r.roleLabel === roleLabel : true) && r.isResponsible);
         if (!role) {
             return res.status(404).json({ success: false, message: `Role ID '${roleId}' not found in this entry.` });
         }
