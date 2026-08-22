@@ -316,17 +316,14 @@ const resolveAcademicIds = async ({ academicYear, semester }) => {
  * Helper to get the current active state (Year & Semester) for a program.
  */
 const getActiveStateForProgram = async (programId) => {
-    const ay = await resolveActiveAcademicYear(programId);
+    const ay = await resolveActiveAcademicYear();
 
     if (!ay) return null;
 
-    const progEntry = ay.programs.find(p => p.programId.toString() === programId.toString());
-    if (!progEntry) return null;
-
     return {
         year: ay.year,
-        activeSemesterTypeId: progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId,
-        activeSemesterName: progEntry.activeSemesterTypeId?.name
+        activeSemesterTypeId: null,
+        activeSemesterName: null
     };
 };
 
@@ -335,45 +332,8 @@ const getActiveStateForProgram = async (programId) => {
  * Returns { deletable: boolean, reason?: string }
  */
 const checkDeletability = async (academicYearId, programId, semesterTypeId) => {
-    if (!academicYearId || !programId) {
-        return { deletable: false, reason: "Missing record metadata (Academic Year or Program)." };
-    }
-
-    // 1. Get the record's specific academic year document
-    const recordYearDoc = await AcademicYear.findById(academicYearId).populate("programs.activeSemesterTypeId");
-    if (!recordYearDoc) {
-        return { deletable: false, reason: "Record's academic year could not be verified." };
-    }
-
-    // 2. Find the program entry in THIS specific academic year document
-    const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
-
-    // 3. If the program is marked as Active in this year, check the semester
-    if (progEntry && progEntry.isActive) {
-        const activeSemId = progEntry.activeSemesterTypeId?._id || progEntry.activeSemesterTypeId;
-
-        if (activeSemId && semesterTypeId) {
-            if (activeSemId.toString() !== semesterTypeId.toString()) {
-                const recordSemDoc = await SemesterType.findById(semesterTypeId);
-                const activeSemDoc = await SemesterType.findById(activeSemId);
-
-                return {
-                    deletable: false,
-                    reason: `The program is currently in the ${activeSemDoc?.name || 'active'} semester of ${recordYearDoc.year}. Records from the ${recordSemDoc?.name || 'requested'} semester cannot be deleted.`
-                };
-            }
-        }
-        // Year matches and is active, and semester matches (or isn't applicable)
-        return { deletable: true };
-    }
-
-    // 4. If the program is NOT active in this year, find what the current active year IS
-    const currentActiveYearDoc = await resolveActiveAcademicYear(programId);
-
-    return {
-        deletable: false,
-        reason: `This record belongs to ${recordYearDoc.year}, but the program's currently active year is ${currentActiveYearDoc?.year || 'a different year'}. Only records from the active period can be deleted.`
-    };
+    // Let the user delete any record belonging to any academic year
+    return { deletable: true };
 };
 
 /**
