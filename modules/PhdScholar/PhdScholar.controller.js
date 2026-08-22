@@ -97,26 +97,36 @@ exports.createPhdApplication = async (req, res) => {
             });
         }
 
-        // 4. Duplicate checks: two different Faculty IDs cannot have same scholar with same status
-        const existingActive = await PhdApplication.findOne({
+        // 4. Duplicate checks
+        // a) Same faculty cannot apply twice for the same scholar
+        const existingEmp = await PhdApplication.findOne({
             rollNumber: rollNo,
+            facultyId: req.user.userId,
             scholarStatus: data.scholarStatus,
             status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
         });
 
-        if (existingActive) {
-            if (existingActive.facultyId.toString() !== req.user.userId.toString()) {
-                const guide = await Employee.findById(existingActive.facultyId).select('name');
-                return res.status(400).json({
-                    success: false,
-                    message: `This scholar roll number is already registered under guide ${guide ? guide.name : "another faculty"} with status "${data.scholarStatus}".`
-                });
-            } else {
-                return res.status(400).json({
-                    success: false,
-                    message: `You have already submitted a pending or approved application for this scholar with status "${data.scholarStatus}".`
-                });
-            }
+        if (existingEmp) {
+            return res.status(400).json({
+                success: false,
+                message: `You have already submitted a pending or approved application for this scholar with status "${data.scholarStatus}".`
+            });
+        }
+
+        // b) Only one 'guide' can exist per scholar
+        const existingGuide = await PhdApplication.findOne({
+            rollNumber: rollNo,
+            type: 'guide',
+            scholarStatus: data.scholarStatus,
+            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+        });
+
+        if (existingGuide) {
+            const guide = await Employee.findById(existingGuide.facultyId).select('name');
+            return res.status(400).json({
+                success: false,
+                message: `This scholar roll number is already registered under guide ${guide ? guide.name : "another faculty"} with status "${data.scholarStatus}".`
+            });
         }
 
         const application = new PhdApplication({

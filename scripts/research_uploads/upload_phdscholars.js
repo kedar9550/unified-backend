@@ -28,7 +28,7 @@ async function processCSV() {
 
     const headers = [
         'empId', 'facultyName', 'academicYear', 'rollNumber', 'studentName', 'course',
-        'branch', 'scholarStatus', 'scholarType', 'university', 'date'
+        'branch', 'scholarStatus', 'scholarType', 'university', 'date', 'type'
     ];
 
     fs.createReadStream(csvFilePath)
@@ -91,6 +91,7 @@ async function processCSV() {
                         scholarType: row['scholarType'] || 'Full-Time',
                         university: row['university'] || 'Unknown University',
                         admissionOrAwardDate: isNaN(admissionDate) ? new Date() : admissionDate,
+                        type: row['type'] ? row['type'].trim().toLowerCase() : 'guide',
                         
                         // Default fields
                         document: 'placeholder.pdf',

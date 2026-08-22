@@ -57,6 +57,11 @@ const PhdApplicationSchema = new mongoose.Schema({
         type: String, // Path of uploaded proof document
         required: true
     },
+    type: {
+        type: String,
+        enum: ['guide', 'co-guide'],
+        default: 'guide'
+    },
     status: {
         type: String,
         enum: ['Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
