@@ -41,9 +41,6 @@ exports.designationRoutingMap = designationRoutingMap;
 
 // Import all related models
 const Employee = require("../employee/employee.model");
-const NotificationService = require("../notification/notification.service");
-const Role = require("../role/role.model");
-const UserAppRole = require("../userAppRole/userAppRole.model");
 
 const getFacultyCategoryHelper = (fac) => {
     if (!fac) return "Non-Doctorate Faculty";
@@ -214,100 +211,6 @@ const Consultancy = require("../Consultancy/Consultancy.model");
 const ResourceUtilization = require("../ResourceUtilization/ResourceUtilization.model");
 const Contribution = require("../Contribution/Contribution.model");
 const FacultyAdministration = require("../FacultyAdministration/FacultyAdministration.model");
-
-// Helper to notify approvers based on nextStatus
-const notifyApprovers = async (nextStatus, faculty, appraisalId) => {
-    try {
-        let recipientId = null;
-        let targetRoleName = "";
-
-        // console.log(`[notifyApprovers] Starting for nextStatus: ${nextStatus}, faculty dept: ${faculty.department}`);
-
-        if (nextStatus === "Submitted to HOD") {
-            targetRoleName = "HOD";
-            const hodRoleDoc = await Role.findOne({ $or: [{ name: 'HOD' }, { key: 'HOD' }, { name: 'DEPARTMENT HOD' }], app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
-            if (hodRoleDoc && faculty.department) {
-                const mapping = await UserAppRole.findOne({ role: hodRoleDoc._id, departments: faculty.department });
-                if (mapping) recipientId = mapping.userId;
-            }
-            // console.log(`[notifyApprovers] HOD role found: ${!!hodRoleDoc}, mapping found: ${!!recipientId}`);
-        } else if (nextStatus === "Submitted to Dean") {
-            targetRoleName = "SCHOOL_DEAN";
-            const deanRoleDoc = await Role.findOne({ $or: [{ name: 'SCHOOL_DEAN' }, { key: 'SCHOOL_DEAN' }, { name: 'SCHOOL DEAN' }], app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
-            if (deanRoleDoc) {
-                const Department = require("../academics/department.model");
-                const dept = await Department.findById(faculty.department);
-                if (dept && dept.schoolIds && dept.schoolIds.length > 0) {
-                    const mapping = await UserAppRole.findOne({ role: deanRoleDoc._id, schools: { $in: dept.schoolIds } });
-                    if (mapping) recipientId = mapping.userId;
-                }
-            }
-            // console.log(`[notifyApprovers] DEAN role found: ${!!deanRoleDoc}, mapping found: ${!!recipientId}`);
-        } else if (nextStatus.startsWith("Submitted to ")) {
-            let extractedRole = nextStatus.replace("Submitted to ", "").trim();
-            targetRoleName = extractedRole.toUpperCase();
-            
-            // Escape special characters for regex, e.g. for (E & S)
-            const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regexRole = new RegExp('^' + escapeRegExp(extractedRole) + '$', 'i');
-            
-            // Generate a potential key like PRO_VICE_CHANCELLOR_E_S
-            const possibleKey = targetRoleName.replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-
-            const roleDoc = await Role.findOne({ 
-                $or: [
-                    { name: regexRole }, 
-                    { key: targetRoleName },
-                    { key: possibleKey }
-                ], 
-                app: process.env.APP_NAME || 'UNIFIED_SYSTEM' 
-            });
-
-            if (roleDoc) {
-                const mapping = await UserAppRole.findOne({ role: roleDoc._id });
-                if (mapping) recipientId = mapping.userId;
-            }
-            // console.log(`[notifyApprovers] Special role ${targetRoleName} found: ${!!roleDoc}, mapping found: ${!!recipientId}`);
-        } else if (nextStatus === "Pending Research Admin") {
-            targetRoleName = "RESEARCH_DEAN";
-            const rdRoleDoc = await Role.findOne({ $or: [{ key: 'RESEARCH_DEAN' }, { name: 'RESEARCH DEAN' }], app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
-            if (rdRoleDoc) {
-                const mapping = await UserAppRole.findOne({ role: rdRoleDoc._id });
-                if (mapping) recipientId = mapping.userId;
-            }
-            if (!recipientId) {
-                const rcRoleDoc = await Role.findOne({ $or: [{ key: 'RESEARCH_COORDINATOR' }, { name: 'RESEARCH COORDINATOR' }], app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
-                if (rcRoleDoc) {
-                    const mapping = await UserAppRole.findOne({ role: rcRoleDoc._id });
-                    if (mapping) recipientId = mapping.userId;
-                }
-            }
-        }
-
-        if (recipientId) {
-            let notifLink = `/appraisal/management-evaluate`;
-            if (targetRoleName === 'HOD' || targetRoleName === 'SCHOOL_DEAN') {
-                notifLink = `/hod/appraisal-verification`;
-            } else if (targetRoleName === 'RESEARCH_DEAN' || targetRoleName === 'RESEARCH_COORDINATOR') {
-                notifLink = `/research-dean/appraisal-finalization`;
-            }
-            
-            // console.log(`[notifyApprovers] Sending notification to recipient: ${recipientId}`);
-            await NotificationService.sendNotification({
-                recipientId,
-                module: 'Appraisal',
-                type: 'ACTION_REQUIRED',
-                title: 'Appraisal Pending Evaluation',
-                message: `An appraisal for ${faculty.name} is waiting for your evaluation.`,
-                link: notifLink
-            });
-        } else {
-            // console.log(`[notifyApprovers] No recipient found for status ${nextStatus}`);
-        }
-    } catch (err) {
-        console.error("[notifyApprovers] Failed to notify approvers:", err);
-    }
-};
 
 // Helper to match a value against config point ranges
 function getPointsFromRanges(val, ranges) {
@@ -1865,25 +1768,6 @@ exports.submitAppraisal = async (req, res) => {
         appraisal.status = nextStatus;
         await appraisal.save();
 
-        // ---------------- Notification logic ----------------
-        // 1. Notify the submitting faculty
-        try {
-            await NotificationService.sendNotification({
-                recipientId: facultyId,
-                module: 'Appraisal',
-                type: 'INFO',
-                title: 'Appraisal Submitted',
-                message: `Your self-appraisal has been successfully submitted and is currently ${nextStatus}.`,
-                link: `/faculty/appraisal`
-            });
-        } catch (err) {
-            console.error("Failed to notify faculty on submit:", err);
-        }
-
-        // 2. Notify the next approvers
-        await notifyApprovers(nextStatus, faculty, appraisal._id);
-        // ----------------------------------------------------
-
         res.json({ success: true, message: `Appraisal ${nextStatus} successfully.`, data: appraisal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -2026,20 +1910,6 @@ exports.evaluateHODAppraisal = async (req, res) => {
                 { $set: { status: "Draft" } }
             );
 
-            // Notify faculty of rejection
-            try {
-                await NotificationService.sendNotification({
-                    recipientId: appraisal.facultyId,
-                    module: 'Appraisal',
-                    type: 'REJECTED',
-                    title: `Appraisal ${appraisal.status}`,
-                    message: `Your appraisal was rejected by ${targetRoleName}. Reason: ${comments || 'No comments provided.'}`,
-                    link: `/faculty/appraisal`
-                });
-            } catch (err) {
-                console.error("Failed to notify faculty of rejection:", err);
-            }
-
             return res.json({ success: true, message: "Appraisal sent back to faculty. Pending individual items reverted to Draft.", data: appraisal });
         }
 
@@ -2157,39 +2027,6 @@ exports.evaluateHODAppraisal = async (req, res) => {
         }
 
         await appraisal.save();
-
-        // Notifications after evaluation
-        try {
-            const facultyObj = await Employee.findById(appraisal.facultyId);
-            if (facultyObj) {
-                if (appraisal.status === `Approved by ${targetRoleName}`) {
-                    // Fully approved at this stage
-                    await NotificationService.sendNotification({
-                        recipientId: appraisal.facultyId,
-                        module: 'Appraisal',
-                        type: 'SUCCESS',
-                        title: 'Appraisal Approved',
-                        message: `Your appraisal has been successfully approved by ${targetRoleName}.`,
-                        link: `/faculty/appraisal`
-                    });
-                } else {
-                    // Forwarded to next approver
-                    await NotificationService.sendNotification({
-                        recipientId: appraisal.facultyId,
-                        module: 'Appraisal',
-                        type: 'INFO',
-                        title: `Appraisal Evaluated by ${targetRoleName}`,
-                        message: `Your appraisal was approved by ${targetRoleName} and is now ${appraisal.status}.`,
-                        link: `/faculty/appraisal`
-                    });
-
-                    // Notify the next approver
-                    await notifyApprovers(appraisal.status, facultyObj, appraisal._id);
-                }
-            }
-        } catch (err) {
-            console.error("Failed to send post-evaluation notifications:", err);
-        }
 
         res.json({ success: true, message: `Appraisal evaluated and ${appraisal.status}.`, data: appraisal });
     } catch (err) {
@@ -2392,21 +2229,6 @@ exports.evaluateRNDAppraisal = async (req, res) => {
         }
 
         await appraisal.save();
-
-        try {
-            if (!isDraft) {
-                await NotificationService.sendNotification({
-                    recipientId: appraisal.facultyId,
-                    module: 'Appraisal',
-                    type: 'SUCCESS',
-                    title: 'Appraisal Completed',
-                    message: `Your appraisal process has been successfully finalized and completed.`,
-                    link: `/faculty/appraisal`
-                });
-            }
-        } catch (err) {
-            console.error("Failed to send post-evaluation notifications in rnd:", err);
-        }
 
         res.json({
             success: true,
@@ -3084,10 +2906,10 @@ exports.getAllAppraisals = async (req, res) => {
 
             if (deptIds && deptIds.length > 0) {
                 // Fetch employees in these departments, but use their institutionId for filtering
-                const deptEmployees = await Employee.find({
-                    department: { $in: deptIds }
+                const deptEmployees = await Employee.find({ 
+                    department: { $in: deptIds } 
                 }).select('institutionId');
-
+                
                 const deptInstIds = deptEmployees
                     .map(e => e.institutionId)
                     .filter(id => !routingMapEmpIds.includes(id) && id?.toString() !== userInstitutionId?.toString());
@@ -3384,10 +3206,6 @@ exports.getPendingManagementAppraisals = async (req, res) => {
             allowedStatuses.push("Approved by Dean");
             allowedStatuses.push("Rejected by Dean");
         }
-        
-        // Also allow viewing completed / pending research admin if they evaluated it
-        allowedStatuses.push("Pending Research Admin");
-        allowedStatuses.push("Completed");
 
         if (allowedStatuses.length === 0) {
             return res.json({ success: true, data: [] });
@@ -3407,7 +3225,7 @@ exports.getPendingManagementAppraisals = async (req, res) => {
                 ]
             }).distinct('_id');
 
-            const deanStatuses = ["Submitted to Dean", "Approved by Dean", "Rejected by Dean", "Pending Research Admin", "Completed"];
+            const deanStatuses = ["Submitted to Dean", "Approved by Dean", "Rejected by Dean"];
             filter = {
                 $or: [
                     { status: { $in: deanStatuses }, facultyId: { $in: facultyIds } },
@@ -3444,10 +3262,9 @@ exports.evaluateManagementAppraisal = async (req, res) => {
         }
 
         let roleName = appraisal.status.replace("Submitted to ", "");
-        let prevStatus = appraisal.status;
 
         if (action === "Approve") {
-            appraisal.status = `Pending Research Admin`;
+            appraisal.status = `Approved by ${roleName}`;
 
             const facultyId = appraisal.facultyId;
             const academicYearId = appraisal.academicYearId;
@@ -3534,35 +3351,8 @@ exports.evaluateManagementAppraisal = async (req, res) => {
         }
 
         await appraisal.save();
-
-        try {
-            if (action === "Reject") {
-                await NotificationService.sendNotification({
-                    recipientId: appraisal.facultyId,
-                    module: 'Appraisal',
-                    type: 'REJECTED',
-                    title: `Appraisal ${appraisal.status}`,
-                    message: `Your appraisal was rejected by ${roleName}. Reason: ${comments || 'No comments provided.'}`,
-                    link: `/faculty/appraisal`
-                });
-            } else if (action === "Approve") {
-                await NotificationService.sendNotification({
-                    recipientId: appraisal.facultyId,
-                    module: 'Appraisal',
-                    type: 'SUCCESS',
-                    title: `Appraisal Evaluated`,
-                    message: `Your appraisal has been successfully evaluated by ${roleName} and forwarded.`,
-                    link: `/faculty/appraisal`
-                });
-
-                // Notify R&D Admin
-                await notifyApprovers(appraisal.status, facultyObj, appraisal._id);
-            }
-        } catch (err) {
-            console.error("Failed to send post-evaluation notifications in management:", err);
-        }
-
         res.json({ success: true, message: `Appraisal ${action}d successfully.`, data: appraisal });
+
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
