@@ -1,5 +1,6 @@
 const ResourceUtilization = require('./ResourceUtilization.model');
 const Contribution = require('../Contribution/Contribution.model');
+const ContributionCategory = require('../Contribution/ContributionCategory.model');
 const Employee = require('../employee/employee.model');
 const AcademicYear = require('../academicYear/academicYear.model');
 const { isFutureDate, isDateWithinAcademicYear } = require('../../utils/validationHelper');
@@ -142,13 +143,14 @@ exports.createResourceUtilization = async (req, res) => {
 
         // Cross-module NPTEL duplicate check
         if (data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NPTEL") {
-            const existingContributions = await Contribution.find({
+            const nptelCategory = await ContributionCategory.findOne({ code: 11 });
+            const existingContributions = nptelCategory ? await Contribution.find({
                 facultyId: req.user.userId,
                 academicYear: data.academicYear,
-                category: 11,
+                category: nptelCategory._id,
                 status: { $ne: 'Rejected' },
                 removedFromAppraisal: { $ne: true }
-            });
+            }) : [];
 
             const certNoInput = data.certificateNumber ? data.certificateNumber.trim().toLowerCase() : "";
             const courseNameInput = data.courseFdpName ? data.courseFdpName.trim().toLowerCase() : "";
@@ -458,13 +460,14 @@ exports.updateResourceUtilization = async (req, res) => {
 
         // Cross-module NPTEL duplicate check
         if (category === "FDP" && type === "FDP Participant" && (data.organizingInstitutionCategory || record.organizingInstitutionCategory) === "NPTEL") {
-            const existingContributions = await Contribution.find({
+            const nptelCategory = await ContributionCategory.findOne({ code: 11 });
+            const existingContributions = nptelCategory ? await Contribution.find({
                 facultyId: req.user.userId,
                 academicYear: data.academicYear || record.academicYear,
-                category: 11,
+                category: nptelCategory._id,
                 status: { $ne: 'Rejected' },
                 removedFromAppraisal: { $ne: true }
-            });
+            }) : [];
 
             const certNoInput = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
             const certNoInputNorm = certNoInput ? certNoInput.trim().toLowerCase() : "";
