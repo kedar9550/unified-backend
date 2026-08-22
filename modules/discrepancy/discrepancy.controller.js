@@ -5,6 +5,9 @@ const FacultySubjectResult = require("../FacultySubjectResult/FacultySubjectResu
 const FacultyProctoringEntry = require("../FacultyProctoringEntry/FacultyProctoringEntry.model");
 // const ProctorSummary = require("../ProctorSummary/ProctorSummary.model");
 const FacultyFeedResult = require("../FacultyFeedbackResults/FacultyFeedResult.model");
+const NotificationService = require('../notification/notification.service');
+const Role = require('../role/role.model');
+const UserAppRole = require('../userAppRole/userAppRole.model');
 
 // Section → responsible role mapping
 const SECTION_ROLE_MAP = {
@@ -70,6 +73,38 @@ const raiseDiscrepancy = async (req, res) => {
             proctoringType,
             studentDepartmentId,
         });
+
+        // ── Send Notification to assignedRole ──────────────────
+        try {
+            const roleQueryKey = assignedRole;
+            const targetRoleDocs = await Role.find({ 
+                $or: [{ key: roleQueryKey }, { name: new RegExp('^' + roleQueryKey + '$', 'i') }, { name: new RegExp('^' + roleQueryKey.replace('_', ' ') + '$', 'i') }],
+                app: process.env.APP_NAME || 'UNIFIED_SYSTEM'
+            });
+            const roleIds = targetRoleDocs.map(r => r._id);
+            if (roleIds.length > 0) {
+                let linkPath = '/exam-result/discrepancies';
+                if (assignedRole === 'HOD') linkPath = '/hod/discrepancies';
+                else if (assignedRole === 'FEEDBACK_COORDINATOR' || assignedRole === 'FEEDBACK COORDINATOR' || assignedRole === 'FEEDBACK') linkPath = '/feedback-management/discrepancies';
+                else if (assignedRole === 'UNIPRIME') linkPath = '/uniprime/discrepancies';
+
+                const mappings = await UserAppRole.find({ role: { $in: roleIds } });
+                const recipientIds = [...new Set(mappings.map(m => m.userId.toString()))];
+                for (const rId of recipientIds) {
+                    await NotificationService.sendNotification({
+                        recipientId: rId,
+                        module: 'Discrepancy',
+                        type: 'ACTION_REQUIRED',
+                        title: 'New Discrepancy Raised',
+                        message: `A new discrepancy has been raised for section ${section} by ${facultyName || 'a faculty member'}.`,
+                        link: linkPath
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to notify role on discrepancy raise:", notifErr);
+        }
+        // ───────────────────────────────────────────────────────
 
         res.status(201).json({ message: "Discrepancy raised successfully.", discrepancy: disc });
     } catch (err) {
@@ -205,6 +240,20 @@ const resolveDiscrepancy = async (req, res) => {
             disc.rejectionNote = rejectionNote.trim();
             disc.resolvedBy = req.user.userId;
             await disc.save();
+
+            try {
+                await NotificationService.sendNotification({
+                    recipientId: disc.raisedBy,
+                    module: 'Discrepancy',
+                    type: 'REJECTED',
+                    title: 'Discrepancy Rejected',
+                    message: `Your discrepancy for section ${disc.section} has been rejected. Reason: ${disc.rejectionNote}`,
+                    link: `/exam-result/discrepancies`
+                });
+            } catch (notifErr) {
+                console.error("Failed to send rejection notification:", notifErr);
+            }
+
             return res.json({ message: "Discrepancy rejected.", discrepancy: disc });
         }
 
@@ -232,6 +281,19 @@ const resolveDiscrepancy = async (req, res) => {
         disc.status = "RESOLVED";
 
         await disc.save();
+
+        try {
+            await NotificationService.sendNotification({
+                recipientId: disc.raisedBy,
+                module: 'Discrepancy',
+                type: 'SUCCESS',
+                title: 'Discrepancy Resolved',
+                message: `Your discrepancy for section ${disc.section} has been resolved.`,
+                link: `/exam-result/discrepancies`
+            });
+        } catch (notifErr) {
+            console.error("Failed to send resolution notification:", notifErr);
+        }
 
         res.json({ message: "Discrepancy resolved.", discrepancy: disc });
     } catch (err) {
