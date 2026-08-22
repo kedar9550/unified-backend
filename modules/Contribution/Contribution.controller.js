@@ -6,6 +6,7 @@ const AcademicYear = require('../academicYear/academicYear.model');
 const { isFutureDate, isDateWithinAcademicYear, isValidURL } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
 const { syncAppraisalOnContributionRejection } = require('../../utils/appraisalSyncHelper');
+const { syncAppraisalTotals } = require('../../utils/appraisalPointSync');
 const fs = require('fs');
 const path = require('path');
 
@@ -357,6 +358,7 @@ exports.createContribution = async (req, res) => {
         });
 
         await contribution.save();
+        await syncAppraisalTotals(req.user.userId, data.academicYear);
         res.status(201).json({ success: true, data: contribution });
     } catch (err) {
         console.error("Create Contribution Error:", err);
@@ -573,6 +575,7 @@ exports.updateContribution = async (req, res) => {
         }
 
         await record.save();
+        await syncAppraisalTotals(req.user.userId, record.academicYear);
         res.json({ success: true, data: record });
     } catch (err) {
         console.error("Update Contribution Error:", err);
@@ -598,12 +601,14 @@ exports.deleteContribution = async (req, res) => {
         if (record.status === 'Rejected') {
             record.removedFromAppraisal = true;
             await record.save();
+            await syncAppraisalTotals(req.user.userId, record.academicYear);
             return res.json({ success: true, message: "Record removed from appraisal." });
         } else if (record.status !== 'Draft') {
             return res.status(400).json({ success: false, message: "Only draft or rejected entries can be deleted/removed." });
         }
 
         await Contribution.findByIdAndDelete(id);
+        await syncAppraisalTotals(req.user.userId, record.academicYear);
         res.json({ success: true, message: "Record deleted successfully." });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

@@ -3,6 +3,7 @@ const Employee = require("../employee/employee.model");
 const AcademicYear = require("../academicYear/academicYear.model");
 const { getHODDepartments } = require("../../utils/hodHelper");
 const { syncAppraisalOnAdministrationRejection } = require("../../utils/appraisalSyncHelper");
+const { syncAppraisalTotals } = require("../../utils/appraisalPointSync");
 
 const { ADMIN_ROLE_CATALOG, ASSIGNED_BY_OPTIONS } = require("./adminRoleCatalog");
 
@@ -153,6 +154,8 @@ exports.createOrUpdateEntry = async (req, res) => {
             });
             await entry.save();
         }
+
+        await syncAppraisalTotals(facultyId, academicYear);
 
         res.status(201).json({ success: true, data: entry });
     } catch (err) {

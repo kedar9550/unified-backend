@@ -6,6 +6,7 @@ const AcademicYear = require('../academicYear/academicYear.model');
 const { isFutureDate, isDateWithinAcademicYear } = require('../../utils/validationHelper');
 const { getHODDepartments } = require('../../utils/hodHelper');
 const { syncAppraisalOnResourceUtilizationRejection } = require('../../utils/appraisalSyncHelper');
+const { syncAppraisalTotals } = require('../../utils/appraisalPointSync');
 const fs = require('fs');
 const path = require('path');
 
@@ -250,6 +251,7 @@ exports.createResourceUtilization = async (req, res) => {
         });
 
         await resourceUtilization.save();
+        await syncAppraisalTotals(req.user.userId, data.academicYear);
         res.status(201).json({ success: true, data: resourceUtilization });
     } catch (err) {
         console.error("Create Resource Utilization Error:", err);
@@ -583,6 +585,7 @@ exports.updateResourceUtilization = async (req, res) => {
         }
 
         await record.save();
+        await syncAppraisalTotals(req.user.userId, record.academicYear);
         res.json({ success: true, data: record });
     } catch (err) {
         console.error("Update Resource Utilization Error:", err);
@@ -608,12 +611,14 @@ exports.deleteResourceUtilization = async (req, res) => {
         if (record.status === 'Rejected') {
             record.removedFromAppraisal = true;
             await record.save();
+            await syncAppraisalTotals(req.user.userId, record.academicYear);
             return res.json({ success: true, message: "Record removed from appraisal." });
         } else if (record.status !== 'Draft') {
             return res.status(400).json({ success: false, message: "Only draft or rejected entries can be deleted/removed." });
         }
 
         await ResourceUtilization.findByIdAndDelete(id);
+        await syncAppraisalTotals(req.user.userId, record.academicYear);
         res.json({ success: true, message: "Record deleted successfully." });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
