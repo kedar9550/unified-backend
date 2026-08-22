@@ -12,7 +12,7 @@ const UserAppRole = require('../userAppRole/userAppRole.model');
 // Section → responsible role mapping
 const SECTION_ROLE_MAP = {
     TEACHING: "EXAMSECTION",
-    PROCTORING: "FEEDBACK_COORDINATOR",
+    PROCTORING: "HOD",
     FEEDBACK: "FEEDBACK_COORDINATOR",
     CO_ATTAINMENT: "EXAMSECTION",
     OTHER: "ADMIN",

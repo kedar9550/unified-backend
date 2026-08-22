@@ -68,51 +68,8 @@ const getAYCache = async () => {
  * Returns { deletable: boolean, reason?: string }
  */
 const checkDeletability = async (programId, examYear, semesterNum) => {
-    const recordYear = Number(examYear);
-
-    // 1. Find the AcademicYear document that covers this record's examYear
-    // Searching for documents where the year range (e.g. "2024-2025") matches the examYear
-    const recordYearDoc = await AcademicYear.findOne({
-        year: { $regex: recordYear.toString() }
-    }).populate("programs.activeSemesterTypeId");
-
-    if (!recordYearDoc) {
-        return { deletable: false, reason: `No academic year record found covering the year ${examYear}.` };
-    }
-
-    const progEntry = recordYearDoc.programs.find(p => p.programId.toString() === programId.toString());
-
-    // 2. If the program is marked as Active in this year doc, check the semester
-    if (progEntry && progEntry.isActive) {
-        const activeSemType = progEntry.activeSemesterTypeId;
-        
-        if (!activeSemType) return { deletable: true };
-
-        const semNum = Number(semesterNum);
-        if (isNaN(semNum)) return { deletable: true }; // YEAR format Pharma.D
-
-        if (activeSemType.name === "ODD" && semNum % 2 === 0) {
-            return { 
-                deletable: false, 
-                reason: `The program is currently in the ODD semester of ${recordYearDoc.year}. Records from EVEN semesters (Sem-${semNum}) cannot be deleted.` 
-            };
-        } else if (activeSemType.name === "EVEN" && semNum % 2 !== 0) {
-            return { 
-                deletable: false, 
-                reason: `The program is currently in the EVEN semester of ${recordYearDoc.year}. Records from ODD semesters (Sem-${semNum}) cannot be deleted.` 
-            };
-        }
-
-        return { deletable: true };
-    }
-
-    // 3. If the program is NOT active in this specific year doc, find the currently active one
-    const activeYearDoc = await resolveActiveAcademicYear(programId);
-
-    return { 
-        deletable: false, 
-        reason: `This record is from the year ${examYear}, but the program's currently active year is ${activeYearDoc?.year || 'a different year'}. Historical data cannot be deleted.` 
-    };
+    // Let the user delete any record belonging to any academic year
+    return { deletable: true };
 };
 
 // ── Download CSV Templates ────────────────────────────────────────────────────
