@@ -19,6 +19,10 @@ connectDB();
 
 const app = express();
 
+// Trust reverse proxy (e.g., Nginx, ALB) to correctly parse X-Forwarded-For headers.
+// This ensures rate limiting uses the actual client's IP instead of the proxy's IP.
+app.set('trust proxy', 1);
+
 // --- Security Middlewares ---
 
 // 1. Helmet: Secure HTTP headers
@@ -35,7 +39,7 @@ app.use(cors(corsOptions));
 // 3. Rate Limiting: Prevent Brute Force / DDoS
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 1000, // Increased for development/intensive dashboard use
+    max: 10000, // Increased for enterprise usage with 10,000+ employees
     message: 'Too many requests from this IP, please try again after 15 minutes',
     standardHeaders: true,
     legacyHeaders: false,
@@ -45,7 +49,7 @@ app.use('/api', limiter);
 // 3b. Dedicated rate limiter for sensitive authentication endpoints
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // max 20 attempts
+    max: 2000, // High enough to support campus NAT networks where many users share one IP
     message: 'Too many login or OTP attempts, please try again after 15 minutes',
     standardHeaders: true,
     legacyHeaders: false,
