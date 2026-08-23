@@ -45,27 +45,32 @@ exports.handleResearchUpload = async (req, res, next) => {
             // Parse the stdout and stderr to extract the number of skipped rows and errors
             let skips = 0;
             let errs = 0;
-            let skipReasons = new Set();
-            let errorReasons = new Set();
+            let totalRows = 0;
+            let skipDetails = [];
+            let errorDetails = [];
             
             const combinedOutput = (stdout || '') + '\n' + (stderr || '');
             if (combinedOutput) {
                 const lines = combinedOutput.split('\n');
                 lines.forEach(line => {
+                    const parsedMatch = line.match(/Parsed (\d+) rows from CSV/i);
+                    if (parsedMatch) {
+                        totalRows = parseInt(parsedMatch[1], 10);
+                    }
+                    
                     const skipMatch = line.match(/Skipping row (\d+):\s*(.*)/i);
                     const errorMatch = line.match(/Error processing row (\d+):\s*(.*)/i);
                     
                     if (skipMatch) {
                         skips++;
-                        let rowNum = skipMatch[1];
+                        let rowNum = parseInt(skipMatch[1], 10) + 2;
                         let reason = skipMatch[2].trim();
-                        // Group reasons by removing specific IDs
                         reason = reason.replace(/ID \S+ not found/gi, "Faculty not found");
                         reason = reason.replace(/Year \S+ not found/gi, "Academic Year not found");
-                        skipReasons.add(`Row ${rowNum}: ${reason}`);
+                        skipDetails.push({ row: rowNum, reason: reason, type: 'Skip' });
                     } else if (errorMatch) {
                         errs++;
-                        let rowNum = errorMatch[1];
+                        let rowNum = parseInt(errorMatch[1], 10) + 2;
                         let reason = errorMatch[2].trim();
                         if (reason.includes('E11000 duplicate key error')) {
                             if (reason.includes('isbn')) {
@@ -87,26 +92,27 @@ exports.handleResearchUpload = async (req, res, next) => {
                         } else if (reason === '') {
                             reason = 'Unknown processing error';
                         }
-                        errorReasons.add(`Row ${rowNum}: ${reason}`);
+                        errorDetails.push({ row: rowNum, reason: reason, type: 'Error' });
                     } else if (line.toLowerCase().includes('error processing row')) {
                         errs++;
                     } else if (line.includes('Parsed 0 rows')) {
                         errs++;
-                        errorReasons.add(`File Error: No valid data rows found! Ensure you kept the original 2 header rows intact.`);
+                        errorDetails.push({ row: 'All', reason: 'File Error: No valid data rows found! Ensure you kept the original 2 header rows intact.', type: 'Error' });
                     }
                 });
             }
 
             let message = `${type} data uploaded and processed successfully!`;
             let isSuccess = true;
+            let successCount = totalRows > 0 ? Math.max(0, totalRows - skips - errs) : 0;
             
             if (skips > 0 || errs > 0) {
-                isSuccess = false;
+                isSuccess = false; // We can still return 400 or 200, but keeping original logic
                 message = `${type} upload completed with issues. Skipped: ${skips}, Errors: ${errs}.`;
                 
                 let combinedReasons = [];
-                if (skipReasons.size > 0) combinedReasons.push(`Skips: ${Array.from(skipReasons).join(', ')}`);
-                if (errorReasons.size > 0) combinedReasons.push(`Errors: ${Array.from(errorReasons).join(', ')}`);
+                if (skipDetails.length > 0) combinedReasons.push(`Skips: ${skipDetails.map(s => `Row ${s.row}`).join(', ')}`);
+                if (errorDetails.length > 0) combinedReasons.push(`Errors: ${errorDetails.map(e => `Row ${e.row}`).join(', ')}`);
                 
                 if (combinedReasons.length > 0) {
                     message += ` Details: ${combinedReasons.join(' | ')}`;
@@ -119,6 +125,14 @@ exports.handleResearchUpload = async (req, res, next) => {
             res.status(isSuccess ? 200 : 400).json({
                 success: isSuccess,
                 message: message,
+                results: {
+                    totalRows,
+                    successCount,
+                    skips,
+                    errs,
+                    skipDetails,
+                    errorDetails
+                },
                 logs: stdout
             });
         });

@@ -133,8 +133,7 @@ async function processCSV() {
                     // Check if exists to avoid duplicates (optional, checking by DOI or just inserting)
                     const existingJournal = await Journal.findOne({ doi: journalData.doi, facultyId: faculty._id });
                     if (existingJournal && journalData.doi !== 'N/A') {
-                        console.log(`Journal with DOI ${journalData.doi} already exists for this faculty, updating...`);
-                        await Journal.updateOne({ _id: existingJournal._id }, { $set: journalData });
+                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
                     } else {
                         await Journal.create(journalData);
                         console.log(`Created new Journal entry for ${faculty.name}`);

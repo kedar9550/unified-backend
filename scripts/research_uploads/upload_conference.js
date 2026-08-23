@@ -130,8 +130,7 @@ async function processCSV() {
                     // 5. Save to DB
                     const existingConference = await Conference.findOne({ title: conferenceData.title, facultyId: faculty._id });
                     if (existingConference && conferenceData.title !== 'Unknown Title') {
-                        console.log(`Conference '${conferenceData.title}' already exists for this faculty, updating...`);
-                        await Conference.updateOne({ _id: existingConference._id }, { $set: conferenceData });
+                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
                     } else {
                         await Conference.create(conferenceData);
                         console.log(`Created new Conference entry for ${faculty.name}`);

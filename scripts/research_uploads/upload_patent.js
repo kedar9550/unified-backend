@@ -147,8 +147,7 @@ async function processCSV() {
                     // 5. Save to DB
                     const existingPatent = await Patent.findOne({ filingNo: patentData.filingNo, facultyId: faculty._id });
                     if (existingPatent && patentData.filingNo !== 'N/A') {
-                        console.log(`Patent with filing number '${patentData.filingNo}' already exists for this faculty, updating...`);
-                        await Patent.updateOne({ _id: existingPatent._id }, { $set: patentData });
+                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
                     } else {
                         await Patent.create(patentData);
                         console.log(`Created new Patent entry for ${faculty.name}`);

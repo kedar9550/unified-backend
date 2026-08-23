@@ -128,8 +128,7 @@ async function processCSV() {
                     // 5. Save to DB
                     const existingTextbook = await Textbook.findOne({ isbn: textbookData.isbn, facultyId: faculty._id });
                     if (existingTextbook && textbookData.isbn !== 'N/A') {
-                        console.log(`Textbook with ISBN ${textbookData.isbn} already exists for this faculty, updating...`);
-                        await Textbook.updateOne({ _id: existingTextbook._id }, { $set: textbookData });
+                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
                     } else {
                         await Textbook.create(textbookData);
                         console.log(`Created new Textbook entry for ${faculty.name}`);

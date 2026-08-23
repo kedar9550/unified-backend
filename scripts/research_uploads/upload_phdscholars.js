@@ -101,8 +101,7 @@ async function processCSV() {
                     // 4. Save to DB
                     const existingApp = await PhdApplication.findOne({ rollNumber: applicationData.rollNumber, facultyId: faculty._id });
                     if (existingApp && !applicationData.rollNumber.startsWith('UNKNOWN')) {
-                        console.log(`Ph.D Application with roll number '${applicationData.rollNumber}' already exists, updating...`);
-                        await PhdApplication.updateOne({ _id: existingApp._id }, { $set: applicationData });
+                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
                     } else {
                         await PhdApplication.create(applicationData);
                         console.log(`Created new Ph.D Application entry for ${applicationData.studentName} under ${faculty.name}`);

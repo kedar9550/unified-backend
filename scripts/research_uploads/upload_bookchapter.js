@@ -130,8 +130,7 @@ async function processCSV() {
                     // Check if exists to avoid duplicates (optional, checking by DOI/Chapter Title)
                     const existingChapter = await BookChapter.findOne({ chapterTitle: bookChapterData.chapterTitle, facultyId: faculty._id });
                     if (existingChapter && bookChapterData.chapterTitle !== 'Unknown Title') {
-                        console.log(`Book Chapter '${bookChapterData.chapterTitle}' already exists for this faculty, updating...`);
-                        await BookChapter.updateOne({ _id: existingChapter._id }, { $set: bookChapterData });
+                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
                     } else {
                         await BookChapter.create(bookChapterData);
                         console.log(`Created new Book Chapter entry for ${faculty.name}`);
