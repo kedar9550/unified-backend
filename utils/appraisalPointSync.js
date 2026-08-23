@@ -16,11 +16,13 @@ function calculateResourceUtilizationPoints(r, config) {
     if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
         pts = (parseInt(r.numberOfSessions) || parseInt(r.sessionsConducted) || 1) * (resourceUtConf.resourcePerson ?? 2);
     } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
+        // Use manually entered daysParticipated as authoritative; duration is auto-calculated fallback
         const participantDays = parseInt(r.numberOfDaysParticipated) || parseInt(r.daysParticipated) || Number(r.duration) || 1;
         pts = participantDays * (resourceUtConf.participated ?? 1);
     } else if (activityRole.includes('guest lecture') || activityRole.includes('workshop') || activityRole.includes('event')) {
         pts = resourceUtConf.guestLecture ?? 2;
     } else {
+        // Organized STTP/FDP/Conference
         if (activityCat.includes('conference')) {
             pts = resourceUtConf.conference ?? 10;
         } else if (activityCat.includes('sttp') || activityCat.includes('refresher')) {
@@ -28,9 +30,10 @@ function calculateResourceUtilizationPoints(r, config) {
         } else if (activityCat.includes('fdp') || activityCat.includes('symposium')) {
             pts = resourceUtConf.fdp ?? 10;
         } else {
-            pts = resourceUtConf.conference ?? 10;
+            pts = resourceUtConf.conference ?? 10; // fallback
         }
     }
+    
     return pts;
 }
 

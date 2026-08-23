@@ -1387,11 +1387,11 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 const activityCat = (r.activityCategory || '').toLowerCase();
 
                 if (activityRole.includes('resource person') || activityRole.includes('resourceperson')) {
-                    pts = (r.sessionsConducted || 1) * (resourceUtConf.resourcePerson ?? 2);
+                    pts = (parseInt(r.numberOfSessions) || parseInt(r.sessionsConducted) || 1) * (resourceUtConf.resourcePerson ?? 2);
                 } else if (activityRole.includes('participant') || activityRole.includes('participated')) {
                     // Use daysParticipated as authoritative day count for points calculation.
                     // If daysParticipated is missing, fallback to duration.
-                    const participantDays = r.daysParticipated || r.duration || 1;
+                    const participantDays = parseInt(r.numberOfDaysParticipated) || parseInt(r.daysParticipated) || Number(r.duration) || 1;
                     pts = participantDays * (resourceUtConf.participated ?? 1);
                 } else if (activityRole.includes('guest lecture') || activityRole.includes('workshop') || activityRole.includes('event')) {
                     pts = resourceUtConf.guestLecture ?? 2;
