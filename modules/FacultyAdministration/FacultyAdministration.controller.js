@@ -71,12 +71,14 @@ exports.createOrUpdateEntry = async (req, res) => {
             // Create a map of existing roles by name to check against
             const existingRolesMap = {};
             (entry.roles || []).forEach(r => {
-                existingRolesMap[r.roleId] = r;
+                const compositeKey = `${r.roleId}_${r.roleLabel}_${r.details}`;
+                existingRolesMap[compositeKey] = r;
             });
 
             // Map through incoming roles and preserve approval status for unchanged or removed roles
             const updatedRoles = formattedRoles.map(newRole => {
-                const existing = existingRolesMap[newRole.roleId];
+                const compositeKey = `${newRole.roleId}_${newRole.roleLabel}_${newRole.details}`;
+                const existing = existingRolesMap[compositeKey];
                 if (existing) {
                     if (!newRole.isResponsible) {
                         // Role was removed from appraisal, preserve its audit details
