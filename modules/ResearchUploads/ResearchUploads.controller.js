@@ -74,8 +74,15 @@ exports.handleResearchUpload = async (req, res, next) => {
                                 reason = 'Duplicate Title found';
                             } else if (reason.includes('doi')) {
                                 reason = 'Duplicate DOI found';
+                            } else if (reason.includes('filingNo')) {
+                                reason = 'Duplicate Filing Number found';
                             } else {
-                                reason = 'Duplicate Entry found';
+                                const fieldMatch = reason.match(/index:\s*([a-zA-Z0-9_]+)_1\s+dup key/);
+                                if (fieldMatch) {
+                                    reason = `Duplicate ${fieldMatch[1]} found`;
+                                } else {
+                                    reason = 'Duplicate Entry found';
+                                }
                             }
                         } else if (reason === '') {
                             reason = 'Unknown processing error';
@@ -83,6 +90,9 @@ exports.handleResearchUpload = async (req, res, next) => {
                         errorReasons.add(`Row ${rowNum}: ${reason}`);
                     } else if (line.toLowerCase().includes('error processing row')) {
                         errs++;
+                    } else if (line.includes('Parsed 0 rows')) {
+                        errs++;
+                        errorReasons.add(`File Error: No valid data rows found! Ensure you kept the original 2 header rows intact.`);
                     }
                 });
             }
