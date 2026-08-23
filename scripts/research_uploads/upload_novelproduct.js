@@ -27,6 +27,14 @@ async function processCSV() {
         process.exit(1);
     }
 
+    // Validate Template
+    const fileContent = fs.readFileSync(csvFilePath, 'utf8').toLowerCase();
+    if (!fileContent.includes('product name')) {
+        console.log('Parsed 0 rows');
+        console.log('Error processing row 0: Invalid Template Format! Please upload the correct CSV template for Novel Products.');
+        process.exit(0);
+    }
+
     const headers = [
         'empId', 'facultyName', 'academicYear', 'category', 'productName', 'organizationName', 'piType',
         'co1EmpId', 'co1Role', 'co2EmpId', 'co2Role', 'co3EmpId', 'co3Role', 'co4EmpId', 'co4Role',

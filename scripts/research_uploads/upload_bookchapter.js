@@ -26,6 +26,14 @@ async function processCSV() {
         process.exit(1);
     }
 
+    // Validate Template
+    const fileContent = fs.readFileSync(csvFilePath, 'utf8').toLowerCase();
+    if (!fileContent.includes('chapter title')) {
+        console.log('Parsed 0 rows');
+        console.log('Error processing row 0: Invalid Template Format! Please upload the correct CSV template for Book Chapters.');
+        process.exit(0);
+    }
+
     const headers = [
         'empId', 'facultyName', 'academicYear', 'college', 'panNumber', 'chapterTitle',
         'doi', 'textBookName', 'isbnNumber', 'yearOfPublication', 'month', 'publisher',

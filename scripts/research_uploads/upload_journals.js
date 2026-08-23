@@ -26,6 +26,14 @@ async function processCSV() {
         process.exit(1);
     }
 
+    // Validate Template
+    const fileContent = fs.readFileSync(csvFilePath, 'utf8').toLowerCase();
+    if (!fileContent.includes('journal name')) {
+        console.log('Parsed 0 rows');
+        console.log('Error processing row 0: Invalid Template Format! Please upload the correct CSV template for Journals.');
+        process.exit(0);
+    }
+
     const headers = [
         'empId', 'facultyName', 'academicYear', 'college', 'panNumber', 'doi',
         'publicationScope', 'journalQuartile', 'journalType', 'paperTitle', 'journalName',

@@ -26,6 +26,14 @@ async function processCSV() {
         process.exit(1);
     }
 
+    // Validate Template
+    const fileContent = fs.readFileSync(csvFilePath, 'utf8').toLowerCase();
+    if (!fileContent.includes('scholar status')) {
+        console.log('Parsed 0 rows');
+        console.log('Error processing row 0: Invalid Template Format! Please upload the correct CSV template for PhD Scholars.');
+        process.exit(0);
+    }
+
     const headers = [
         'empId', 'facultyName', 'academicYear', 'rollNumber', 'studentName', 'course',
         'branch', 'scholarStatus', 'scholarType', 'university', 'date', 'type'
