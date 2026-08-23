@@ -94,6 +94,10 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     }
 
     const minPoints = mins.total || 0;
+    
+    // Explicitly calculate 1-to-4 minimum points mimicking the frontend exactly
+    mins.total1to4 = minPoints - (mins.interpersonalSkills || 30);
+
 
     const disallowedOrg = ["other / host institute", "other", "host institute"];
 
@@ -3259,8 +3263,8 @@ exports.getMyAppraisals = async (req, res) => {
             return {
                 _id: app._id,
                 academicYearId: app.academicYearId, // includes _id and year
-                totalPointsGained: eligibleApp.eligibility?.totalObtained || (app.teaching?.totalClaimed || 0) + (app.research?.totalClaimed || 0) + (app.valueAddition?.totalClaimed || 0) + (app.administration?.totalClaimed || 0) + (app.hodEvaluation?.totalInterpersonalPoints || 0),
-                minPointsRequired: eligibleApp.eligibility?.mins?.total || 0,
+                totalPointsGained: (typeof eligibleApp.cappedTotal1to4 !== 'undefined') ? eligibleApp.cappedTotal1to4 : ((app.teaching?.totalClaimed || 0) + (app.research?.totalClaimed || 0) + (app.valueAddition?.totalClaimed || 0) + (app.administration?.totalClaimed || 0)),
+                minPointsRequired: eligibleApp.eligibility?.mins?.total1to4 || 0,
                 eligibility: eligibleApp.eligibility,
                 status: app.status,
                 createdAt: app.createdAt
