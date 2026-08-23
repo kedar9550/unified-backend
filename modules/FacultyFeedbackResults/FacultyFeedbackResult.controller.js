@@ -624,8 +624,8 @@ const createResult = async (req, res) => {
             programId, branchId, semesterNumber, yearNumber
         } = req.body;
 
-        if (!facultyId || !subjectName || !academicYearId || !semesterTypeId) {
-            return res.status(400).json({ message: "facultyId, subjectName, academicYearId, and semesterTypeId are required." });
+        if (!facultyId || !subjectName || !academicYearId) {
+            return res.status(400).json({ message: "facultyId, subjectName, and academicYearId are required." });
         }
 
         const normalizedSubjType = normalizeSubjectType(subjectType);
@@ -634,6 +634,16 @@ const createResult = async (req, res) => {
         const trimmedSubjectCode = (subjectCode || "").trim().toUpperCase();
         const trimmedSection = (section || "").trim().toUpperCase();
         const phs = phase ? Number(phase) : undefined;
+
+        let resolvedSemTypeId = semesterTypeId;
+        if (!resolvedSemTypeId && semesterNumber) {
+            const num = Number(semesterNumber);
+            if (!isNaN(num)) {
+                const typeStr = num % 2 === 0 ? "EVEN" : "ODD";
+                const st = await SemesterType.findOne({ name: typeStr });
+                if (st) resolvedSemTypeId = st._id;
+            }
+        }
 
         const query = {
             facultyId: facultyId.trim(),
