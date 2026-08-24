@@ -81,6 +81,7 @@ exports.createEvent = async (req, res, next) => {
             groupId,
             eventName,
             price,
+            priceType,
             maxTeamSize,
             extraTeamSize,
             extraAmountPerHead,
@@ -92,6 +93,7 @@ exports.createEvent = async (req, res, next) => {
             floor,
             ground,
             roomNo,
+            department,
         } = req.body;
 
         const bannerImage = req.file;
@@ -127,7 +129,7 @@ exports.createEvent = async (req, res, next) => {
             return res.status(400).json({ message: 'Room No is required.' });
         }
 
-        const group = await Group.findById(groupId).populate('department', 'name');
+        const group = await Group.findById(groupId);
         if (!group) {
             if (bannerImage) {
                 fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
@@ -152,15 +154,24 @@ exports.createEvent = async (req, res, next) => {
             bannerImageUrl = `/uploads/events/${bannerImage.filename}`;
         }
 
-        const departmentNames = Array.isArray(group.department)
-            ? group.department.map((dept) => dept?.name || '').filter(Boolean).join(', ')
-            : group.department?.name || '';
+        let parsedDepartments = [];
+        if (department) {
+            try {
+                parsedDepartments = typeof department === 'string' ? JSON.parse(department) : department;
+            } catch (e) {
+                parsedDepartments = [department];
+            }
+        }
+        if (!Array.isArray(parsedDepartments)) {
+            parsedDepartments = [parsedDepartments];
+        }
 
         const newEvent = new Events({
             group: group._id,
-            department: departmentNames,
+            department: parsedDepartments,
             eventName,
             price: Number(price) || 0,
+            priceType: priceType || 'Per Head',
             maxTeamSize: Number(maxTeamSize),
             venueType,
             building: building || undefined,
@@ -243,7 +254,7 @@ exports.getAllEvents = async (req, res, next) => {
 
                     if (empId) {
                         const Group = require('../Group/Group.model');
-                        const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('_id');
+                        const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('_id');
                         const myGroupIds = myGroups.map(g => g._id);
 
                         filterQuery = {
@@ -262,7 +273,8 @@ exports.getAllEvents = async (req, res, next) => {
         }
 
         const events = await Events.find(filterQuery)
-            .populate('group', 'name department eventCoordinator')
+            .populate('group', 'name coordinator')
+            .populate('department', 'name')
             .populate('building', 'name')
             .populate('floor', 'name')
             .populate('ground', 'name')
@@ -299,7 +311,8 @@ exports.getAllEvents = async (req, res, next) => {
 exports.getEventById = async (req, res, next) => {
     try {
         const event = await Events.findById(req.params.id)
-            .populate('group', 'name department eventCoordinator')
+            .populate('group', 'name coordinator')
+            .populate('department', 'name')
             .populate('building', 'name')
             .populate('floor', 'name')
             .populate('ground', 'name');
@@ -337,6 +350,7 @@ exports.updateEvent = async (req, res, next) => {
             groupId,
             eventName,
             price,
+            priceType,
             maxTeamSize,
             extraTeamSize,
             extraAmountPerHead,
@@ -347,6 +361,7 @@ exports.updateEvent = async (req, res, next) => {
             floor,
             ground,
             roomNo,
+            department,
         } = req.body;
 
         if (!groupId || !eventName || !overview || !maxTeamSize) {
@@ -365,7 +380,7 @@ exports.updateEvent = async (req, res, next) => {
             return res.status(400).json({ message: 'Room No is required.' });
         }
 
-        const group = await Group.findById(groupId).populate('department', 'name');
+        const group = await Group.findById(groupId);
         if (!group) {
             return res.status(400).json({ message: 'Selected group does not exist.' });
         }
@@ -373,15 +388,24 @@ exports.updateEvent = async (req, res, next) => {
         const parsedRules = Array.isArray(rules) ? rules.filter((rule) => rule && rule.trim()) : [];
         const parsedFacultyCoordinators = normalizeCoordinators(req.body.facultyCoordinators || req.body.facultyCoordinator);
 
-        const departmentNames = Array.isArray(group.department)
-            ? group.department.map((dept) => dept?.name || '').filter(Boolean).join(', ')
-            : group.department?.name || '';
+        let parsedDepartments = [];
+        if (department) {
+            try {
+                parsedDepartments = typeof department === 'string' ? JSON.parse(department) : department;
+            } catch (e) {
+                parsedDepartments = [department];
+            }
+        }
+        if (!Array.isArray(parsedDepartments)) {
+            parsedDepartments = [parsedDepartments];
+        }
 
         const updatedFields = {
             group: group._id,
-            department: departmentNames,
+            department: parsedDepartments,
             eventName,
             price: Number(price) || 0,
+            priceType: priceType || 'Per Head',
             maxTeamSize: Number(maxTeamSize),
             venueType,
             building: building || undefined,

@@ -3,13 +3,38 @@ const PaymentRegistration = require('./PaymentRegistration.model');
 
 exports.createOrder = async (req, res) => {
   try {
-    const { amount, currency, receipt } = req.body;
-    if (!amount || typeof amount !== 'number' || amount <= 0) {
+    const { amount: frontendAmount, eventId, teamSize, extraTeamSize, currency, receipt } = req.body;
+    let amountInPaisa = 0;
+
+    if (eventId) {
+      const Events = require('../Events/Events.model');
+      const event = await Events.findById(eventId);
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+
+      const baseAmount = Number(event.price) || 0;
+      const extraPerHead = Number(event.extraAmountPerHead) || 0;
+      const tSize = Number(teamSize) || 1;
+      const eSize = Number(extraTeamSize) || 0;
+
+      let totalBase = baseAmount;
+      if (event.priceType && event.priceType.toLowerCase() === 'per head') {
+        totalBase = baseAmount * tSize;
+      }
+      const totalAmount = totalBase + (eSize * extraPerHead);
+
+      amountInPaisa = Math.round(totalAmount * 100);
+    } else {
+      amountInPaisa = Number(frontendAmount);
+    }
+
+    if (!amountInPaisa || typeof amountInPaisa !== 'number' || amountInPaisa <= 0) {
       return res.status(400).json({ error: 'Invalid amount' });
     }
 
-    const order = await paymentsService.createOrder({ amount, currency, receipt });
-    return res.json({ orderId: order.id, order });
+    const order = await paymentsService.createOrder({ amount: amountInPaisa, currency, receipt });
+    return res.json({ orderId: order.id, order, amountInPaisa });
   } catch (err) {
     console.error('Payments.createOrder error', err);
     return res.status(500).json({ error: 'Unable to create order', details: err.message });
@@ -27,7 +52,7 @@ exports.getRegistrations = async (req, res) => {
     }
 
     const activeRole = req.headers['active-role'];
-    if (activeRole === 'EVENT_COORDINATOR') {
+    if (activeRole === 'SCHOOL_COORDINATOR') {
       const jwt = require('jsonwebtoken');
       const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
       if (token) {
@@ -38,7 +63,7 @@ exports.getRegistrations = async (req, res) => {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
 
             const myEvents = await Events.find({
@@ -56,7 +81,7 @@ exports.getRegistrations = async (req, res) => {
             ];
           }
         } catch (err) {
-          console.error('Error decoding token for EVENT_COORDINATOR filter', err);
+          console.error('Error decoding token for SCHOOL_COORDINATOR filter', err);
         }
       }
     }
@@ -184,7 +209,7 @@ exports.verifyPayment = async (req, res) => {
         amountPaid: amountValue,
         participants: Array.isArray(participants) ? participants : [],
       };
-      
+
       if (emailPayload.email) {
         // Send email in the background to not block the response
         eventsController.sendInvoiceMailInternal(emailPayload).catch(e => {
@@ -220,7 +245,7 @@ exports.getDashboardStats = async (req, res) => {
     let query = {};
     const activeRole = req.headers['active-role'];
 
-    if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
+    if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
       const jwt = require('jsonwebtoken');
       const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
 
@@ -233,7 +258,7 @@ exports.getDashboardStats = async (req, res) => {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
 
             const myEvents = await Events.find({
@@ -251,7 +276,7 @@ exports.getDashboardStats = async (req, res) => {
             ];
           }
         } catch (err) {
-          console.error('Error decoding token for EVENT_COORDINATOR filter in stats', err);
+          console.error('Error decoding token for SCHOOL_COORDINATOR filter in stats', err);
         }
       }
     }
@@ -341,13 +366,13 @@ exports.getDashboardStats = async (req, res) => {
     const genderMap = { male: 0, female: 0, others: 0 };
     let totalAttended = 0;
     let accommodationCheckedInCount = 0;
-    
+
     participants.forEach((p) => {
       const g = (p.gender || '').toLowerCase();
       if (g === 'male') genderMap.male++;
       else if (g === 'female') genderMap.female++;
       else genderMap.others++;
-      
+
       if (p.attended) totalAttended++;
       if (p.accommodationCheckedIn) accommodationCheckedInCount++;
     });
@@ -460,9 +485,9 @@ exports.scanBarcode = async (req, res) => {
       return res.status(404).json({ error: 'Pass not found or invalid barcode.' });
     }
 
-    // Verify EVENT_COORDINATOR and FACULTY_COORDINATOR access
+    // Verify SCHOOL_COORDINATOR and FACULTY_COORDINATOR access
     const activeRole = req.headers['active-role'];
-    if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
+    if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
       const jwt = require('jsonwebtoken');
       const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
       let authorized = false;
@@ -474,7 +499,7 @@ exports.scanBarcode = async (req, res) => {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => g.name.toLowerCase());
 
             const myEvents = await Events.find({
@@ -522,7 +547,7 @@ exports.scanBarcode = async (req, res) => {
     // Mark as attended and increment scan count
     await PaymentRegistration.updateOne(
       { _id: registration._id, 'participants.barcode': barcode },
-      { 
+      {
         $set: { 'participants.$.attended': true },
         $inc: { 'participants.$.scanCount': 1 }
       }
@@ -704,7 +729,7 @@ exports.updateAttendance = async (req, res) => {
     }
 
     const activeRole = req.headers['active-role'];
-    if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
+    if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
       const jwt = require('jsonwebtoken');
       const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
       let authorized = false;
@@ -716,7 +741,7 @@ exports.updateAttendance = async (req, res) => {
             const Group = require('../Group/Group.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'eventCoordinator.employeeId': empId }).select('name');
+            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
             const myGroupNames = myGroups.map(g => g.name.toLowerCase());
 
             const myEvents = await Events.find({
@@ -811,5 +836,39 @@ exports.updateWinnerStatus = async (req, res) => {
   } catch (err) {
     console.error('Payments.updateWinnerStatus error', err);
     return res.status(500).json({ error: 'Unable to update winner status', details: err.message });
+  }
+};
+
+exports.uploadPhoto = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No photo uploaded' });
+    }
+    return res.json({ filename: req.file.filename, url: `/uploads/othercollegephotos/${req.file.filename}` });
+  } catch (err) {
+    console.error('Error uploading photo:', err);
+    return res.status(500).json({ error: 'Upload failed' });
+  }
+};
+
+exports.checkPhoto = async (req, res) => {
+  try {
+    const roll = req.params.roll;
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../../uploads/othercollegephotos');
+    
+    if (!fs.existsSync(dir)) return res.json({ exists: false });
+    
+    const files = fs.readdirSync(dir);
+    const photoFile = files.reverse().find(f => f.startsWith(`photo-${roll}-`));
+    
+    if (photoFile) {
+      return res.json({ exists: true, url: `/uploads/othercollegephotos/${photoFile}` });
+    }
+    return res.json({ exists: false });
+  } catch (err) {
+    console.error('Error checking photo:', err);
+    return res.status(500).json({ error: 'Check failed' });
   }
 };

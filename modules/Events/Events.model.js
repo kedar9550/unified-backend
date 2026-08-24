@@ -49,16 +49,19 @@ const EventsSchema = new mongoose.Schema({
         trim: true,
         maxlength: 200
     },
-    department: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: 200
-    },
+    department: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'EventDepartment'
+    }],
     price: {
         type: Number,
         default: 0,
         min: 0
+    },
+    priceType: {
+        type: String,
+        enum: ['Per Head', 'Per Team'],
+        default: 'Per Head'
     },
     maxTeamSize: {
         type: Number,
