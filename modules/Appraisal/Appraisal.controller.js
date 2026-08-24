@@ -22,7 +22,7 @@ const designationRoutingMap = {
     "666": "Pro Vice-Chancellor (E & S)", // Assoc. Professor & Assoc. Dean-Freshmen Engg.
     "6048": "Pro Vice-Chancellor (S & P)", // Asst. Prof. & Assoc. Dean-School Of Business
     "114": "Dean - (IQAC)", // Asst. Professor  Of Maths & Assoc. Dean (IQAC)
-    "497": "Dean - (Admissions)", // Assoc. Professor & Assoc. Dean-Admissions
+    "2199": "Dean - (Admissions)", // Assoc. Professor & Assoc. Dean-Admissions
     "5177": "Pro Vice-Chancellor (A)", // Assoc. Professor & Assoc.Dean-Academics
     "6120": "Registrar", // Assoc. Professor & Asst. Registrar
     "1565": "Registrar", // Asst. Professor & Asst. Registrar
@@ -94,7 +94,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     }
 
     const minPoints = mins.total || 0;
-    
+
     // Explicitly calculate 1-to-4 minimum points mimicking the frontend exactly
     mins.total1to4 = minPoints - (mins.interpersonalSkills || 30);
 
@@ -250,21 +250,21 @@ const notifyApprovers = async (nextStatus, faculty, appraisalId) => {
         } else if (nextStatus.startsWith("Submitted to ")) {
             let extractedRole = nextStatus.replace("Submitted to ", "").trim();
             targetRoleName = extractedRole.toUpperCase();
-            
+
             // Escape special characters for regex, e.g. for (E & S)
             const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const regexRole = new RegExp('^' + escapeRegExp(extractedRole) + '$', 'i');
-            
+
             // Generate a potential key like PRO_VICE_CHANCELLOR_E_S
             const possibleKey = targetRoleName.replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 
-            const roleDoc = await Role.findOne({ 
+            const roleDoc = await Role.findOne({
                 $or: [
-                    { name: regexRole }, 
+                    { name: regexRole },
                     { key: targetRoleName },
                     { key: possibleKey }
-                ], 
-                app: process.env.APP_NAME || 'UNIFIED_SYSTEM' 
+                ],
+                app: process.env.APP_NAME || 'UNIFIED_SYSTEM'
             });
 
             if (roleDoc) {
@@ -295,7 +295,7 @@ const notifyApprovers = async (nextStatus, faculty, appraisalId) => {
             } else if (targetRoleName === 'RESEARCH_DEAN' || targetRoleName === 'RESEARCH_COORDINATOR') {
                 notifLink = `/research-dean/appraisal-finalization`;
             }
-            
+
             // console.log(`[notifyApprovers] Sending notification to recipient: ${recipientId}`);
             await NotificationService.sendNotification({
                 recipientId,
@@ -3388,7 +3388,7 @@ exports.getPendingManagementAppraisals = async (req, res) => {
             allowedStatuses.push("Approved by Dean");
             allowedStatuses.push("Rejected by Dean");
         }
-        
+
         // Also allow viewing completed / pending research admin if they evaluated it
         allowedStatuses.push("Pending Research Admin");
         allowedStatuses.push("Completed");
