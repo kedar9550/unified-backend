@@ -3406,7 +3406,6 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 
             const facultyIds = await Employee.find({
                 $or: [
-                    { coreDepartment: { $in: deptIds } },
                     { department: { $in: deptIds } }
                 ]
             }).distinct('_id');
