@@ -1357,7 +1357,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const savedHIndexPoints = (savedHIndexPrevYear !== null && savedHIndexCurrentYear !== null) ? hIndexPointsVal : (appraisal ? appraisal.research.scopusHIndexScore : 0);
 
         const appraisalStatus = appraisal ? appraisal.status : "Draft";
-        const isDraftOrRejected = appraisalStatus === "Draft" || appraisalStatus === "Rejected by HOD";
+        const isDraftOrRejected = appraisalStatus === "Draft" || appraisalStatus.includes("Rejected");
 
         const citationScoreFinal = (savedCitationStatus === "Approved" || isDraftOrRejected) ? savedCitationPoints : 0;
         const hIndexPointsFinal = (savedHIndexStatus === "Approved" || isDraftOrRejected) ? savedHIndexPoints : 0;
@@ -2733,7 +2733,7 @@ exports.updateProctoringDuties = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal draft not found. Please initiate first." });
         }
 
-        if (appraisal.status !== "Draft" && appraisal.status !== "Rejected by HOD") {
+        if (appraisal.status !== "Draft" && !appraisal.status.includes("Rejected")) {
             return res.status(400).json({ success: false, message: "Appraisal has already been submitted." });
         }
 
@@ -2955,7 +2955,7 @@ exports.getScopusData = async (req, res) => {
         const appraisal = await Appraisal.findOne({ facultyId, academicYearId });
         if (appraisal) {
             const isEvaluator = ["ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT HOD", "HOD"].includes(req.user.role);
-            if (appraisal.status === "Draft" || appraisal.status === "Rejected by HOD" || isEvaluator) {
+            if (appraisal.status === "Draft" || appraisal.status.includes("Rejected") || isEvaluator) {
                 appraisal.research.scopusCitations = citationsCurrentYear;
                 appraisal.research.hIndexPrevYear = hIndexPrevYear;
                 appraisal.research.hIndexCurrentYear = hIndexCurrentYear;
@@ -2970,8 +2970,8 @@ exports.getScopusData = async (req, res) => {
                 const novelPts = appraisal.research.novelProducts?.totalClaimed || 0;
                 const projPts = appraisal.research.projectsConsultancies?.totalClaimed || 0;
 
-                const citationScoreFinal = (appraisal.research.scopusCitationStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? citationScore : 0;
-                const hIndexPointsFinal = (appraisal.research.scopusHIndexStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? hIndexPoints : 0;
+                const citationScoreFinal = (appraisal.research.scopusCitationStatus === "Approved" || appraisal.status === "Draft" || appraisal.status.includes("Rejected")) ? citationScore : 0;
+                const hIndexPointsFinal = (appraisal.research.scopusHIndexStatus === "Approved" || appraisal.status === "Draft" || appraisal.status.includes("Rejected")) ? hIndexPoints : 0;
 
                 appraisal.research.totalClaimed = Number((
                     paperPts + phdPts + bookPts + patentPts + novelPts + projPts +
