@@ -3381,7 +3381,7 @@ exports.getPendingManagementAppraisals = async (req, res) => {
         // Checking via roles catalog if available, or designation fallback
         const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase() || r.role || r);
-        const isSchoolDean = userRoles.includes(ADMIN_ROLE_CATALOG.SCHOOL_DEAN) || designation.includes("Dean") || designation.includes("Associate Dean");
+        const isSchoolDean = userRoles.includes("SCHOOL_DEAN") || userRoles.includes("SCHOOL DEAN") || designation.includes("Dean") || designation.includes("Associate Dean") || designation.includes("Principal") || designation.includes("PRINCIPAL");
 
         if (isSchoolDean) {
             allowedStatuses.push("Submitted to Dean");
@@ -3451,7 +3451,7 @@ exports.evaluateManagementAppraisal = async (req, res) => {
         let prevStatus = appraisal.status;
 
         if (action === "Approve") {
-            appraisal.status = `Pending Research Admin`;
+            appraisal.status = `Approved by ${roleName}`;
 
             const facultyId = appraisal.facultyId;
             const academicYearId = appraisal.academicYearId;
