@@ -18,8 +18,8 @@ const getHODDepartments = async (user) => {
 
     // 2. Fallback to Database Lookup if token doesn't have them or is empty
     if (deptIds.length === 0) {
-        const hodRoleDoc = await Role.findOne({ key: 'HOD', app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
-        const deanRoleDoc = await Role.findOne({ key: 'SCHOOL_DEAN', app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
+        const hodRoleDoc = await Role.findOne({ $or: [{ name: 'HOD' }, { key: 'HOD' }, { name: 'DEPARTMENT HOD' }], app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
+        const deanRoleDoc = await Role.findOne({ $or: [{ name: 'SCHOOL_DEAN' }, { key: 'SCHOOL_DEAN' }, { name: 'SCHOOL DEAN' }], app: process.env.APP_NAME || 'UNIFIED_SYSTEM' });
         
         const rolesToFind = [];
         if (hodRoleDoc) rolesToFind.push(hodRoleDoc._id);
@@ -59,7 +59,7 @@ const getHODByDepartment = async (departmentId) => {
     if (isHODRouted || !department.schoolIds || department.schoolIds.length === 0) {
         // Route to HOD
         const hodRoleDoc = await Role.findOne({ 
-            name: 'HOD', 
+            $or: [{ name: 'HOD' }, { key: 'HOD' }, { name: 'DEPARTMENT HOD' }],
             app: process.env.APP_NAME || 'UNIFIED_SYSTEM' 
         });
         if (!hodRoleDoc) return null;
@@ -73,7 +73,7 @@ const getHODByDepartment = async (departmentId) => {
     } else {
         // Route to SCHOOL_DEAN
         const deanRoleDoc = await Role.findOne({ 
-            name: 'SCHOOL_DEAN', 
+            $or: [{ name: 'SCHOOL_DEAN' }, { key: 'SCHOOL_DEAN' }, { name: 'SCHOOL DEAN' }],
             app: process.env.APP_NAME || 'UNIFIED_SYSTEM' 
         });
         if (!deanRoleDoc) return null;

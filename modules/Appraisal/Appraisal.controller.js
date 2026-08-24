@@ -22,7 +22,7 @@ const designationRoutingMap = {
     "666": "Pro Vice-Chancellor (E & S)", // Assoc. Professor & Assoc. Dean-Freshmen Engg.
     "6048": "Pro Vice-Chancellor (S & P)", // Asst. Prof. & Assoc. Dean-School Of Business
     "114": "Dean - (IQAC)", // Asst. Professor  Of Maths & Assoc. Dean (IQAC)
-    "497": "Dean - (Admissions)", // Assoc. Professor & Assoc. Dean-Admissions
+    "2199": "Dean - (Admissions)", // Assoc. Professor & Assoc. Dean-Admissions
     "5177": "Pro Vice-Chancellor (A)", // Assoc. Professor & Assoc.Dean-Academics
     "6120": "Registrar", // Assoc. Professor & Asst. Registrar
     "1565": "Registrar", // Asst. Professor & Asst. Registrar
@@ -94,7 +94,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
     }
 
     const minPoints = mins.total || 0;
-    
+
     // Explicitly calculate 1-to-4 minimum points mimicking the frontend exactly
     mins.total1to4 = minPoints - (mins.interpersonalSkills || 30);
 
@@ -250,21 +250,21 @@ const notifyApprovers = async (nextStatus, faculty, appraisalId) => {
         } else if (nextStatus.startsWith("Submitted to ")) {
             let extractedRole = nextStatus.replace("Submitted to ", "").trim();
             targetRoleName = extractedRole.toUpperCase();
-            
+
             // Escape special characters for regex, e.g. for (E & S)
             const escapeRegExp = (string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const regexRole = new RegExp('^' + escapeRegExp(extractedRole) + '$', 'i');
-            
+
             // Generate a potential key like PRO_VICE_CHANCELLOR_E_S
             const possibleKey = targetRoleName.replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
 
-            const roleDoc = await Role.findOne({ 
+            const roleDoc = await Role.findOne({
                 $or: [
-                    { name: regexRole }, 
+                    { name: regexRole },
                     { key: targetRoleName },
                     { key: possibleKey }
-                ], 
-                app: process.env.APP_NAME || 'UNIFIED_SYSTEM' 
+                ],
+                app: process.env.APP_NAME || 'UNIFIED_SYSTEM'
             });
 
             if (roleDoc) {
@@ -295,7 +295,7 @@ const notifyApprovers = async (nextStatus, faculty, appraisalId) => {
             } else if (targetRoleName === 'RESEARCH_DEAN' || targetRoleName === 'RESEARCH_COORDINATOR') {
                 notifLink = `/research-dean/appraisal-finalization`;
             }
-            
+
             // console.log(`[notifyApprovers] Sending notification to recipient: ${recipientId}`);
             await NotificationService.sendNotification({
                 recipientId,
@@ -330,7 +330,7 @@ async function getJournalBasePoints(j, config) {
         const searchName = j.journalName.trim().toUpperCase();
         const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const match = await mongoose.connection.db.collection('journalmasters').findOne({
-            journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`)
+            journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`, 'i')
         });
         if (match) {
             isJournalMaster = true;
@@ -929,7 +929,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 const searchName = j.journalName.trim().toUpperCase();
                 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const match = await mongoose.connection.db.collection('journalmasters').findOne({
-                    journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`)
+                    journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`, 'i')
                 });
                 if (match) {
                     isJournalMaster = true;
@@ -1357,7 +1357,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         const savedHIndexPoints = (savedHIndexPrevYear !== null && savedHIndexCurrentYear !== null) ? hIndexPointsVal : (appraisal ? appraisal.research.scopusHIndexScore : 0);
 
         const appraisalStatus = appraisal ? appraisal.status : "Draft";
-        const isDraftOrRejected = appraisalStatus === "Draft" || appraisalStatus === "Rejected by HOD";
+        const isDraftOrRejected = appraisalStatus === "Draft" || appraisalStatus.includes("Rejected");
 
         const citationScoreFinal = (savedCitationStatus === "Approved" || isDraftOrRejected) ? savedCitationPoints : 0;
         const hIndexPointsFinal = (savedHIndexStatus === "Approved" || isDraftOrRejected) ? savedHIndexPoints : 0;
@@ -2733,7 +2733,7 @@ exports.updateProctoringDuties = async (req, res) => {
             return res.status(404).json({ success: false, message: "Appraisal draft not found. Please initiate first." });
         }
 
-        if (appraisal.status !== "Draft" && appraisal.status !== "Rejected by HOD") {
+        if (appraisal.status !== "Draft" && !appraisal.status.includes("Rejected")) {
             return res.status(400).json({ success: false, message: "Appraisal has already been submitted." });
         }
 
@@ -2955,7 +2955,7 @@ exports.getScopusData = async (req, res) => {
         const appraisal = await Appraisal.findOne({ facultyId, academicYearId });
         if (appraisal) {
             const isEvaluator = ["ADMIN", "RESEARCH_DEAN", "RESEARCH_COORDINATOR", "DEPARTMENT HOD", "HOD"].includes(req.user.role);
-            if (appraisal.status === "Draft" || appraisal.status === "Rejected by HOD" || isEvaluator) {
+            if (appraisal.status === "Draft" || appraisal.status.includes("Rejected") || isEvaluator) {
                 appraisal.research.scopusCitations = citationsCurrentYear;
                 appraisal.research.hIndexPrevYear = hIndexPrevYear;
                 appraisal.research.hIndexCurrentYear = hIndexCurrentYear;
@@ -2970,8 +2970,8 @@ exports.getScopusData = async (req, res) => {
                 const novelPts = appraisal.research.novelProducts?.totalClaimed || 0;
                 const projPts = appraisal.research.projectsConsultancies?.totalClaimed || 0;
 
-                const citationScoreFinal = (appraisal.research.scopusCitationStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? citationScore : 0;
-                const hIndexPointsFinal = (appraisal.research.scopusHIndexStatus === "Approved" || appraisal.status === "Draft" || appraisal.status === "Rejected by HOD") ? hIndexPoints : 0;
+                const citationScoreFinal = (appraisal.research.scopusCitationStatus === "Approved" || appraisal.status === "Draft" || appraisal.status.includes("Rejected")) ? citationScore : 0;
+                const hIndexPointsFinal = (appraisal.research.scopusHIndexStatus === "Approved" || appraisal.status === "Draft" || appraisal.status.includes("Rejected")) ? hIndexPoints : 0;
 
                 appraisal.research.totalClaimed = Number((
                     paperPts + phdPts + bookPts + patentPts + novelPts + projPts +
@@ -3381,14 +3381,14 @@ exports.getPendingManagementAppraisals = async (req, res) => {
         // Checking via roles catalog if available, or designation fallback
         const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase() || r.role || r);
-        const isSchoolDean = userRoles.includes(ADMIN_ROLE_CATALOG.SCHOOL_DEAN) || designation.includes("Dean") || designation.includes("Associate Dean");
+        const isSchoolDean = userRoles.includes("SCHOOL_DEAN") || userRoles.includes("SCHOOL DEAN") || designation.includes("Dean") || designation.includes("Associate Dean") || designation.includes("Principal") || designation.includes("PRINCIPAL");
 
         if (isSchoolDean) {
             allowedStatuses.push("Submitted to Dean");
             allowedStatuses.push("Approved by Dean");
             allowedStatuses.push("Rejected by Dean");
         }
-        
+
         // Also allow viewing completed / pending research admin if they evaluated it
         allowedStatuses.push("Pending Research Admin");
         allowedStatuses.push("Completed");
@@ -3406,7 +3406,6 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 
             const facultyIds = await Employee.find({
                 $or: [
-                    { coreDepartment: { $in: deptIds } },
                     { department: { $in: deptIds } }
                 ]
             }).distinct('_id');
@@ -3451,7 +3450,7 @@ exports.evaluateManagementAppraisal = async (req, res) => {
         let prevStatus = appraisal.status;
 
         if (action === "Approve") {
-            appraisal.status = `Pending Research Admin`;
+            appraisal.status = `Approved by ${roleName}`;
 
             const facultyId = appraisal.facultyId;
             const academicYearId = appraisal.academicYearId;

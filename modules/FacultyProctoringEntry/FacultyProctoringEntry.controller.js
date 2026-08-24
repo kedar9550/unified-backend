@@ -33,7 +33,9 @@ exports.uploadExcel = async (req, res) => {
         const rows = parseCSV(req.file.buffer);
         const results = [];
         const errors = [];
+        const skipped = [];
         let successCount = 0;
+        let skippedCount = 0;
 
         for (let i = 0; i < rows.length; i++) {
             const row = rows[i];
@@ -110,14 +112,19 @@ exports.uploadExcel = async (req, res) => {
                 // Check for duplicate in the database
                 const duplicateDb = await FacultyProctoringEntry.findOne({
                     academicYear: rowAyDoc._id,
-                    empId: String(empId).trim(),
                     programme: String(programme).trim(),
                     branch: String(branch).trim(),
                     semesterNumber: semesterNumber,
                     yearNumber: yearNumber
                 });
                 if (duplicateDb) {
-                    throw new Error(`Duplicate entry found in database for Emp Id '${empId}', Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' under Academic Year '${rowAcademicYear}'`);
+                    if (duplicateDb.empId === String(empId).trim()) {
+                        skipped.push({ row: rowNum, message: `Record already exists for Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' (Skipped)` });
+                        skippedCount++;
+                        continue;
+                    } else {
+                        throw new Error(`Failed: Record already exists for Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' under a different Employee ID: ${duplicateDb.empId}`);
+                    }
                 }
 
                 // Check for duplicate in the current upload batch
@@ -183,9 +190,12 @@ exports.uploadExcel = async (req, res) => {
         }
 
         res.json({
+            totalRecords: rows.length,
             successCount,
+            skippedCount,
             failedCount: errors.length,
-            errors
+            errors,
+            skipped
         });
 
     } catch (error) {
