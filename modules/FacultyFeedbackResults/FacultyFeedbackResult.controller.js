@@ -59,7 +59,9 @@ const uploadCSV = async (req, res) => {
 
         const results = [];
         const errors = [];
+        const skipped = [];
         let successCount = 0;
+        let skippedCount = 0;
 
         const ayCache = {};
         const programCache = {};
@@ -218,7 +220,6 @@ const uploadCSV = async (req, res) => {
                 }
 
                 const query = {
-                    facultyId: faculty.institutionId,
                     academicYearId: ayId,
                     programId: programDoc._id,
                     branchId: branchDoc._id,
@@ -233,7 +234,13 @@ const uploadCSV = async (req, res) => {
 
                 const existing = await FacultyFeedResult.findOne(query);
                 if (existing) {
-                    throw new Error(`Record already exists in the database for Faculty: ${faculty.institutionId}, Subject: ${trimmedSubjectCode}, Section: ${trimmedSection}, Phase: ${phs}`);
+                    if (existing.facultyId === faculty.institutionId) {
+                        skipped.push({ row: rowNum, message: `Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' (Skipped)` });
+                        skippedCount++;
+                        continue;
+                    } else {
+                        throw new Error(`Failed: Record already exists for Subject '${trimmedSubjectCode}' Section '${trimmedSection}' under a different Employee ID: ${existing.facultyId}`);
+                    }
                 }
                 processedKeys.set(duplicateKey, true);
 
@@ -269,9 +276,12 @@ const uploadCSV = async (req, res) => {
         }
 
         res.json({
+            totalRecords: rows.length,
             successCount,
+            skippedCount,
             failedCount: errors.length,
-            errors
+            errors,
+            skipped
         });
 
     } catch (error) {
