@@ -57,7 +57,9 @@ const uploadUnifiedResults = async (req, res) => {
 
         const results = [];
         const errors = [];
+        const skipped = [];
         let successCount = 0;
+        let skippedCount = 0;
 
         // Caches for optimization
         const ayCache = {};
@@ -248,7 +250,6 @@ const uploadUnifiedResults = async (req, res) => {
                 }
 
                 const query = {
-                    facultyId: faculty.institutionId,
                     academicYearId: ayId,
                     programId: programDoc._id,
                     branchId: branchDoc._id,
@@ -262,7 +263,15 @@ const uploadUnifiedResults = async (req, res) => {
 
                 const existing = await FacultySubjectResult.findOne(query);
                 if (existing) {
-                    throw new Error(`Record already exists in the database for Faculty: ${faculty.institutionId}, Course: ${trimmedCourseCode}, Section: ${trimmedSection}`);
+                    if (existing.facultyId === faculty.institutionId) {
+                        // Belongs to the same faculty -> Skip it
+                        skipped.push({ row: rowNum, message: `Record already exists for Course '${trimmedCourseCode}' Section '${trimmedSection}' (Skipped)` });
+                        skippedCount++;
+                        continue; // Skip the rest of the loop for this row
+                    } else {
+                        // Belongs to a different faculty -> Fail it
+                        throw new Error(`Failed: Record already exists for Course '${trimmedCourseCode}' Section '${trimmedSection}' under a different Employee ID: ${existing.facultyId}`);
+                    }
                 }
                 processedKeys.set(duplicateKey, true);
 
@@ -303,9 +312,12 @@ const uploadUnifiedResults = async (req, res) => {
         }
 
         res.json({
+            totalRecords: rows.length,
             successCount,
+            skippedCount,
             failedCount: errors.length,
-            errors
+            errors,
+            skipped
         });
 
     } catch (error) {

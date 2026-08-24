@@ -330,7 +330,7 @@ async function getJournalBasePoints(j, config) {
         const searchName = j.journalName.trim().toUpperCase();
         const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const match = await mongoose.connection.db.collection('journalmasters').findOne({
-            journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`)
+            journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`, 'i')
         });
         if (match) {
             isJournalMaster = true;
@@ -929,7 +929,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 const searchName = j.journalName.trim().toUpperCase();
                 const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const match = await mongoose.connection.db.collection('journalmasters').findOne({
-                    journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`)
+                    journalTitle: new RegExp(`^${escapeRegExp(searchName)}$`, 'i')
                 });
                 if (match) {
                     isJournalMaster = true;
