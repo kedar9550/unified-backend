@@ -12,7 +12,7 @@ const UserAppRole = require('../userAppRole/userAppRole.model');
 // Section → responsible role mapping
 const SECTION_ROLE_MAP = {
     TEACHING: "EXAMSECTION",
-    PROCTORING: "HOD",
+    PROCTORING: "FEEDBACK_COORDINATOR",
     FEEDBACK: "FEEDBACK_COORDINATOR",
     CO_ATTAINMENT: "EXAMSECTION",
     OTHER: "ADMIN",
@@ -117,19 +117,11 @@ const getDiscrepancies = async (req, res) => {
 
         if (activeRole && !["FACULTY", "STUDENT"].includes(activeRole)) {
             if (activeRole === "HOD") {
-                // HOD resolves proctoring assigned count discrepancies
-                query.$or = [
-                    { assignedRole: "HOD" },
-                    {
-                        section: "PROCTORING",
-                        proctoringType: "ASSIGNED_COUNT",
-                        assignedRole: { $in: ["UNIPRIME", "EXAMSECTION"] }
-                    }
-                ];
+                query.assignedRole = "HOD";
             } else {
                 const rolesToQuery = [activeRole];
                 if (activeRole === "FEEDBACK_COORDINATOR" || activeRole === "FEEDBACK COORDINATOR") {
-                    rolesToQuery.push("FEEDBACK", "FEEDBACK COORDINATOR", "FEEDBACK_COORDINATOR", "PROCTORING");
+                    rolesToQuery.push("FEEDBACK", "FEEDBACK COORDINATOR", "FEEDBACK_COORDINATOR");
                 }
 
                 if (activeRole === "EXAMSECTION") {
@@ -140,7 +132,14 @@ const getDiscrepancies = async (req, res) => {
                     rolesToQuery.push("PROCTORING");
                 }
 
-                query.assignedRole = { $in: rolesToQuery };
+                if (activeRole === "FEEDBACK_COORDINATOR" || activeRole === "FEEDBACK COORDINATOR") {
+                    query.$or = [
+                        { assignedRole: { $in: rolesToQuery } },
+                        { section: "PROCTORING" }
+                    ];
+                } else {
+                    query.assignedRole = { $in: rolesToQuery };
+                }
             }
         } else if (activeRole === "FACULTY") {
             // User is acting as faculty, see only raised discrepancies
