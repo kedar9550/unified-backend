@@ -12,7 +12,7 @@ const OrganisationCommitteeSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['Convener', 'Co-convener', 'Student Coordinator'],
+        enum: ['Convener', 'Member', 'Student Coordinator'],
         required: [true, 'Role is required']
     },
     status: {

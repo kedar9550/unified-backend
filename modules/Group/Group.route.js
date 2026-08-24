@@ -6,7 +6,7 @@ const fs      = require('fs');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 const groupController = require('./Group.controller');
 
-// ─── Multer storage: both logo & banner go to uploads/groups/ ─────────────────
+// ─── Multer storage: banner goes to uploads/groups/ ─────────────────
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         const uploadPath = path.join(__dirname, '..', '..', 'uploads', 'groups');
@@ -21,7 +21,7 @@ const storage = multer.diskStorage({
             .replace(/[^a-zA-Z0-9]/g, '')
             .toLowerCase()
             .slice(0, 30);
-        const field     = file.fieldname; // 'logo' or 'banner'
+        const field     = file.fieldname; // 'banner'
         cb(null, `group-${field}-${timestamp}-${safeName}${path.extname(file.originalname).toLowerCase()}`);
     }
 });
@@ -41,9 +41,8 @@ const upload = multer({
     fileFilter
 });
 
-// Accept both 'logo' and 'banner' fields in a single request
+// Accept 'banner' field
 const uploadGroupImages = upload.fields([
-    { name: 'logo',   maxCount: 1 },
     { name: 'banner', maxCount: 1 }
 ]);
 
