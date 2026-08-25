@@ -3232,10 +3232,10 @@ exports.getAllAppraisals = async (req, res) => {
         const config = await AppraisalConfig.findOne({ academicYearId });
         const appraisalsObj = appraisals.map(app => {
             const appObj = app.toObject();
-            if (appObj.facultyId && appObj.facultyDetails) {
+            if (appObj.facultyId && appObj.personalInfoSnapshot) {
                 let liveDoj = appObj.facultyId.dateOfJoining;
                 if (typeof liveDoj === 'string' && liveDoj.trim() === '') liveDoj = null;
-                appObj.facultyDetails.dateOfJoining = liveDoj || null;
+                appObj.personalInfoSnapshot.dateOfJoining = liveDoj || null;
             }
             return attachEligibilityInfo(appObj, config);
         });
@@ -3335,10 +3335,10 @@ exports.getAppraisalById = async (req, res) => {
         appObj.contributionDetails = contributions;
         appObj.administrationDetail = adminRoles;
 
-        if (appObj.facultyId && appObj.facultyDetails) {
+        if (appObj.facultyId && appObj.personalInfoSnapshot) {
             let liveDoj = appObj.facultyId.dateOfJoining;
             if (typeof liveDoj === 'string' && liveDoj.trim() === '') liveDoj = null;
-            appObj.facultyDetails.dateOfJoining = liveDoj || null;
+            appObj.personalInfoSnapshot.dateOfJoining = liveDoj || null;
         }
 
         const config = await AppraisalConfig.findOne({ academicYearId });
