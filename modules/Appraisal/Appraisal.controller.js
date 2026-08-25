@@ -4,7 +4,7 @@ const Appraisal = require("./Appraisal.model.js");
 const AppraisalConfig = require("./AppraisalConfig.model");
 const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
 const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
-
+const escapeRegex = require("../../utils/escapeRegex");
 const designationRoutingMap = {
     "3541": "Vice Chancellor", // Professor & Dean - Research & Consultancy
     "4117": "Vice Chancellor", // Professor & Dean (International Relations)
@@ -966,23 +966,23 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             // });
             // totalPaperPoints += points;
 
-            if (claimStatus !== "claimed_by_other" && claimStatus !== "requires_claim_action") {
-
-                researchPapers.push({
-                    paperId: j._id,
-                    paperType: 'Journal',
-                    title: j.paperTitle,
-                    scope: finalCategory,
-                    doi: j.doi,
-                    isMultiAUSAuthor,
-                    claimStatus,
-                    claimedBy,
-                    pointsClaimed: Number(points.toFixed(2)),
-                    impactFactor: jcrIF
-                });
-                totalPaperPoints += points;
-
+            if (claimStatus === "claimed_by_other" || claimStatus === "requires_claim_action") {
+                points = 0;
             }
+
+            researchPapers.push({
+                paperId: j._id,
+                paperType: 'Journal',
+                title: j.paperTitle,
+                scope: finalCategory,
+                doi: j.doi,
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
+                pointsClaimed: Number(points.toFixed(2)),
+                impactFactor: jcrIF
+            });
+            totalPaperPoints += points;
         }
 
         // 2.2 Guiding PhD Scholars
@@ -1021,7 +1021,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': faculty.institutionId }
+                { 'coAuthors.employeeId': faculty.institutionId },
+                { 'coAuthors.authorName': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -1032,7 +1033,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             appraisalEligible: 'Yes',
             $or: [
                 { facultyId },
-                { 'coAuthors.employeeId': faculty.institutionId }
+                { 'coAuthors.employeeId': faculty.institutionId },
+                { 'coAuthors.authorName': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -1040,17 +1042,37 @@ exports.initiateOrGetAppraisal = async (req, res) => {
         let totalBookConfPoints = 0;
 
         for (const b of books) {
-            if (b.appraisalClaimant && b.appraisalClaimant !== faculty.institutionId) {
-                continue;
-            }
-
-            const ausAuthors = (b.authors || []).filter(a => a.employeeId);
-            const isSingleAUSAuthor = ausAuthors.length === 0;
+            const ausAuthorsCount = (b.authors || []).filter(a => a.employeeId).length;
+            const isMultiAUSAuthor = ausAuthorsCount > 0;
 
             let pts = 0;
-            if (b.appraisalClaimant === faculty.institutionId || (!b.appraisalClaimant && isSingleAUSAuthor)) {
-                pts = config.research.bookConferencePoints.isbnBook || 10;
+            let claimStatus = "unclaimed";
+            let claimedBy = null;
+
+            if (b.appraisalClaimant) {
+                if (b.appraisalClaimant === faculty.institutionId) {
+                    claimStatus = "claimed_by_me";
+                    pts = config.research.bookConferencePoints.isbnBook || 10;
+                } else {
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: b.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    pts = 0;
+                }
+            } else {
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    pts = config.research.bookConferencePoints.isbnBook || 10;
+                } else {
+                    claimStatus = "requires_claim_action";
+                    pts = 0;
+                }
             }
+
+            if (claimStatus === "claimed_by_other" || claimStatus === "requires_claim_action") {
+                pts = 0;
+            }
+
             const isbn = b.isbn || b.isbnNumber || null;
             bookChapterItems.push({
                 itemId: b._id,
@@ -1058,53 +1080,99 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 title: isbn ? `${b.title} (${isbn})` : b.title,
                 isbn: isbn || "",
                 publisher: b.publisher || "N/A",
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
         }
 
         for (const c of chapters) {
-            if (c.appraisalClaimant && c.appraisalClaimant !== faculty.institutionId) {
-                continue;
-            }
-
-            const ausCoAuthors = (c.coAuthors || []).filter(co =>
+            const ausCoAuthorsCount = (c.coAuthors || []).filter(co =>
                 (co.employeeId && co.employeeId !== '') ||
                 (co.affiliation && co.affiliation.toLowerCase().includes('aditya'))
-            );
-            const isSingleAUSAuthor = ausCoAuthors.length === 0;
+            ).length;
+            const isMultiAUSAuthor = ausCoAuthorsCount > 0;
 
             let pts = 0;
+            let claimStatus = "unclaimed";
+            let claimedBy = null;
             const isbn = c.isbnNumber || null;
-            if ((c.appraisalClaimant === faculty.institutionId || (!c.appraisalClaimant && isSingleAUSAuthor)) && isbn) {
-                pts = config.research.bookConferencePoints.isbnBookChapter || 5;
+
+            if (c.appraisalClaimant) {
+                if (c.appraisalClaimant === faculty.institutionId) {
+                    claimStatus = "claimed_by_me";
+                    if (isbn) pts = config.research.bookConferencePoints.isbnBookChapter || 5;
+                } else {
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: c.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    pts = 0;
+                }
+            } else {
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    if (isbn) pts = config.research.bookConferencePoints.isbnBookChapter || 5;
+                } else {
+                    claimStatus = "requires_claim_action";
+                    pts = 0;
+                }
             }
+
+            if (claimStatus === "claimed_by_other" || claimStatus === "requires_claim_action") {
+                pts = 0;
+            }
+
             bookChapterItems.push({
                 itemId: c._id,
                 itemType: 'BookChapter',
                 title: isbn ? `${c.chapterTitle} - ${c.textBookName} (${isbn})` : `${c.chapterTitle} - ${c.textBookName}`,
                 isbn: isbn || "",
                 publisher: c.publisher || "N/A",
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
         }
 
         for (const c of conferences) {
-            if (c.appraisalClaimant && c.appraisalClaimant !== faculty.institutionId) {
-                continue;
-            }
-
-            const ausCoAuthors = (c.coAuthors || []).filter(co =>
+            const ausCoAuthorsCount = (c.coAuthors || []).filter(co =>
                 (co.employeeId && co.employeeId !== '') ||
                 (co.affiliation && co.affiliation.toLowerCase().includes('aditya'))
-            );
-            const isSingleAUSAuthor = ausCoAuthors.length === 0;
+            ).length;
+            const isMultiAUSAuthor = ausCoAuthorsCount > 0;
 
             let pts = 0;
-            if (c.appraisalClaimant === faculty.institutionId || (!c.appraisalClaimant && isSingleAUSAuthor)) {
-                pts = config.research.bookConferencePoints.scopusConference || 5;
+            let claimStatus = "unclaimed";
+            let claimedBy = null;
+
+            if (c.appraisalClaimant) {
+                if (c.appraisalClaimant === faculty.institutionId) {
+                    claimStatus = "claimed_by_me";
+                    pts = config.research.bookConferencePoints.scopusConference || 5;
+                } else {
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: c.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    pts = 0;
+                }
+            } else {
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    pts = config.research.bookConferencePoints.scopusConference || 5;
+                } else {
+                    claimStatus = "requires_claim_action";
+                    pts = 0;
+                }
             }
+
+            if (claimStatus === "claimed_by_other" || claimStatus === "requires_claim_action") {
+                pts = 0;
+            }
+
             const issn = c.issnIsbn || null;
             bookChapterItems.push({
                 itemId: c._id,
@@ -1112,6 +1180,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 title: issn ? `${c.title} (${issn})` : c.title,
                 isbn: issn || "",
                 publisher: c.publisher || c.organizer || "N/A",
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
                 pointsClaimed: pts
             });
             totalBookConfPoints += pts;
@@ -1128,28 +1199,52 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             status: "Approved",
             $or: [
                 { facultyId },
-                { 'coInventors.employeeId': faculty.institutionId }
+                { 'coInventors.employeeId': faculty.institutionId },
+                { 'coInventors.name': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
             ]
         }).populate('facultyId', 'name institutionId');
 
         const patentItems = [];
         let totalPatentPoints = 0;
 
-        patents.forEach(p => {
-            if (p.appraisalClaimant && p.appraisalClaimant !== faculty.institutionId) {
-                return; // skip
-            }
-
-            const ausCoInventors = (p.coInventors || []).filter(c => c.employeeId);
-            const isSingleAUSAuthor = ausCoInventors.length === 0;
+        for (const p of patents) {
+            const ausCoInventorsCount = (p.coInventors || []).filter(c => c.employeeId).length;
+            const isMultiAUSAuthor = ausCoInventorsCount > 0;
 
             let pts = 0;
-            if (p.appraisalClaimant === faculty.institutionId || (!p.appraisalClaimant && isSingleAUSAuthor)) {
-                const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
-                if (statusKey === 'published' || statusKey === 'granted') {
-                    pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+            let claimStatus = "unclaimed";
+            let claimedBy = null;
+
+            if (p.appraisalClaimant) {
+                if (p.appraisalClaimant === faculty.institutionId) {
+                    claimStatus = "claimed_by_me";
+                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
+                    if (statusKey === 'published' || statusKey === 'granted') {
+                        pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+                    }
+                } else {
+                    claimStatus = "claimed_by_other";
+                    const claimFaculty = await Employee.findOne({ institutionId: p.appraisalClaimant }).select("name institutionId");
+                    claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
+                    pts = 0;
+                }
+            } else {
+                if (!isMultiAUSAuthor) {
+                    claimStatus = "auto_eligible";
+                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
+                    if (statusKey === 'published' || statusKey === 'granted') {
+                        pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+                    }
+                } else {
+                    claimStatus = "requires_claim_action";
+                    pts = 0;
                 }
             }
+
+            if (claimStatus === "claimed_by_other" || claimStatus === "requires_claim_action") {
+                pts = 0;
+            }
+
             patentItems.push({
                 patentId: p._id,
                 title: p.patentTitle || p.title,
@@ -1157,10 +1252,13 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 filingNo: p.filingNo || "N/A",
                 dateOfFiling: p.dateOfFiling,
                 country: p.patentFiledCountry || "India",
+                isMultiAUSAuthor,
+                claimStatus,
+                claimedBy,
                 pointsClaimed: pts
             });
             totalPatentPoints += pts;
-        });
+        }
 
         // 2.5 Novel products/Technology
         const novelProducts = await NovelProduct.find({
@@ -2487,7 +2585,8 @@ exports.getUnresolvedClaims = async (req, res) => {
             appraisalClaimant: null,
             $or: [
                 { facultyId },
-                { 'coInventors.employeeId': faculty.institutionId }
+                { 'coInventors.employeeId': faculty.institutionId },
+                { 'coInventors.name': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -3354,6 +3453,7 @@ exports.getPendingManagementAppraisals = async (req, res) => {
             if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
             if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
             if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
+            if (role === "CONTROLLER_OF_EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
             return role;
         });
 
@@ -3366,7 +3466,8 @@ exports.getPendingManagementAppraisals = async (req, res) => {
             "Pro Vice-Chancellor (A)",
             "Pro Vice-Chancellor (S & P)",
             "Dean - (IQAC)",
-            "Dean - (Admissions)"
+            "Dean - (Admissions)",
+            "Controller of Examinations"
         ];
 
         specificRoles.forEach(role => {
