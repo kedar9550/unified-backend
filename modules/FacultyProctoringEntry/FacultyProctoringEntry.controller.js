@@ -109,8 +109,9 @@ exports.uploadExcel = async (req, res) => {
                     semesterNumber = semYearNum;
                 }
 
-                // Check for duplicate in the database
+                // Check for duplicate in the database for the SAME employee
                 const duplicateDb = await FacultyProctoringEntry.findOne({
+                    empId: String(empId).trim(),
                     academicYear: rowAyDoc._id,
                     programme: String(programme).trim(),
                     branch: String(branch).trim(),
@@ -118,13 +119,9 @@ exports.uploadExcel = async (req, res) => {
                     yearNumber: yearNumber
                 });
                 if (duplicateDb) {
-                    if (duplicateDb.empId === String(empId).trim()) {
-                        skipped.push({ row: rowNum, message: `Record already exists for Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' (Skipped)` });
-                        skippedCount++;
-                        continue;
-                    } else {
-                        throw new Error(`Failed: Record already exists for Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' under a different Employee ID: ${duplicateDb.empId}`);
-                    }
+                    skipped.push({ row: rowNum, message: `Record already exists for Programme '${programme}', Branch '${branch}', Sem/Year '${semYear}' (Skipped)` });
+                    skippedCount++;
+                    continue;
                 }
 
                 // Check for duplicate in the current upload batch
