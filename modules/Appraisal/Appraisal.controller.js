@@ -3274,6 +3274,7 @@ exports.getAppraisalById = async (req, res) => {
             if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
             if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
             if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
+            if (role === "CONTROLLER_OF_EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
             return role;
         });
 
@@ -3282,7 +3283,7 @@ exports.getAppraisalById = async (req, res) => {
             "UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT HOD", "HOD", "SCHOOL DEAN", "SCHOOL_DEAN",
             "VICE CHANCELLOR", "DY. PRO CHANCELLOR", "REGISTRAR",
             "PRO VICE-CHANCELLOR (E & S)", "PRO VICE-CHANCELLOR (A)", "PRO VICE-CHANCELLOR (S & P)",
-            "DEAN - (IQAC)", "DEAN - (ADMISSIONS)", "DEAN"
+            "DEAN - (IQAC)", "DEAN - (ADMISSIONS)", "DEAN", "CONTROLLER OF EXAMINATIONS"
         ];
         const isHigherRole = userRoles.some(r => higherRoles.includes(r));
 
