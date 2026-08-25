@@ -897,7 +897,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     claimStatus = "claimed_by_me";
                     const basePoints = await getJournalBasePoints(j, config);
                     points = basePoints;
-                    const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
+                    let jcrIF = parseFloat(j.jcrImpactFactor || j.impactFactor);
+                    jcrIF = isNaN(jcrIF) ? 0 : jcrIF;
                     if (jcrIF > 0) {
                         points += jcrIF;
                     }
@@ -912,7 +913,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                     claimStatus = "auto_eligible";
                     const basePoints = await getJournalBasePoints(j, config);
                     points = basePoints;
-                    const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
+                    let jcrIF = parseFloat(j.jcrImpactFactor || j.impactFactor);
+                    jcrIF = isNaN(jcrIF) ? 0 : jcrIF;
                     if (jcrIF > 0) {
                         points += jcrIF;
                     }
@@ -950,7 +952,8 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 }
             }
 
-            const jcrIF = Number(j.jcrImpactFactor || j.impactFactor || 0);
+            let jcrIF = parseFloat(j.jcrImpactFactor || j.impactFactor);
+            jcrIF = isNaN(jcrIF) ? 0 : jcrIF;
 
             // researchPapers.push({
             //     paperId: j._id,
