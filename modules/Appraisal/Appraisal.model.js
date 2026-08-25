@@ -42,9 +42,9 @@ const AppraisalSchema = new mongoose.Schema({
             "Approved by Dean - (IQAC)",
             "Submitted to Dean - (Admissions)",
             "Approved by Dean - (Admissions)",
-            "Submitted to Controlelr of Examinations",
-            "Rejected by Controlelr of Examinations",
-            "Approved by Controlelr of Examinations",
+            "Submitted to Controller of Examinations",
+            "Rejected by Controller of Examinations",
+            "Approved by Controller of Examinations",
             "Completed"
         ],
         default: "Draft"
@@ -172,6 +172,9 @@ const AppraisalSchema = new mongoose.Schema({
                 title: String,
                 isbn: String,
                 publisher: String,
+                isMultiAUSAuthor: Boolean,
+                claimStatus: String,
+                claimedBy: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 } // Capped at max 10 points
@@ -184,6 +187,9 @@ const AppraisalSchema = new mongoose.Schema({
                 filingNo: String,
                 dateOfFiling: Date,
                 country: { type: String, default: 'India' },
+                isMultiAUSAuthor: Boolean,
+                claimStatus: String,
+                claimedBy: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }
@@ -194,6 +200,9 @@ const AppraisalSchema = new mongoose.Schema({
                 title: String,
                 status: String, // Developed / Implemented
                 organizationName: String,
+                isMultiAUSAuthor: Boolean,
+                claimStatus: String,
+                claimedBy: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }
