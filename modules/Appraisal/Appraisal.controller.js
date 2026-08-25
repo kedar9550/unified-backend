@@ -1714,7 +1714,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 scopusId: faculty.scopusId || "",
                 wosId: faculty.wosId || "",
                 orcidId: faculty.orcidId || "",
-                dateOfJoining: faculty.dateOfJoining || faculty.createdAt, // fallback
+                dateOfJoining: faculty.dateOfJoining || null,
                 qualification: (() => {
                     if (faculty.qualifications && faculty.qualifications.length > 0) {
                         const weight = { "Doctoral": 3, "PG": 2, "UG": 1 };
@@ -3131,14 +3131,21 @@ exports.getAllAppraisals = async (req, res) => {
         });
 
         userRoles = userRoles.map(role => {
-            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S") {
+            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S" || role === "PRO VICE-CHANCELLOR (E & S)" || role === "PRO VICE CHANCELLOR (E & S)") {
                 return "PRO VICE-CHANCELLOR (E & S)";
             }
-            if (role === "VICE_CHANCELLOR") return "VICE CHANCELLOR";
-            if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
-            if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
-            if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
-            if (role === "CONTROLELR OF EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
+            if (role === "PRO_VICE_CHANCELLOR_A" || role === "PRO VICE-CHANCELLOR (A)" || role === "PRO VICE CHANCELLOR (A)" || role === "PRO VICE-CHANCELLOR(A)") {
+                return "PRO VICE-CHANCELLOR (A)";
+            }
+            if (role === "PRO_VICE_CHANCELLOR_S_P" || role === "PRO VICE-CHANCELLOR (S & P)" || role === "PRO VICE CHANCELLOR (S & P)" || role === "PRO VICE-CHANCELLOR(S & P)") {
+                return "PRO VICE-CHANCELLOR (S & P)";
+            }
+            if (role === "VICE_CHANCELLOR" || role === "VICE CHANCELLOR") return "VICE CHANCELLOR";
+            if (role === "DY_PRO_CHANCELLOR" || role === "DY PRO CHANCELLOR" || role === "DY. PRO CHANCELLOR") return "DY. PRO CHANCELLOR";
+            if (role === "DEAN_IQAC" || role === "DEAN (IQAC)" || role === "DEAN-(IQAC)" || role === "DEAN - (IQAC)") return "DEAN - (IQAC)";
+            if (role === "DEAN_ADMISSIONS" || role === "DEAN (ADMISSIONS)" || role === "DEAN-(ADMISSIONS)" || role === "DEAN - (ADMISSIONS)") return "DEAN - (ADMISSIONS)";
+            if (role === "CONTROLLER_OF_EXAMINATIONS" || role === "CONTROLELR OF EXAMINATIONS" || role === "CONTROLLER OF EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
+            if (role === "REGISTRAR") return "REGISTRAR";
             return role;
         });
 
@@ -3209,7 +3216,7 @@ exports.getAllAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find(filterQuery)
             .populate({
                 path: 'facultyId',
-                select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership',
+                select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership dateOfJoining',
                 populate: [
                     { path: 'department', select: 'name' },
                     { path: 'coreDepartment', select: 'name' }
@@ -3225,6 +3232,11 @@ exports.getAllAppraisals = async (req, res) => {
         const config = await AppraisalConfig.findOne({ academicYearId });
         const appraisalsObj = appraisals.map(app => {
             const appObj = app.toObject();
+            if (appObj.facultyId && appObj.facultyDetails) {
+                let liveDoj = appObj.facultyId.dateOfJoining;
+                if (typeof liveDoj === 'string' && liveDoj.trim() === '') liveDoj = null;
+                appObj.facultyDetails.dateOfJoining = liveDoj || null;
+            }
             return attachEligibilityInfo(appObj, config);
         });
 
@@ -3244,7 +3256,7 @@ exports.getAppraisalById = async (req, res) => {
         const { id } = req.params;
         const appraisal = await Appraisal.findById(id).populate({
             path: 'facultyId',
-            select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership',
+            select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership dateOfJoining',
             populate: [
                 { path: 'department', select: 'name' },
                 { path: 'coreDepartment', select: 'name' }
@@ -3270,14 +3282,21 @@ exports.getAppraisalById = async (req, res) => {
 
         // Normalize roles that might have different naming conventions in the token
         userRoles = userRoles.map(role => {
-            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S") {
+            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S" || role === "PRO VICE-CHANCELLOR (E & S)" || role === "PRO VICE CHANCELLOR (E & S)") {
                 return "PRO VICE-CHANCELLOR (E & S)";
             }
-            if (role === "VICE_CHANCELLOR") return "VICE CHANCELLOR";
-            if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
-            if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
-            if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
-            if (role === "CONTROLLER_OF_EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
+            if (role === "PRO_VICE_CHANCELLOR_A" || role === "PRO VICE-CHANCELLOR (A)" || role === "PRO VICE CHANCELLOR (A)" || role === "PRO VICE-CHANCELLOR(A)") {
+                return "PRO VICE-CHANCELLOR (A)";
+            }
+            if (role === "PRO_VICE_CHANCELLOR_S_P" || role === "PRO VICE-CHANCELLOR (S & P)" || role === "PRO VICE CHANCELLOR (S & P)" || role === "PRO VICE-CHANCELLOR(S & P)") {
+                return "PRO VICE-CHANCELLOR (S & P)";
+            }
+            if (role === "VICE_CHANCELLOR" || role === "VICE CHANCELLOR") return "VICE CHANCELLOR";
+            if (role === "DY_PRO_CHANCELLOR" || role === "DY PRO CHANCELLOR" || role === "DY. PRO CHANCELLOR") return "DY. PRO CHANCELLOR";
+            if (role === "DEAN_IQAC" || role === "DEAN (IQAC)" || role === "DEAN-(IQAC)" || role === "DEAN - (IQAC)") return "DEAN - (IQAC)";
+            if (role === "DEAN_ADMISSIONS" || role === "DEAN (ADMISSIONS)" || role === "DEAN-(ADMISSIONS)" || role === "DEAN - (ADMISSIONS)") return "DEAN - (ADMISSIONS)";
+            if (role === "CONTROLLER_OF_EXAMINATIONS" || role === "CONTROLELR OF EXAMINATIONS" || role === "CONTROLLER OF EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
+            if (role === "REGISTRAR") return "REGISTRAR";
             return role;
         });
 
@@ -3315,6 +3334,12 @@ exports.getAppraisalById = async (req, res) => {
         appObj.resourceUtilizationDetails = resourceUt;
         appObj.contributionDetails = contributions;
         appObj.administrationDetail = adminRoles;
+
+        if (appObj.facultyId && appObj.facultyDetails) {
+            let liveDoj = appObj.facultyId.dateOfJoining;
+            if (typeof liveDoj === 'string' && liveDoj.trim() === '') liveDoj = null;
+            appObj.facultyDetails.dateOfJoining = liveDoj || null;
+        }
 
         const config = await AppraisalConfig.findOne({ academicYearId });
         attachEligibilityInfo(appObj, config);
@@ -3450,14 +3475,21 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 
         // Normalize roles
         userRolesExtracted = userRolesExtracted.map(role => {
-            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S") {
+            if (role === "PRO VICE-CHANCELLOR (ENGG.&SCI.)" || role === "PRO VICE CHANCELLOR (ENGG.&SCI.)" || role === "PRO_VICE_CHANCELLOR_E_S" || role === "PRO VICE-CHANCELLOR (E & S)" || role === "PRO VICE CHANCELLOR (E & S)") {
                 return "PRO VICE-CHANCELLOR (E & S)";
             }
-            if (role === "VICE_CHANCELLOR") return "VICE CHANCELLOR";
-            if (role === "DY_PRO_CHANCELLOR") return "DY. PRO CHANCELLOR";
-            if (role === "DEAN_IQAC") return "DEAN - (IQAC)";
-            if (role === "DEAN_ADMISSIONS") return "DEAN - (ADMISSIONS)";
-            if (role === "CONTROLLER_OF_EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
+            if (role === "PRO_VICE_CHANCELLOR_A" || role === "PRO VICE-CHANCELLOR (A)" || role === "PRO VICE CHANCELLOR (A)" || role === "PRO VICE-CHANCELLOR(A)") {
+                return "PRO VICE-CHANCELLOR (A)";
+            }
+            if (role === "PRO_VICE_CHANCELLOR_S_P" || role === "PRO VICE-CHANCELLOR (S & P)" || role === "PRO VICE CHANCELLOR (S & P)" || role === "PRO VICE-CHANCELLOR(S & P)") {
+                return "PRO VICE-CHANCELLOR (S & P)";
+            }
+            if (role === "VICE_CHANCELLOR" || role === "VICE CHANCELLOR") return "VICE CHANCELLOR";
+            if (role === "DY_PRO_CHANCELLOR" || role === "DY PRO CHANCELLOR" || role === "DY. PRO CHANCELLOR") return "DY. PRO CHANCELLOR";
+            if (role === "DEAN_IQAC" || role === "DEAN (IQAC)" || role === "DEAN-(IQAC)" || role === "DEAN - (IQAC)") return "DEAN - (IQAC)";
+            if (role === "DEAN_ADMISSIONS" || role === "DEAN (ADMISSIONS)" || role === "DEAN-(ADMISSIONS)" || role === "DEAN - (ADMISSIONS)") return "DEAN - (ADMISSIONS)";
+            if (role === "CONTROLLER_OF_EXAMINATIONS" || role === "CONTROLELR OF EXAMINATIONS" || role === "CONTROLLER OF EXAMINATIONS") return "CONTROLLER OF EXAMINATIONS";
+            if (role === "REGISTRAR") return "REGISTRAR";
             return role;
         });
 

@@ -89,7 +89,8 @@ router.put("/hod-evaluate/:id", protect, authorize(
     "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
     "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
     "DEAN - (IQAC)", "DEAN_IQAC",
-    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS"
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+    "CONTROLLER OF EXAMINATIONS", "CONTROLLER_OF_EXAMINATIONS", "CONTROLELR OF EXAMINATIONS"
 ), evaluateHODAppraisal);
 
 // Management Appraisal actions (Dean, Pro-VC, VC, Registrar, etc.)
@@ -115,9 +116,31 @@ router.get("/all/:academicYearId", protect, authorize(
     "SCHOOL DEAN", "SCHOOL_DEAN",
     "HOD", "DEPARTMENT HOD", "DEPARTMENT_HOD"
 ), getAllAppraisals);
-router.get("/detail/:id", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY"), getAppraisalById);
+router.get("/detail/:id", protect, authorize(
+    "UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY",
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+    "CONTROLLER OF EXAMINATIONS", "CONTROLLER_OF_EXAMINATIONS", "CONTROLELR OF EXAMINATIONS"
+), getAppraisalById);
 
 // PDF Generation
-router.post("/generate-pdf", protect, authorize("UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY"), generateAppraisalPDF);
+router.post("/generate-pdf", protect, authorize(
+    "UNIPRIME", "ADMIN", "PRINCIPAL", "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", "FACULTY",
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+    "CONTROLLER OF EXAMINATIONS", "CONTROLLER_OF_EXAMINATIONS", "CONTROLELR OF EXAMINATIONS"
+), generateAppraisalPDF);
 
 module.exports = router;
