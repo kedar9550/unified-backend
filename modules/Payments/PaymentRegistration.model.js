@@ -9,7 +9,7 @@ const ParticipantSchema = new mongoose.Schema({
   mobile: { type: String, trim: true },
   email: { type: String, trim: true },
   year: { type: String, trim: true },
-  accommodation: { type: String, trim: true },
+  accommodation: { type: String, trim: true, default: "No" },
   department: { type: String, trim: true },
   location: { type: String, trim: true },
   accommodationPayment: {

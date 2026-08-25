@@ -344,6 +344,14 @@ exports.getEventById = async (req, res, next) => {
     }
 };
 
+const deleteFile = (filePath) => {
+    if (!filePath) return;
+    const absPath = path.join(__dirname, '..', '..', filePath);
+    if (fs.existsSync(absPath)) {
+        fs.unlinkSync(absPath);
+    }
+};
+
 exports.updateEvent = async (req, res, next) => {
     try {
         const {
@@ -362,27 +370,42 @@ exports.updateEvent = async (req, res, next) => {
             ground,
             roomNo,
             department,
+            removeBanner,
         } = req.body;
 
+        const bannerImage = req.file;
+
         if (!groupId || !eventName || !overview || !maxTeamSize) {
+            if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Group, Event Name, Max Team Size, and Overview are required.' });
         }
         if (!venueType) {
+            if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Venue Type is required.' });
         }
         if (venueType === 'Indoor' && (!building || !floor)) {
+            if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Building and Floor are required for Indoor venues.' });
         }
         if (venueType === 'Outdoor' && !ground) {
+            if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Ground is required for Outdoor venues.' });
         }
         if (venueType && !roomNo) {
+            if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Room No is required.' });
         }
 
         const group = await Group.findById(groupId);
         if (!group) {
+            if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Selected group does not exist.' });
+        }
+        
+        const existingEvent = await Events.findById(req.params.id);
+        if (!existingEvent) {
+            if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
+            return res.status(404).json({ message: 'Event not found.' });
         }
 
         const parsedRules = Array.isArray(rules) ? rules.filter((rule) => rule && rule.trim()) : [];
@@ -417,6 +440,15 @@ exports.updateEvent = async (req, res, next) => {
             overview,
             rules: parsedRules,
         };
+
+        if (bannerImage) {
+            deleteFile(existingEvent.bannerImage);
+            updatedFields.bannerImage = `/uploads/events/${bannerImage.filename}`;
+        } else if (removeBanner === 'true') {
+            deleteFile(existingEvent.bannerImage);
+            updatedFields.bannerImage = null;
+        }
+
         if (parsedFacultyCoordinators.length > 0) {
             updatedFields.facultyCoordinator = parsedFacultyCoordinators[0];
             updatedFields.facultyCoordinators = parsedFacultyCoordinators;
