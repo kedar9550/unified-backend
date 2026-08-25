@@ -17,7 +17,8 @@ const primaryEvaluatorRoles = [
     "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
     "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
     "DEAN - (IQAC)", "DEAN_IQAC",
-    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS"
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+    "CONTROLLER OF EXAMINATIONS", "CONTROLLER_OF_EXAMINATIONS"
 ];
 
 router.get("/pending-hod", protect, authorize(...primaryEvaluatorRoles), facultyAdministrationController.getPendingAtHOD);

@@ -1221,9 +1221,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (p.appraisalClaimant) {
                 if (p.appraisalClaimant === faculty.institutionId) {
                     claimStatus = "claimed_by_me";
-                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
+                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase().trim() : 'published';
                     if (statusKey === 'published' || statusKey === 'granted') {
-                        pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+                        pts = config.research.patentPoints[statusKey] !== undefined ? config.research.patentPoints[statusKey] : (statusKey === 'granted' ? 20 : 5);
                     }
                 } else {
                     claimStatus = "claimed_by_other";
@@ -1234,9 +1234,9 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
-                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase() : 'published';
+                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase().trim() : 'published';
                     if (statusKey === 'published' || statusKey === 'granted') {
-                        pts = config.research.patentPoints[statusKey] || (statusKey === 'granted' ? 20 : 5);
+                        pts = config.research.patentPoints[statusKey] !== undefined ? config.research.patentPoints[statusKey] : (statusKey === 'granted' ? 20 : 5);
                     }
                 } else {
                     claimStatus = "requires_claim_action";
