@@ -42,9 +42,9 @@ const AppraisalSchema = new mongoose.Schema({
             "Approved by Dean - (IQAC)",
             "Submitted to Dean - (Admissions)",
             "Approved by Dean - (Admissions)",
-            "Submitted to Controlelr of Examinations",
-            "Rejected by Controlelr of Examinations",
-            "Approved by Controlelr of Examinations",
+            "Submitted to Controller of Examinations",
+            "Rejected by Controller of Examinations",
+            "Approved by Controller of Examinations",
             "Completed"
         ],
         default: "Draft"
