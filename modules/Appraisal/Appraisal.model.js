@@ -172,6 +172,9 @@ const AppraisalSchema = new mongoose.Schema({
                 title: String,
                 isbn: String,
                 publisher: String,
+                isMultiAUSAuthor: Boolean,
+                claimStatus: String,
+                claimedBy: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 } // Capped at max 10 points
@@ -184,6 +187,9 @@ const AppraisalSchema = new mongoose.Schema({
                 filingNo: String,
                 dateOfFiling: Date,
                 country: { type: String, default: 'India' },
+                isMultiAUSAuthor: Boolean,
+                claimStatus: String,
+                claimedBy: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }
@@ -194,6 +200,9 @@ const AppraisalSchema = new mongoose.Schema({
                 title: String,
                 status: String, // Developed / Implemented
                 organizationName: String,
+                isMultiAUSAuthor: Boolean,
+                claimStatus: String,
+                claimedBy: String,
                 pointsClaimed: Number
             }],
             totalClaimed: { type: Number, default: 0 }

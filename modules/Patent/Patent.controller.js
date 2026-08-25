@@ -111,6 +111,7 @@ exports.getMyPatents = async (req, res) => {
         const query = {
             $or: [
                 { facultyId: req.user.userId },
+                { 'coInventors.employeeId': user ? user.institutionId : null },
                 ...(user && user.name ? [{ 'coInventors.name': new RegExp(`^${escapeRegex(user.name.trim())}$`, 'i') }] : [])
             ]
         };
@@ -118,7 +119,6 @@ exports.getMyPatents = async (req, res) => {
         const patents = await Patent.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
-            .populate('coInventors.employeeId', 'name institutionId')
             .sort({ createdAt: -1 });
 
         const patentsWithVisibility = patents.map(p => {

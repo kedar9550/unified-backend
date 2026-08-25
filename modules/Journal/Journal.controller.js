@@ -178,6 +178,7 @@ exports.getMyJournals = async (req, res) => {
         const query = {
             $or: [
                 { facultyId: req.user.userId },
+                { 'coAuthors.employeeId': user ? user.institutionId : null },
                 ...(user && user.name ? [{ 'coAuthors.name': new RegExp(`^${escapeRegex(user.name.trim())}$`, 'i') }] : [])
             ]
         };
