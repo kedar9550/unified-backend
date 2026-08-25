@@ -22,7 +22,7 @@ const GroupSchema = new mongoose.Schema({
     },
     banner: {
         type: String,
-        required: [true, 'Banner image is required']
+        // required: [true, 'Banner image is required']
     },
     coordinator: {
         employeeId: {

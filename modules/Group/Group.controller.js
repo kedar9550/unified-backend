@@ -5,8 +5,8 @@ const Role = require('../role/role.model');
 const UserAppRole = require('../userAppRole/userAppRole.model');
 const Employee = require('../employee/employee.model');
 
-// ─── Helper: delete a file from disk safely ───────────────────────────────────
 const deleteFile = (filePath) => {
+    if (!filePath) return;
     const absPath = path.join(__dirname, '..', '..', filePath);
     if (fs.existsSync(absPath)) {
         fs.unlinkSync(absPath);
@@ -75,7 +75,7 @@ exports.createGroup = async (req, res, next) => {
     const bannerFile = req.files?.banner?.[0] ?? null;
 
     try {
-        const { name, shortName, content, status, coordinator } = req.body;
+        const { name, shortName, content, status, coordinator, removeBanner } = req.body;
         const normalizedCoordinator = normalizeCoordinator(coordinator);
 
         if (!name || !shortName || !content || !bannerFile) {
@@ -195,7 +195,7 @@ exports.updateGroup = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Group not found.' });
         }
 
-        const { name, shortName, content, status, coordinator } = req.body;
+        const { name, shortName, content, status, coordinator, removeBanner } = req.body;
         const normalizedCoordinator = normalizeCoordinator(coordinator);
 
         if (name) group.name = name.trim();
@@ -205,10 +205,7 @@ exports.updateGroup = async (req, res, next) => {
         if (normalizedCoordinator) group.coordinator = normalizedCoordinator;
 
         // Replace banner on disk if a new one was uploaded
-        if (bannerFile) {
-            deleteFile(group.banner);
-            group.banner = `/uploads/groups/${bannerFile.filename}`;
-        }
+        if (bannerFile) { deleteFile(group.banner); group.banner = `/uploads/groups/${bannerFile.filename}`; } else if (removeBanner === 'true') { deleteFile(group.banner); group.banner = null; }
 
         await group.save();
 
@@ -250,3 +247,4 @@ exports.deleteGroup = async (req, res, next) => {
         next(error);
     }
 };
+

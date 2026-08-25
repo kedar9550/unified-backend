@@ -182,6 +182,7 @@ exports.verifyPayment = async (req, res) => {
       teamSize: Number(teamSize) || 1,
       participants: (Array.isArray(participants) ? participants : []).map(p => ({
         ...p,
+        accommodation: p.accommodation || "No",
         barcode: require('crypto').randomBytes(4).toString('hex').toUpperCase()
       })),
       receipt: receipt || '',
