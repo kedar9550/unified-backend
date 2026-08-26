@@ -320,39 +320,238 @@ exports.getDashboardStats = async (req, res) => {
       campusMap[campus].total++;
     });
 
-    // ─── Department-wise stats (including revenue) ────────
-    const deptMap = {};
-    allPayments.forEach((p) => {
-      const dept = (p.schoolId || 'Unknown').toUpperCase();
-      if (!deptMap[dept]) {
-        deptMap[dept] = {
-          dept,
-          eventNames: new Set(),
-          teamCount: 0,
-          studentCount: 0,
-          aus: 0,
-          acet: 0,
-          other: 0,
-          participatedStudents: 0,
-          revenue: 0,
-        };
+    const Group = require('../Group/Group.model');
+    const Events = require('../Events/Events.model');
+    const EventDepartment = require('../EventDepartment/EventDepartment.model');
+
+    const [allGroups, allEvents, allEventDepts] = await Promise.all([
+      Group.find({}).lean(),
+      Events.find({}).populate('group').populate('department').lean(),
+      EventDepartment.find({}).sort({ name: 1 }).lean(),
+    ]);
+
+    const groupById = new Map();
+    const groupByShortName = new Map();
+    const groupByName = new Map();
+
+    allGroups.forEach((g) => {
+      groupById.set(g._id.toString(), g);
+      if (g.shortName) groupByShortName.set(g.shortName.toLowerCase().trim(), g);
+      if (g.name) groupByName.set(g.name.toLowerCase().trim(), g);
+    });
+
+    const eventGroupMap = new Map();
+    allEvents.forEach((e) => {
+      if (e._id) eventGroupMap.set(e._id.toString(), e.group);
+      if (e.eventName) eventGroupMap.set(e.eventName.toLowerCase().trim(), e.group);
+    });
+
+    const resolveGroupForPayment = (p) => {
+      // 1. Match by eventId
+      if (p.eventId) {
+        const eId = p.eventId.toString().toLowerCase().trim();
+        if (eventGroupMap.has(eId)) return eventGroupMap.get(eId);
+        if (groupById.has(eId)) return groupById.get(eId);
       }
-      deptMap[dept].eventNames.add(p.eventName || '');
-      deptMap[dept].teamCount++;
-      deptMap[dept].studentCount += (p.participants || []).length;
-      deptMap[dept].revenue += Number(p.amountRupees || p.amount || 0);
+
+      // 2. Match by exact or partial eventName
+      if (p.eventName) {
+        const eName = p.eventName.toLowerCase().trim();
+        if (eventGroupMap.has(eName)) return eventGroupMap.get(eName);
+        for (const e of allEvents) {
+          if (e.eventName) {
+            const target = e.eventName.toLowerCase().trim();
+            if (target.includes(eName) || eName.includes(target)) {
+              if (e.group) return e.group;
+            }
+          }
+        }
+      }
+
+      // 3. Match by schoolId / event group alias
+      if (p.schoolId) {
+        const sId = p.schoolId.toLowerCase().trim();
+        if (groupById.has(sId)) return groupById.get(sId);
+        if (groupByShortName.has(sId)) return groupByShortName.get(sId);
+        if (groupByName.has(sId)) return groupByName.get(sId);
+
+        if (sId.includes('digi') || sId.includes('comp') || sId.includes('soc')) {
+          return groupByShortName.get('soc') || groupByName.get('school of computing');
+        }
+        if (sId.includes('krishi') || sId.includes('agri') || sId.includes('science') || sId.includes('sos')) {
+          return groupByShortName.get('sos') || groupByName.get('school of science');
+        }
+        if (sId.includes('kriya') || sId.includes('eng') || sId.includes('soe') || sId.includes('tech')) {
+          return groupByShortName.get('soe') || groupByName.get('school of engineering');
+        }
+        if (sId.includes('bus') || sId.includes('sob') || sId.includes('mgmt')) {
+          return groupByShortName.get('sob') || groupByName.get('school of business');
+        }
+      }
+
+      // 4. Match by category / department
+      if (p.category) {
+        const cat = p.category.toLowerCase().trim();
+        if (cat.includes('cse') || cat.includes('it') || cat.includes('ds') || cat.includes('iot') || cat.includes('aiml') || cat.includes('mca')) {
+          return groupByShortName.get('soc') || groupByName.get('school of computing');
+        }
+        if (cat.includes('agri') || cat.includes('science') || cat.includes('forensic')) {
+          return groupByShortName.get('sos') || groupByName.get('school of science');
+        }
+        if (cat.includes('mech') || cat.includes('civil') || cat.includes('eee') || cat.includes('ece') || cat.includes('petro') || cat.includes('mining')) {
+          return groupByShortName.get('soe') || groupByName.get('school of engineering');
+        }
+        if (cat.includes('bus') || cat.includes('mgmt') || cat.includes('comm')) {
+          return groupByShortName.get('sob') || groupByName.get('school of business');
+        }
+      }
+
+      return allGroups[0] || null;
+    };
+
+    // ─── Group / School-wise stats (strictly for existing DB groups) ────────
+    const groupMap = {};
+    allGroups.forEach((g) => {
+      const gKey = g.shortName || g.name;
+      groupMap[gKey] = {
+        group: gKey,
+        name: g.name,
+        shortName: g.shortName || g.name,
+        eventNames: new Set(),
+        teamCount: 0,
+        studentCount: 0,
+        aus: 0,
+        acet: 0,
+        other: 0,
+        participatedStudents: 0,
+        revenue: 0,
+      };
+    });
+
+    // ─── Department-wise stats (from EventDepartment collection) ────────
+    const deptMap = {};
+    allEventDepts.forEach((d) => {
+      const dKey = d.name;
+      deptMap[dKey] = {
+        id: d._id ? d._id.toString() : '',
+        dept: dKey,
+        name: dKey,
+        eventNames: new Set(),
+        teamCount: 0,
+        studentCount: 0,
+        aus: 0,
+        acet: 0,
+        other: 0,
+        participatedStudents: 0,
+        revenue: 0,
+      };
+    });
+
+    // Populate events count for each department from Event model
+    allEvents.forEach((e) => {
+      (e.department || []).forEach((d) => {
+        const dName = d.name || (allEventDepts.find(ad => ad._id.toString() === (d._id || d).toString())?.name);
+        if (dName && deptMap[dName]) {
+          deptMap[dName].eventNames.add(e.eventName);
+        }
+      });
+    });
+
+    allPayments.forEach((p) => {
+      // 1. Group Resolution
+      const group = resolveGroupForPayment(p);
+      const gKey = group ? (group.shortName || group.name) : (allGroups[0]?.shortName || allGroups[0]?.name);
+
+      if (gKey && groupMap[gKey]) {
+        groupMap[gKey].eventNames.add(p.eventName || '');
+        groupMap[gKey].teamCount++;
+        groupMap[gKey].studentCount += (p.participants || []).length;
+        groupMap[gKey].revenue += Number(p.amountRupees || p.amount || 0);
+      }
+
+      // 2. Department Resolution
+      const targetDeptNames = new Set();
+      const cat = (p.category || '').toUpperCase().trim();
+      const sId = (p.schoolId || '').toUpperCase().trim();
+
+      allEventDepts.forEach((d) => {
+        const dName = d.name.toUpperCase().trim();
+        if (cat === dName || sId === dName) {
+          targetDeptNames.add(d.name);
+        } else if (cat.includes(dName)) {
+          const regex = new RegExp(`\\b${dName.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i');
+          if (regex.test(cat)) {
+            targetDeptNames.add(d.name);
+          }
+        }
+      });
+
+      if (targetDeptNames.size === 0) {
+        const pName = (p.eventName || '').toLowerCase().trim();
+        const pEventId = (p.eventId || '').toLowerCase().trim();
+
+        const matchedEvent = allEvents.find((e) =>
+          (e._id && e._id.toString().toLowerCase() === pEventId) ||
+          (e.eventName && e.eventName.toLowerCase().trim() === pName)
+        );
+
+        if (matchedEvent && Array.isArray(matchedEvent.department)) {
+          matchedEvent.department.forEach((d) => {
+            const dName = d.name || (allEventDepts.find(ad => ad._id.toString() === (d._id || d).toString())?.name);
+            if (dName && deptMap[dName]) {
+              targetDeptNames.add(dName);
+            }
+          });
+        }
+      }
+
+      if (targetDeptNames.size === 0) {
+        if (cat.includes('BUSINESS') || sId.includes('BUSINESS')) {
+          if (deptMap['BUSINESS SCHOOL']) targetDeptNames.add('BUSINESS SCHOOL');
+        } else if (cat.includes('AGRICULTURE') || sId.includes('AGRICULTURE')) {
+          if (deptMap['AGRICULTURE']) targetDeptNames.add('AGRICULTURE');
+        } else if (cat.includes('CSE') || sId.includes('CSE')) {
+          if (deptMap['CSE']) targetDeptNames.add('CSE');
+        }
+      }
+
+      const amount = Number(p.amountRupees || p.amount || 0);
+      const studentCount = (p.participants || []).length;
+
+      targetDeptNames.forEach((dName) => {
+        if (deptMap[dName]) {
+          deptMap[dName].eventNames.add(p.eventName || '');
+          deptMap[dName].teamCount++;
+          deptMap[dName].studentCount += studentCount;
+          deptMap[dName].revenue += amount;
+
+          (p.participants || []).forEach((part) => {
+            const campus = classifyCampus(part.college || part.otherCollege || '');
+            if (campus === 'AUS') deptMap[dName].aus++;
+            else if (campus === 'ACET') deptMap[dName].acet++;
+            else deptMap[dName].other++;
+            deptMap[dName].participatedStudents++;
+          });
+        }
+      });
 
       (p.participants || []).forEach((part) => {
         const campus = classifyCampus(part.college || part.otherCollege || '');
-        if (campus === 'AUS') deptMap[dept].aus++;
-        else if (campus === 'ACET') deptMap[dept].acet++;
-        else deptMap[dept].other++;
-        deptMap[dept].participatedStudents++;
+        if (campus === 'AUS') {
+          if (gKey && groupMap[gKey]) groupMap[gKey].aus++;
+        } else if (campus === 'ACET') {
+          if (gKey && groupMap[gKey]) groupMap[gKey].acet++;
+        } else {
+          if (gKey && groupMap[gKey]) groupMap[gKey].other++;
+        }
+        if (gKey && groupMap[gKey]) groupMap[gKey].participatedStudents++;
       });
     });
 
     const departmentStats = Object.values(deptMap).map((d) => ({
-      dept: d.dept,
+      id: d.id,
+      dept: d.name,
+      name: d.name,
       eventCount: d.eventNames.size,
       teamCount: d.teamCount,
       studentCount: d.studentCount,
@@ -361,6 +560,22 @@ exports.getDashboardStats = async (req, res) => {
       other: d.other,
       participatedStudents: d.participatedStudents,
       revenue: Math.round(d.revenue * 100) / 100,
+    }));
+
+
+    const groupStats = Object.values(groupMap).map((g) => ({
+      group: g.group,
+      dept: g.shortName || g.name,
+      name: g.name,
+      shortName: g.shortName,
+      eventCount: g.eventNames.size,
+      teamCount: g.teamCount,
+      studentCount: g.studentCount,
+      aus: g.aus,
+      acet: g.acet,
+      other: g.other,
+      participatedStudents: g.participatedStudents,
+      revenue: Math.round(g.revenue * 100) / 100,
     }));
 
     // ─── Gender & Attendance stats ─────────────────────────
@@ -454,6 +669,8 @@ exports.getDashboardStats = async (req, res) => {
       yearCounts,
       campusWise: campusMap,
       departmentStats,
+      groupStats,
+      schoolStats: groupStats,
       genderStats: genderMap,
       campusGenderStats: campusGenderMap,
       accommodation: {
