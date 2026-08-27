@@ -78,11 +78,11 @@ exports.createEventSchool = async (req, res, next) => {
         const { name, shortName, content, status, coordinator, removeBanner } = req.body;
         const normalizedCoordinator = normalizeCoordinator(coordinator);
 
-        if (!name || !shortName || !content || !bannerFile) {
+        if (!name || !shortName || !content) {
             cleanupFiles([bannerFile]);
             return res.status(400).json({
                 success: false,
-                message: 'Name, Short Name, Content, and Banner are required.'
+                message: 'Name, Short Name, and Content are required.'
             });
         }
 
@@ -96,7 +96,7 @@ exports.createEventSchool = async (req, res, next) => {
             name: name.trim(),
             shortName: shortName.trim(),
             content: content.trim(),
-            banner: `/uploads/event_schools/${bannerFile.filename}`,
+            banner: bannerFile ? `/uploads/event_schools/${bannerFile.filename}` : null,
             coordinator: normalizedCoordinator || {},
             status: status || 'Active',
             createdBy: userId
