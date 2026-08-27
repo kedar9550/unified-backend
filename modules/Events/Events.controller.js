@@ -264,7 +264,7 @@ exports.getAllEvents = async (req, res, next) => {
 
                         filterQuery = {
                             $or: [
-                                { group: { $in: myGroupIds } },
+                                { eventSchool: { $in: myGroupIds } },
                                 { 'conveners.employeeId': empId },
                                 { 'facultyCoordinators.employeeId': empId },
                                 { 'facultyCoordinator.employeeId': empId }
