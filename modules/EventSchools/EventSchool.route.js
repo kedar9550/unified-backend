@@ -4,12 +4,12 @@ const multer  = require('multer');
 const path    = require('path');
 const fs      = require('fs');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
-const groupController = require('./Group.controller');
+const eventSchoolController = require('./EventSchool.controller');
 
-// ─── Multer storage: banner goes to uploads/groups/ ─────────────────
+// ─── Multer storage: banner goes to uploads/event_schools/ ─────────────────
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        const uploadPath = path.join(__dirname, '..', '..', 'uploads', 'groups');
+        const uploadPath = path.join(__dirname, '..', '..', 'uploads', 'event_schools');
         if (!fs.existsSync(uploadPath)) {
             fs.mkdirSync(uploadPath, { recursive: true });
         }
@@ -17,12 +17,12 @@ const storage = multer.diskStorage({
     },
     filename: function (req, file, cb) {
         const timestamp = Date.now();
-        const safeName  = (req.body.name || 'group')
+        const safeName  = (req.body.name || 'event_school')
             .replace(/[^a-zA-Z0-9]/g, '')
             .toLowerCase()
             .slice(0, 30);
         const field     = file.fieldname; // 'banner'
-        cb(null, `group-${field}-${timestamp}-${safeName}${path.extname(file.originalname).toLowerCase()}`);
+        cb(null, `eventschool-${field}-${timestamp}-${safeName}${path.extname(file.originalname).toLowerCase()}`);
     }
 });
 
@@ -42,7 +42,7 @@ const upload = multer({
 });
 
 // Accept 'banner' field
-const uploadGroupImages = upload.fields([
+const uploadEventSchoolImages = upload.fields([
     { name: 'banner', maxCount: 1 }
 ]);
 
@@ -51,27 +51,27 @@ router.post(
     '/',
     protect,
     authorize('STUDENT_EVENT_ADMIN'),
-    uploadGroupImages,
-    groupController.createGroup
+    uploadEventSchoolImages,
+    eventSchoolController.createEventSchool
 );
 
-router.get('/', groupController.getAllGroups);
+router.get('/', eventSchoolController.getAllEventSchools);
 
-router.get('/:id', protect, groupController.getGroupById);
+router.get('/:id', protect, eventSchoolController.getEventSchoolById);
 
 router.put(
     '/:id',
     protect,
     authorize('STUDENT_EVENT_ADMIN'),
-    uploadGroupImages,
-    groupController.updateGroup
+    uploadEventSchoolImages,
+    eventSchoolController.updateEventSchool
 );
 
 router.delete(
     '/:id',
     protect,
     authorize('STUDENT_EVENT_ADMIN'),
-    groupController.deleteGroup
+    eventSchoolController.deleteEventSchool
 );
 
 module.exports = router;
