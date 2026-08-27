@@ -75,23 +75,24 @@ const attachEligibilityInfo = (appraisalObj, config) => {
         return appraisalObj;
     }
 
-    const type = getFacultyCategoryHelper(appraisalObj.facultyId);
+    const type = appraisalObj.facultyCategory || getFacultyCategoryHelper(appraisalObj.facultyId);
     let mins = {};
     if (config && config.minimumPoints && config.minimumPoints[type]) {
         // Deep copy to avoid mutating the config
         mins = JSON.parse(JSON.stringify(config.minimumPoints[type]));
     }
 
-    // Adjust minimums for those without COs
     const hasCos = appraisalObj.personalInfoSnapshot?.hasCos !== false; // defaults to true
     if (!hasCos) {
+        let teachingDrop = 0;
         if (type === "Leadership Team") {
+            teachingDrop = (mins.teaching || 40) - 30;
             mins.teaching = 30;
         } else {
+            teachingDrop = (mins.teaching || 50) - 38;
             mins.teaching = 38;
         }
-        // Total drops by 20 because max teaching drops from 80 to 60
-        mins.total = (mins.total || 0) - 20;
+        mins.total = (mins.total || 0) - teachingDrop;
     }
 
     const minPoints = mins.total || 0;
@@ -2313,7 +2314,7 @@ exports.getPendingRNDAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find({
             status: { $in: ["Pending Research Admin", "Completed"] }
         })
-            .populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college leadership")
+            .populate("facultyId", "name institutionId coreDepartment department designation qualification email phone profileImage college leadership doctorate")
             .populate("academicYearId", "year")
             .populate([
                 {
@@ -3221,7 +3222,7 @@ exports.getAllAppraisals = async (req, res) => {
         const appraisals = await Appraisal.find(filterQuery)
             .populate({
                 path: 'facultyId',
-                select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership dateOfJoining',
+                select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership doctorate dateOfJoining',
                 populate: [
                     { path: 'department', select: 'name' },
                     { path: 'coreDepartment', select: 'name' }
@@ -3261,7 +3262,7 @@ exports.getAppraisalById = async (req, res) => {
         const { id } = req.params;
         const appraisal = await Appraisal.findById(id).populate({
             path: 'facultyId',
-            select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership dateOfJoining',
+            select: 'name email phone institutionId designation profileImage department coreDepartment qualification leadership doctorate dateOfJoining',
             populate: [
                 { path: 'department', select: 'name' },
                 { path: 'coreDepartment', select: 'name' }
