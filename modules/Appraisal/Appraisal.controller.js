@@ -74,7 +74,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
         return appraisalObj;
     }
 
-    const type = getFacultyCategoryHelper(appraisalObj.facultyId);
+    const type = appraisalObj.facultyCategory || getFacultyCategoryHelper(appraisalObj.facultyId);
     let mins = {};
     if (config && config.minimumPoints && config.minimumPoints[type]) {
         // Deep copy to avoid mutating the config
