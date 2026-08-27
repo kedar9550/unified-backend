@@ -243,7 +243,7 @@ exports.getAllEvents = async (req, res, next) => {
         let filterQuery = {};
         const activeRole = req.headers['active-role'];
 
-        if (activeRole === 'EVENT_COORDINATOR') {
+        if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'SCHOOL_COORDINATOR') {
             const jwt = require('jsonwebtoken');
             const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
 

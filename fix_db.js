@@ -1,21 +1,18 @@
-
+require('dotenv').config();
 const mongoose = require('mongoose');
-const url = 'mongodb://kedarnadha_db_user:5uyAKg1rRFhH1f20@ac-pogja6y-shard-00-00.kcpzev0.mongodb.net:27017,ac-pogja6y-shard-00-01.kcpzev0.mongodb.net:27017,ac-pogja6y-shard-00-02.kcpzev0.mongodb.net:27017/digital_services?ssl=true&replicaSet=atlas-vyaq5g-shard-0&authSource=admin&appName=Cluster0';
-mongoose.connect(url).then(async () => {
-    const Appraisal = require('./modules/Appraisal/Appraisal.model');
-    const badStatuses = await Appraisal.find({ status: /Controlelr/ }).countDocuments();
-    const goodStatuses = await Appraisal.find({ status: /Controller/ }).countDocuments();
-    console.log('Bad:', badStatuses, 'Good:', goodStatuses);
-    
-    if(badStatuses > 0) {
-        const badDocs = await Appraisal.find({ status: /Controlelr/ });
-        for (let doc of badDocs) {
-            doc.status = doc.status.replace('Controlelr', 'Controller');
-            await doc.save();
+
+mongoose.connect(process.env.UnifiedDb).then(async () => {
+    const db = mongoose.connection.db;
+    const groups = await db.collection('groups').find().toArray();
+    for (let g of groups) {
+        if (g.coordinator && typeof g.coordinator.employeeId === 'number') {
+            await db.collection('groups').updateOne(
+                { _id: g._id },
+                { $set: { 'coordinator.employeeId': g.coordinator.employeeId.toString() } }
+            );
+            console.log('Fixed:', g.name);
         }
-        console.log('Fixed bad statuses');
     }
-    
+    console.log('Done');
     process.exit(0);
 });
-
