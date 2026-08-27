@@ -99,9 +99,9 @@ const EventsSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
-    group: {
+    eventSchool: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Group',
+        ref: 'EventSchools',
         required: true
     },
     overview: {

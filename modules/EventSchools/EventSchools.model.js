@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const GroupSchema = new mongoose.Schema({
+const EventSchoolsSchema = new mongoose.Schema({
     name: {
         type: String,
         required: [true, 'Group name is required'],
@@ -13,7 +13,6 @@ const GroupSchema = new mongoose.Schema({
         trim: true,
         maxlength: [100, 'Short name cannot exceed 100 characters']
     },
-
     content: {
         type: String,
         required: [true, 'Content is required'],
@@ -22,36 +21,27 @@ const GroupSchema = new mongoose.Schema({
     },
     banner: {
         type: String,
-        // required: [true, 'Banner image is required']
     },
     coordinator: {
         employeeId: {
             type: String,
-            trim: true,
+            required: [true, 'Coordinator ID is required']
         },
         employeeName: {
             type: String,
-            trim: true,
-        },
-        department: {
-            type: String,
-            trim: true,
-        },
-        designation: {
-            type: String,
-            trim: true,
+            required: [true, 'Coordinator name is required']
         }
     },
     status: {
         type: String,
         enum: ['Active', 'Inactive'],
         default: 'Active'
-    },
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Employee',
-        required: true
     }
-}, { timestamps: true });
+}, {
+    timestamps: true,
+    collection: 'event_schools'
+});
 
-module.exports = mongoose.model('Group', GroupSchema);
+const EventSchools = mongoose.model('EventSchools', EventSchoolsSchema);
+
+module.exports = EventSchools;

@@ -1,4 +1,4 @@
-const Group = require('./Group.model');
+const EventSchool = require('./EventSchool.model');
 const fs = require('fs');
 const path = require('path');
 const Role = require('../role/role.model');
@@ -25,12 +25,12 @@ const cleanupFiles = (files = []) => {
     });
 };
 
-const assignEventCoordinatorRole = async (coordinator) => {
+const assignSchoolCoordinatorRole = async (coordinator) => {
     if (!coordinator || !coordinator.employeeId) return;
 
-    const roleDoc = await Role.findOne({ name: 'EVENT COORDINATOR', app: 'UNIFIED_SYSTEM' });
+    const roleDoc = await Role.findOne({ name: 'SCHOOL COORDINATOR', app: 'UNIFIED_SYSTEM' });
     if (!roleDoc) {
-        console.warn('EVENT COORDINATOR role not found in DB. Roles not assigned.');
+        console.warn('SCHOOL COORDINATOR role not found in DB. Roles not assigned.');
         return;
     }
 
@@ -71,7 +71,7 @@ const normalizeCoordinator = (coordinator) => {
 };
 
 // ─── CREATE ───────────────────────────────────────────────────────────────────
-exports.createGroup = async (req, res, next) => {
+exports.createEventSchool = async (req, res, next) => {
     const bannerFile = req.files?.banner?.[0] ?? null;
 
     try {
@@ -92,34 +92,34 @@ exports.createGroup = async (req, res, next) => {
             return res.status(401).json({ success: false, message: 'Unauthorized. User ID not found.' });
         }
 
-        const group = await Group.create({
+        const event_school = await EventSchool.create({
             name: name.trim(),
             shortName: shortName.trim(),
             content: content.trim(),
-            banner: `/uploads/groups/${bannerFile.filename}`,
+            banner: `/uploads/event_schools/${bannerFile.filename}`,
             coordinator: normalizedCoordinator || {},
             status: status || 'Active',
             createdBy: userId
         });
 
         if (normalizedCoordinator) {
-            await assignEventCoordinatorRole(normalizedCoordinator);
+            await assignSchoolCoordinatorRole(normalizedCoordinator);
         }
 
         return res.status(201).json({
             success: true,
-            message: 'Group created successfully.',
-            group
+            message: 'EventSchool created successfully.',
+            event_school
         });
     } catch (error) {
         cleanupFiles([bannerFile]);
-        console.error('Error creating group:', error);
+        console.error('Error creating event_school:', error);
         next(error);
     }
 };
 
 // ─── READ ALL ─────────────────────────────────────────────────────────────────
-exports.getAllGroups = async (req, res, next) => {
+exports.getAllEventSchools = async (req, res, next) => {
     try {
         let filterQuery = {};
         const activeRole = req.headers['active-role'];
@@ -142,12 +142,12 @@ exports.getAllGroups = async (req, res, next) => {
             }
         }
 
-        const groupsData = await Group.find(filterQuery)
+        const event_schoolsData = await EventSchool.find(filterQuery)
             .sort({ createdAt: -1 });
 
         // Populate phone numbers from Employee model
-        let groups = JSON.parse(JSON.stringify(groupsData));
-        const empIds = groups
+        let event_schools = JSON.parse(JSON.stringify(event_schoolsData));
+        const empIds = event_schools
             .filter(g => g.coordinator && g.coordinator.employeeId)
             .map(g => g.coordinator.employeeId);
 
@@ -158,92 +158,92 @@ exports.getAllGroups = async (req, res, next) => {
                 empMap[emp.institutionId] = emp.phone || emp.mobile || 'N/A';
             });
 
-            groups.forEach(g => {
+            event_schools.forEach(g => {
                 if (g.coordinator && g.coordinator.employeeId) {
                     g.coordinator.phone = empMap[g.coordinator.employeeId] || 'N/A';
                 }
             });
         }
 
-        return res.status(200).json({ success: true, groups });
+        return res.status(200).json({ success: true, event_schools });
     } catch (error) {
         next(error);
     }
 };
 
 // ─── READ ONE ─────────────────────────────────────────────────────────────────
-exports.getGroupById = async (req, res, next) => {
+exports.getEventSchoolById = async (req, res, next) => {
     try {
-        const group = await Group.findById(req.params.id);
-        if (!group) {
-            return res.status(404).json({ success: false, message: 'Group not found.' });
+        const event_school = await EventSchool.findById(req.params.id);
+        if (!event_school) {
+            return res.status(404).json({ success: false, message: 'Event School not found.' });
         }
-        return res.status(200).json({ success: true, group });
+        return res.status(200).json({ success: true, event_school });
     } catch (error) {
         next(error);
     }
 };
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
-exports.updateGroup = async (req, res, next) => {
+exports.updateEventSchool = async (req, res, next) => {
     const bannerFile = req.files?.banner?.[0] ?? null;
 
     try {
-        const group = await Group.findById(req.params.id);
-        if (!group) {
+        const event_school = await EventSchool.findById(req.params.id);
+        if (!event_school) {
             cleanupFiles([bannerFile]);
-            return res.status(404).json({ success: false, message: 'Group not found.' });
+            return res.status(404).json({ success: false, message: 'Event School not found.' });
         }
 
         const { name, shortName, content, status, coordinator, removeBanner } = req.body;
         const normalizedCoordinator = normalizeCoordinator(coordinator);
 
-        if (name) group.name = name.trim();
-        if (shortName) group.shortName = shortName.trim();
-        if (content) group.content = content.trim();
-        if (status) group.status = status;
-        if (normalizedCoordinator) group.coordinator = normalizedCoordinator;
+        if (name) event_school.name = name.trim();
+        if (shortName) event_school.shortName = shortName.trim();
+        if (content) event_school.content = content.trim();
+        if (status) event_school.status = status;
+        if (normalizedCoordinator) event_school.coordinator = normalizedCoordinator;
 
         // Replace banner on disk if a new one was uploaded
-        if (bannerFile) { deleteFile(group.banner); group.banner = `/uploads/groups/${bannerFile.filename}`; } else if (removeBanner === 'true') { deleteFile(group.banner); group.banner = null; }
+        if (bannerFile) { deleteFile(event_school.banner); event_school.banner = `/uploads/event_schools/${bannerFile.filename}`; } else if (removeBanner === 'true') { deleteFile(event_school.banner); event_school.banner = null; }
 
-        await group.save();
+        await event_school.save();
 
         if (normalizedCoordinator) {
-            await assignEventCoordinatorRole(normalizedCoordinator);
+            await assignSchoolCoordinatorRole(normalizedCoordinator);
         }
 
         return res.status(200).json({
             success: true,
-            message: 'Group updated successfully.',
-            group
+            message: 'EventSchool updated successfully.',
+            event_school
         });
     } catch (error) {
         cleanupFiles([bannerFile]);
-        console.error('Error updating group:', error);
+        console.error('Error updating event_school:', error);
         next(error);
     }
 };
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
-exports.deleteGroup = async (req, res, next) => {
+exports.deleteEventSchool = async (req, res, next) => {
     try {
-        const group = await Group.findById(req.params.id);
-        if (!group) {
-            return res.status(404).json({ success: false, message: 'Group not found.' });
+        const event_school = await EventSchool.findById(req.params.id);
+        if (!event_school) {
+            return res.status(404).json({ success: false, message: 'Event School not found.' });
         }
 
         // Remove banner image from disk
-        deleteFile(group.banner);
+        deleteFile(event_school.banner);
 
-        await Group.findByIdAndDelete(req.params.id);
+        await EventSchool.findByIdAndDelete(req.params.id);
 
         return res.status(200).json({
             success: true,
-            message: 'Group deleted successfully.'
+            message: 'EventSchool deleted successfully.'
         });
     } catch (error) {
-        console.error('Error deleting group:', error);
+        console.error('Error deleting event_school:', error);
         next(error);
     }
 };

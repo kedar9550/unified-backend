@@ -1,5 +1,5 @@
 const Events = require('./Events.model');
-const Group = require('../Group/Group.model');
+const Group = require('../EventSchools/EventSchools.model');
 const fs = require('fs');
 const path = require('path');
 const UserAppRole = require('../userAppRole/userAppRole.model');
@@ -52,7 +52,12 @@ const normalizeCoordinators = (coordinatorsInput) => {
 const assignFacultyCoordinatorRole = async (coordinators) => {
     if (!Array.isArray(coordinators) || coordinators.length === 0) return;
 
-    const roleDoc = await Role.findOne({ name: 'FACULTY COORDINATOR', app: 'UNIFIED_SYSTEM' });
+    const roleDoc = await Role.findOne({ 
+        $or: [
+            { name: 'FACULTY COORDINATOR', app: 'UNIFIED_SYSTEM' },
+            { key: 'FACULTY_COORDINATOR', app: 'UNIFIED_SYSTEM' }
+        ]
+    });
     if (!roleDoc) {
         console.warn('FACULTY COORDINATOR role not found in DB. Role not assigned.');
         return;
@@ -78,7 +83,7 @@ const assignFacultyCoordinatorRole = async (coordinators) => {
 exports.createEvent = async (req, res, next) => {
     try {
         const {
-            groupId,
+            eventSchoolId,
             eventName,
             price,
             priceType,
@@ -98,7 +103,7 @@ exports.createEvent = async (req, res, next) => {
 
         const bannerImage = req.file;
 
-        if (!groupId || !eventName || !overview || !maxTeamSize) {
+        if (!eventSchoolId || !eventName || !overview || !maxTeamSize) {
             if (bannerImage) {
                 fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
             }
@@ -129,7 +134,7 @@ exports.createEvent = async (req, res, next) => {
             return res.status(400).json({ message: 'Room No is required.' });
         }
 
-        const group = await Group.findById(groupId);
+        const group = await Group.findById(eventSchoolId);
         if (!group) {
             if (bannerImage) {
                 fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', 'events', bannerImage.filename));
@@ -167,7 +172,7 @@ exports.createEvent = async (req, res, next) => {
         }
 
         const newEvent = new Events({
-            group: group._id,
+            eventSchool: group._id,
             department: parsedDepartments,
             eventName,
             price: Number(price) || 0,
@@ -253,7 +258,7 @@ exports.getAllEvents = async (req, res, next) => {
                     const empId = decoded.institutionId;
 
                     if (empId) {
-                        const Group = require('../Group/Group.model');
+                        const Group = require('../EventSchools/EventSchools.model');
                         const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('_id');
                         const myGroupIds = myGroups.map(g => g._id);
 
@@ -273,7 +278,7 @@ exports.getAllEvents = async (req, res, next) => {
         }
 
         const events = await Events.find(filterQuery)
-            .populate('group', 'name coordinator')
+            .populate('eventSchool', 'name coordinator')
             .populate('department', 'name')
             .populate('building', 'name')
             .populate('floor', 'name')
@@ -311,7 +316,7 @@ exports.getAllEvents = async (req, res, next) => {
 exports.getEventById = async (req, res, next) => {
     try {
         const event = await Events.findById(req.params.id)
-            .populate('group', 'name coordinator')
+            .populate('eventSchool', 'name coordinator')
             .populate('department', 'name')
             .populate('building', 'name')
             .populate('floor', 'name')
@@ -355,7 +360,7 @@ const deleteFile = (filePath) => {
 exports.updateEvent = async (req, res, next) => {
     try {
         const {
-            groupId,
+            eventSchoolId,
             eventName,
             price,
             priceType,
@@ -375,7 +380,7 @@ exports.updateEvent = async (req, res, next) => {
 
         const bannerImage = req.file;
 
-        if (!groupId || !eventName || !overview || !maxTeamSize) {
+        if (!eventSchoolId || !eventName || !overview || !maxTeamSize) {
             if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Group, Event Name, Max Team Size, and Overview are required.' });
         }
@@ -396,7 +401,7 @@ exports.updateEvent = async (req, res, next) => {
             return res.status(400).json({ message: 'Room No is required.' });
         }
 
-        const group = await Group.findById(groupId);
+        const group = await Group.findById(eventSchoolId);
         if (!group) {
             if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Selected group does not exist.' });
@@ -424,7 +429,7 @@ exports.updateEvent = async (req, res, next) => {
         }
 
         const updatedFields = {
-            group: group._id,
+            eventSchool: group._id,
             department: parsedDepartments,
             eventName,
             price: Number(price) || 0,

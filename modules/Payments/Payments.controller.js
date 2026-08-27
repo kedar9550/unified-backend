@@ -60,11 +60,11 @@ exports.getRegistrations = async (req, res) => {
           const decoded = jwt.verify(token, process.env.JWT_SECRET);
           const empId = decoded.institutionId;
           if (empId) {
-            const Group = require('../Group/Group.model');
+            const EventSchools = require('../EventSchools/EventSchools.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
-            const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
+            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
+            const mySchoolNames = mySchools.map(g => new RegExp(`^${g.name}$`, 'i'));
 
             const myEvents = await Events.find({
               $or: [
@@ -76,7 +76,7 @@ exports.getRegistrations = async (req, res) => {
             const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
 
             query.$or = [
-              { schoolId: { $in: myGroupNames } },
+              { schoolId: { $in: mySchoolNames } },
               { eventName: { $in: myEventNames } }
             ];
           }
@@ -256,11 +256,11 @@ exports.getDashboardStats = async (req, res) => {
           const empId = decoded.institutionId;
 
           if (empId) {
-            const Group = require('../Group/Group.model');
+            const EventSchools = require('../EventSchools/EventSchools.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
-            const myGroupNames = myGroups.map(g => new RegExp(`^${g.name}$`, 'i'));
+            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
+            const mySchoolNames = mySchools.map(g => new RegExp(`^${g.name}$`, 'i'));
 
             const myEvents = await Events.find({
               $or: [
@@ -272,7 +272,7 @@ exports.getDashboardStats = async (req, res) => {
             const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
 
             query.$or = [
-              { schoolId: { $in: myGroupNames } },
+              { schoolId: { $in: mySchoolNames } },
               { eventName: { $in: myEventNames } }
             ];
           }
@@ -320,49 +320,49 @@ exports.getDashboardStats = async (req, res) => {
       campusMap[campus].total++;
     });
 
-    const Group = require('../Group/Group.model');
+    const EventSchools = require('../EventSchools/EventSchools.model');
     const Events = require('../Events/Events.model');
     const EventDepartment = require('../EventDepartment/EventDepartment.model');
 
-    const [allGroups, allEvents, allEventDepts] = await Promise.all([
-      Group.find({}).lean(),
-      Events.find({}).populate('group').populate('department').lean(),
+    const [allSchools, allEvents, allEventDepts] = await Promise.all([
+      EventSchools.find({}).lean(),
+      Events.find({}).populate('eventSchool').populate('department').lean(),
       EventDepartment.find({}).sort({ name: 1 }).lean(),
     ]);
 
-    const groupById = new Map();
-    const groupByShortName = new Map();
-    const groupByName = new Map();
+    const schoolById = new Map();
+    const schoolByShortName = new Map();
+    const schoolByName = new Map();
 
-    allGroups.forEach((g) => {
-      groupById.set(g._id.toString(), g);
-      if (g.shortName) groupByShortName.set(g.shortName.toLowerCase().trim(), g);
-      if (g.name) groupByName.set(g.name.toLowerCase().trim(), g);
+    allSchools.forEach((g) => {
+      schoolById.set(g._id.toString(), g);
+      if (g.shortName) schoolByShortName.set(g.shortName.toLowerCase().trim(), g);
+      if (g.name) schoolByName.set(g.name.toLowerCase().trim(), g);
     });
 
-    const eventGroupMap = new Map();
+    const eventSchoolMap = new Map();
     allEvents.forEach((e) => {
-      if (e._id) eventGroupMap.set(e._id.toString(), e.group);
-      if (e.eventName) eventGroupMap.set(e.eventName.toLowerCase().trim(), e.group);
+      if (e._id) eventSchoolMap.set(e._id.toString(), e.eventSchool);
+      if (e.eventName) eventSchoolMap.set(e.eventName.toLowerCase().trim(), e.eventSchool);
     });
 
-    const resolveGroupForPayment = (p) => {
+    const resolveSchoolForPayment = (p) => {
       // 1. Match by eventId
       if (p.eventId) {
         const eId = p.eventId.toString().toLowerCase().trim();
-        if (eventGroupMap.has(eId)) return eventGroupMap.get(eId);
-        if (groupById.has(eId)) return groupById.get(eId);
+        if (eventSchoolMap.has(eId)) return eventSchoolMap.get(eId);
+        if (schoolById.has(eId)) return schoolById.get(eId);
       }
 
       // 2. Match by exact or partial eventName
       if (p.eventName) {
         const eName = p.eventName.toLowerCase().trim();
-        if (eventGroupMap.has(eName)) return eventGroupMap.get(eName);
+        if (eventSchoolMap.has(eName)) return eventSchoolMap.get(eName);
         for (const e of allEvents) {
           if (e.eventName) {
             const target = e.eventName.toLowerCase().trim();
             if (target.includes(eName) || eName.includes(target)) {
-              if (e.group) return e.group;
+              if (e.eventSchool) return e.eventSchool;
             }
           }
         }
@@ -371,21 +371,21 @@ exports.getDashboardStats = async (req, res) => {
       // 3. Match by schoolId / event group alias
       if (p.schoolId) {
         const sId = p.schoolId.toLowerCase().trim();
-        if (groupById.has(sId)) return groupById.get(sId);
-        if (groupByShortName.has(sId)) return groupByShortName.get(sId);
-        if (groupByName.has(sId)) return groupByName.get(sId);
+        if (schoolById.has(sId)) return schoolById.get(sId);
+        if (schoolByShortName.has(sId)) return schoolByShortName.get(sId);
+        if (schoolByName.has(sId)) return schoolByName.get(sId);
 
         if (sId.includes('digi') || sId.includes('comp') || sId.includes('soc')) {
-          return groupByShortName.get('soc') || groupByName.get('school of computing');
+          return schoolByShortName.get('soc') || schoolByName.get('school of computing');
         }
         if (sId.includes('krishi') || sId.includes('agri') || sId.includes('science') || sId.includes('sos')) {
-          return groupByShortName.get('sos') || groupByName.get('school of science');
+          return schoolByShortName.get('sos') || schoolByName.get('school of science');
         }
         if (sId.includes('kriya') || sId.includes('eng') || sId.includes('soe') || sId.includes('tech')) {
-          return groupByShortName.get('soe') || groupByName.get('school of engineering');
+          return schoolByShortName.get('soe') || schoolByName.get('school of engineering');
         }
         if (sId.includes('bus') || sId.includes('sob') || sId.includes('mgmt')) {
-          return groupByShortName.get('sob') || groupByName.get('school of business');
+          return schoolByShortName.get('sob') || schoolByName.get('school of business');
         }
       }
 
@@ -393,27 +393,27 @@ exports.getDashboardStats = async (req, res) => {
       if (p.category) {
         const cat = p.category.toLowerCase().trim();
         if (cat.includes('cse') || cat.includes('it') || cat.includes('ds') || cat.includes('iot') || cat.includes('aiml') || cat.includes('mca')) {
-          return groupByShortName.get('soc') || groupByName.get('school of computing');
+          return schoolByShortName.get('soc') || schoolByName.get('school of computing');
         }
         if (cat.includes('agri') || cat.includes('science') || cat.includes('forensic')) {
-          return groupByShortName.get('sos') || groupByName.get('school of science');
+          return schoolByShortName.get('sos') || schoolByName.get('school of science');
         }
         if (cat.includes('mech') || cat.includes('civil') || cat.includes('eee') || cat.includes('ece') || cat.includes('petro') || cat.includes('mining')) {
-          return groupByShortName.get('soe') || groupByName.get('school of engineering');
+          return schoolByShortName.get('soe') || schoolByName.get('school of engineering');
         }
         if (cat.includes('bus') || cat.includes('mgmt') || cat.includes('comm')) {
-          return groupByShortName.get('sob') || groupByName.get('school of business');
+          return schoolByShortName.get('sob') || schoolByName.get('school of business');
         }
       }
 
-      return allGroups[0] || null;
+      return allSchools[0] || null;
     };
 
     // ─── Group / School-wise stats (strictly for existing DB groups) ────────
-    const groupMap = {};
-    allGroups.forEach((g) => {
+    const schoolMap = {};
+    allSchools.forEach((g) => {
       const gKey = g.shortName || g.name;
-      groupMap[gKey] = {
+      schoolMap[gKey] = {
         group: gKey,
         name: g.name,
         shortName: g.shortName || g.name,
@@ -459,14 +459,14 @@ exports.getDashboardStats = async (req, res) => {
 
     allPayments.forEach((p) => {
       // 1. Group Resolution
-      const group = resolveGroupForPayment(p);
-      const gKey = group ? (group.shortName || group.name) : (allGroups[0]?.shortName || allGroups[0]?.name);
+      const group = resolveSchoolForPayment(p);
+      const gKey = group ? (group.shortName || group.name) : (allSchools[0]?.shortName || allSchools[0]?.name);
 
-      if (gKey && groupMap[gKey]) {
-        groupMap[gKey].eventNames.add(p.eventName || '');
-        groupMap[gKey].teamCount++;
-        groupMap[gKey].studentCount += (p.participants || []).length;
-        groupMap[gKey].revenue += Number(p.amountRupees || p.amount || 0);
+      if (gKey && schoolMap[gKey]) {
+        schoolMap[gKey].eventNames.add(p.eventName || '');
+        schoolMap[gKey].teamCount++;
+        schoolMap[gKey].studentCount += (p.participants || []).length;
+        schoolMap[gKey].revenue += Number(p.amountRupees || p.amount || 0);
       }
 
       // 2. Department Resolution
@@ -538,13 +538,13 @@ exports.getDashboardStats = async (req, res) => {
       (p.participants || []).forEach((part) => {
         const campus = classifyCampus(part.college || part.otherCollege || '');
         if (campus === 'AUS') {
-          if (gKey && groupMap[gKey]) groupMap[gKey].aus++;
+          if (gKey && schoolMap[gKey]) schoolMap[gKey].aus++;
         } else if (campus === 'ACET') {
-          if (gKey && groupMap[gKey]) groupMap[gKey].acet++;
+          if (gKey && schoolMap[gKey]) schoolMap[gKey].acet++;
         } else {
-          if (gKey && groupMap[gKey]) groupMap[gKey].other++;
+          if (gKey && schoolMap[gKey]) schoolMap[gKey].other++;
         }
-        if (gKey && groupMap[gKey]) groupMap[gKey].participatedStudents++;
+        if (gKey && schoolMap[gKey]) schoolMap[gKey].participatedStudents++;
       });
     });
 
@@ -563,7 +563,7 @@ exports.getDashboardStats = async (req, res) => {
     }));
 
 
-    const groupStats = Object.values(groupMap).map((g) => ({
+    const schoolStats = Object.values(schoolMap).map((g) => ({
       group: g.group,
       dept: g.shortName || g.name,
       name: g.name,
@@ -669,8 +669,8 @@ exports.getDashboardStats = async (req, res) => {
       yearCounts,
       campusWise: campusMap,
       departmentStats,
-      groupStats,
-      schoolStats: groupStats,
+      schoolStats,
+      schoolStats: schoolStats,
       genderStats: genderMap,
       campusGenderStats: campusGenderMap,
       accommodation: {
@@ -714,11 +714,11 @@ exports.scanBarcode = async (req, res) => {
           const decoded = jwt.verify(token, process.env.JWT_SECRET);
           const empId = decoded.institutionId;
           if (empId) {
-            const Group = require('../Group/Group.model');
+            const EventSchools = require('../EventSchools/EventSchools.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
-            const myGroupNames = myGroups.map(g => g.name.toLowerCase());
+            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
+            const mySchoolNames = mySchools.map(g => g.name.toLowerCase());
 
             const myEvents = await Events.find({
               $or: [
@@ -730,7 +730,7 @@ exports.scanBarcode = async (req, res) => {
             const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
 
             if (
-              myGroupNames.includes((registration.schoolId || '').toLowerCase()) ||
+              mySchoolNames.includes((registration.schoolId || '').toLowerCase()) ||
               myEventNames.includes((registration.eventName || '').toLowerCase())
             ) {
               authorized = true;
@@ -956,11 +956,11 @@ exports.updateAttendance = async (req, res) => {
           const decoded = jwt.verify(token, process.env.JWT_SECRET);
           const empId = decoded.institutionId;
           if (empId) {
-            const Group = require('../Group/Group.model');
+            const EventSchools = require('../EventSchools/EventSchools.model');
             const Events = require('../Events/Events.model');
 
-            const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('name');
-            const myGroupNames = myGroups.map(g => g.name.toLowerCase());
+            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
+            const mySchoolNames = mySchools.map(g => g.name.toLowerCase());
 
             const myEvents = await Events.find({
               $or: [
@@ -972,7 +972,7 @@ exports.updateAttendance = async (req, res) => {
             const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
 
             if (
-              myGroupNames.includes((registration.schoolId || '').toLowerCase()) ||
+              mySchoolNames.includes((registration.schoolId || '').toLowerCase()) ||
               myEventNames.includes((registration.eventName || '').toLowerCase())
             ) {
               authorized = true;

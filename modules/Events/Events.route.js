@@ -44,10 +44,10 @@ const uploadEventImage = upload.single('bannerImage');
 
 // --- Routes ---
 router.post('/send-invoice', protect, authorize('STUDENT_EVENT_ADMIN'), eventsController.sendInvoiceMail);
-router.post('/', protect, authorize('STUDENT_EVENT_ADMIN'), uploadEventImage, eventsController.createEvent);
+router.post('/', protect, authorize('STUDENT_EVENT_ADMIN', 'SCHOOL_COORDINATOR'), uploadEventImage, eventsController.createEvent);
 router.get('/', eventsController.getAllEvents);
 router.get('/:id', protect, eventsController.getEventById);
-router.put('/:id', protect, authorize('STUDENT_EVENT_ADMIN'), uploadEventImage, eventsController.updateEvent);
-router.delete('/:id', protect, authorize('STUDENT_EVENT_ADMIN'), eventsController.deleteEvent);
+router.put('/:id', protect, authorize('STUDENT_EVENT_ADMIN', 'SCHOOL_COORDINATOR'), uploadEventImage, eventsController.updateEvent);
+router.delete('/:id', protect, authorize('STUDENT_EVENT_ADMIN', 'SCHOOL_COORDINATOR'), eventsController.deleteEvent);
 
 module.exports = router;
