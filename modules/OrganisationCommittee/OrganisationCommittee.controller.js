@@ -3,7 +3,7 @@ const Studentdata = require('../StudentData/Studentdata.model');
 
 exports.createCommitteeMember = async (req, res, next) => {
     try {
-        const { employee, rollNo, role, status } = req.body;
+        const { employee, rollNo, role, status, orderNumber } = req.body;
 
         if (!role) {
             return res.status(400).json({ success: false, message: 'Please provide role' });
@@ -36,6 +36,7 @@ exports.createCommitteeMember = async (req, res, next) => {
             ...(rollNo && { rollNo: rollNo.toUpperCase() }),
             role,
             status,
+            orderNumber: orderNumber || 0,
             createdBy: userId
         });
 
@@ -62,7 +63,7 @@ exports.getCommitteeMembers = async (req, res, next) => {
 
         let members = await OrganisationCommittee.find(query)
             .populate('employee', 'name employeeName employeeCode email phone department designation institutionId')
-            .sort({ createdAt: -1 })
+            .sort({ orderNumber: 1, createdAt: -1 })
             .lean();
 
         const axios = require('axios');
@@ -95,7 +96,7 @@ exports.getCommitteeMembers = async (req, res, next) => {
 
 exports.updateCommitteeMember = async (req, res, next) => {
     try {
-        const { status, employee, rollNo } = req.body;
+        const { status, employee, rollNo, orderNumber } = req.body;
 
         let member = await OrganisationCommittee.findById(req.params.id);
 
@@ -104,6 +105,9 @@ exports.updateCommitteeMember = async (req, res, next) => {
         }
 
         let updateData = { status };
+        if (orderNumber !== undefined) {
+            updateData.orderNumber = orderNumber;
+        }
 
         if (member.role === 'Student Coordinator') {
             if (rollNo && rollNo.toUpperCase() !== member.rollNo) {

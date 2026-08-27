@@ -24,6 +24,10 @@ const OrganisationCommitteeSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',
         required: false
+    },
+    orderNumber: {
+        type: Number,
+        default: 0
     }
 }, { timestamps: true });
 
