@@ -41,10 +41,36 @@ const upload = multer({
     fileFilter
 });
 
-// Accept 'banner' field
-const uploadEventSchoolImages = upload.fields([
-    { name: 'banner', maxCount: 1 }
-]);
+// Accept 'banner' field with graceful error handling
+const uploadEventSchoolImages = (req, res, next) => {
+    upload.fields([{ name: 'banner', maxCount: 1 }])(req, res, (err) => {
+        if (err) {
+            if (err instanceof multer.MulterError) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Banner image exceeds the 5MB size limit. Please upload a smaller image under 5MB.'
+                    });
+                }
+                if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+                    return res.status(400).json({
+                        success: false,
+                        message: 'Unexpected file upload field encountered.'
+                    });
+                }
+                return res.status(400).json({
+                    success: false,
+                    message: `Image upload error: ${err.message}`
+                });
+            }
+            return res.status(400).json({
+                success: false,
+                message: err.message || 'Invalid image file. Please upload JPG, PNG, or WebP under 5MB.'
+            });
+        }
+        next();
+    });
+};
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 router.post(
