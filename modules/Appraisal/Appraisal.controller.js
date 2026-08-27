@@ -74,7 +74,7 @@ const attachEligibilityInfo = (appraisalObj, config) => {
         return appraisalObj;
     }
 
-    const type = appraisalObj.facultyCategory || getFacultyCategoryHelper(appraisalObj.facultyId);
+    const type = getFacultyCategoryHelper(appraisalObj.facultyId);
     let mins = {};
     if (config && config.minimumPoints && config.minimumPoints[type]) {
         // Deep copy to avoid mutating the config
@@ -1351,7 +1351,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (p.applyingSeedGrant !== "Yes" && p.fundingAgencyAditya !== "Yes" && isClaimantEligible(p, faculty.institutionId)) {
                 const statusKey = p.projectStatus ? p.projectStatus.toLowerCase() : 'sanctioned';
                 if (statusKey === 'sanctioned') {
-                    const amountInLakhs = Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2));
+                    const amountInLakhs = Number(((parseFloat(String(p.sanctionedAmount || '0').replace(/,/g, '')) || 0) / 100000).toFixed(2));
                     pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                 } else {
                     pts = config.research.projectProposalPoints.shortlisted || 5;
@@ -1363,7 +1363,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 projectType: 'FundedProject',
                 title: p.title,
                 agency: p.fundingAgency,
-                amountInLakhs: Number(((parseFloat(p.sanctionedAmount) || 0) / 100000).toFixed(2)),
+                amountInLakhs: Number(((parseFloat(String(p.sanctionedAmount || '0').replace(/,/g, '')) || 0) / 100000).toFixed(2)),
                 status: p.projectStatus || 'Sanctioned',
                 isMultiAUSAuthor,
                 claimStatus,
@@ -1392,7 +1392,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
                 const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
                 if (statusKey === 'sanctioned') {
-                    const amountInLakhs = Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2));
+                    const amountInLakhs = Number(((parseFloat(String(c.amount || '0').replace(/,/g, '')) || 0) / 100000).toFixed(2));
                     pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
                 } else {
                     pts = config.research.projectProposalPoints.shortlisted || 5;
@@ -1404,7 +1404,7 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 projectType: 'Consultancy',
                 title: c.title,
                 agency: c.fundingAgency,
-                amountInLakhs: Number(((parseFloat(c.amount) || 0) / 100000).toFixed(2)),
+                amountInLakhs: Number(((parseFloat(String(c.amount || '0').replace(/,/g, '')) || 0) / 100000).toFixed(2)),
                 status: c.projectStatus || 'Sanctioned',
                 isMultiAUSAuthor,
                 claimStatus,
