@@ -3,6 +3,7 @@ const puppeteer = require("puppeteer");
 const Appraisal = require("./Appraisal.model.js");
 const AppraisalConfig = require("./AppraisalConfig.model");
 const AppraisalResearchClaim = require("./AppraisalResearchClaim.model");
+const { syncAppraisalTotals } = require("../../utils/appraisalPointSync");
 const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
 const escapeRegex = require("../../utils/escapeRegex");
 const designationRoutingMap = {
@@ -1966,6 +1967,9 @@ exports.submitAppraisal = async (req, res) => {
             }
         }
 
+        // Sync point totals one last time to ensure the snapshot is perfect before locking
+        await syncAppraisalTotals(facultyId, academicYearId);
+
         // Lock and submit
         appraisal.status = nextStatus;
         await appraisal.save();
@@ -1999,7 +2003,8 @@ exports.submitAppraisal = async (req, res) => {
 exports.getPendingHODAppraisals = async (req, res) => {
     try {
         const Employee = require("../employee/employee.model");
-        const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
+        const { syncAppraisalTotals } = require("../../utils/appraisalPointSync");
+const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const { getHODDepartments } = require("../../utils/hodHelper");
 
         const potentialInstId = req.user.institutionId || req.user.userId || req.user.id;
@@ -3516,7 +3521,8 @@ exports.getPendingManagementAppraisals = async (req, res) => {
 
         // Check if they are a regular School Dean
         // Checking via roles catalog if available, or designation fallback
-        const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
+        const { syncAppraisalTotals } = require("../../utils/appraisalPointSync");
+const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase() || r.role || r);
         const isSchoolDean = userRoles.includes("SCHOOL_DEAN") || userRoles.includes("SCHOOL DEAN") || designation.includes("Dean") || designation.includes("Associate Dean") || designation.includes("Principal") || designation.includes("PRINCIPAL");
 
