@@ -4,7 +4,10 @@ const CoAuthorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
     employeeId: { type: String, default: null },
-    authorPosition: { type: Number, default: null }
+    authorPosition: { type: Number, default: null },
+    studentId: { type: String, default: null },
+    CoAuthorType: { type: String, default: 'faculty' },
+
 }, { _id: false });
 
 const JournalSchema = new mongoose.Schema({
@@ -21,7 +24,7 @@ const JournalSchema = new mongoose.Schema({
     college: { type: String },
     panNumber: { type: String },
     doi: { type: String, required: true, trim: true, unique: true, sparse: true },
-    
+
     publicationScope: { type: String, required: true },
     totalAuthors: { type: Number, required: true },
     userAuthorPosition: { type: Number, required: true },
@@ -43,12 +46,14 @@ const JournalSchema = new mongoose.Schema({
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
     completeJournalName: { type: String },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
-    
+
+    isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
+
     // Files
     publishedPaper: { type: String, required: true },
     referencePages: { type: String, required: true },
     completeJournal: { type: String },
-    
+
     status: {
         type: String,
         enum: ['Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
@@ -57,7 +62,7 @@ const JournalSchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
-    
+
     appraisalClaimant: {
         type: String,
         default: null
@@ -71,7 +76,7 @@ const JournalSchema = new mongoose.Schema({
         enum: ['Yes', 'No'],
         default: null
     },
-    
+
     createdAt: {
         type: Date,
         default: Date.now
