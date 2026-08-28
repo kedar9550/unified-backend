@@ -855,6 +855,10 @@ const bulkRegisterUser = async (req, res) => {
                     }
                 }
 
+                if (dojInput && new Date(dojInput) > new Date()) {
+                    return res.status(400).json({ success: false, message: "Date of joining cannot be a future date" });
+                }
+
                 const password = "Aditya@123";
 
                 const newEmployeeData = {
@@ -1099,7 +1103,12 @@ const adminUpdateEmployee = async (req, res) => {
         if (leadership) employee.leadership = leadership;
         if (isActive !== undefined) employee.isActive = isActive;
         if (qualifications) employee.qualifications = qualifications;
-        if (dateOfJoining !== undefined) employee.dateOfJoining = dateOfJoining;
+        if (dateOfJoining !== undefined) {
+            if (dateOfJoining && new Date(dateOfJoining) > new Date()) {
+                return res.status(400).json({ success: false, message: "Date of joining cannot be a future date" });
+            }
+            employee.dateOfJoining = dateOfJoining;
+        }
         
         await employee.save();
 
