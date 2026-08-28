@@ -41,77 +41,172 @@ exports.createOrder = async (req, res) => {
   }
 };
 
+const getRoleFilterQuery = async (req) => {
+  const activeRole = req.headers['active-role'];
+  if (!activeRole) return {};
+
+  const role = String(activeRole).toUpperCase().trim();
+  // Unrestricted admin roles
+  if (['STUDENT_EVENT_ADMIN', 'ADMIN', 'SUPER_ADMIN', 'MANAGEMENT', 'DEVELOPER'].includes(role)) {
+    return {};
+  }
+
+  const jwt = require('jsonwebtoken');
+  const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+  if (!token) return {};
+
+  let empId = null;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    empId = decoded.institutionId || decoded.employeeId || decoded.employeeCode || decoded.id || decoded.userId;
+    if (empId) empId = String(empId).trim();
+  } catch (err) {
+    console.error('Error decoding token for role filter', err);
+    return {};
+  }
+
+  if (!empId) return {};
+
+  const empIdNum = Number(empId);
+  const empMatch = isNaN(empIdNum) ? [empId] : [empId, empIdNum];
+
+  const EventSchools = require('../EventSchools/EventSchools.model');
+  const Events = require('../Events/Events.model');
+
+  if (role === 'SCHOOL_COORDINATOR' || role === 'EVENT_COORDINATOR') {
+    // 1. Find all schools where coordinator is this employee
+    const mySchools = await EventSchools.find({
+      'coordinator.employeeId': { $in: empMatch }
+    }).lean();
+
+    const schoolIds = mySchools.map(s => s._id.toString());
+    const schoolNames = mySchools.map(s => s.name).filter(Boolean);
+    const schoolShortNames = mySchools.map(s => s.shortName).filter(Boolean);
+
+    // 2. Find all events under these schools OR where coordinator is convener / faculty coordinator
+    const myEvents = await Events.find({
+      $or: [
+        { eventSchool: { $in: mySchools.map(s => s._id) } },
+        { 'conveners.employeeId': { $in: empMatch } },
+        { 'facultyCoordinators.employeeId': { $in: empMatch } },
+        { 'facultyCoordinator.employeeId': { $in: empMatch } }
+      ]
+    }).lean();
+
+    const eventIds = myEvents.map(e => e._id.toString());
+    const eventNames = myEvents.map(e => e.eventName).filter(Boolean);
+
+    const orConditions = [];
+
+    // Match by school IDs (string or ObjectId)
+    if (schoolIds.length > 0) {
+      orConditions.push({ schoolId: { $in: schoolIds } });
+    }
+
+    // Match by school names/shortNames in schoolId or category
+    const schoolNameRegexes = [...new Set([...schoolNames, ...schoolShortNames])].map(
+      name => new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    );
+    if (schoolNameRegexes.length > 0) {
+      orConditions.push({ schoolId: { $in: schoolNameRegexes } });
+      orConditions.push({ category: { $in: schoolNameRegexes } });
+    }
+
+    // Match by event IDs
+    if (eventIds.length > 0) {
+      orConditions.push({ eventId: { $in: eventIds } });
+    }
+
+    // Match by event names in eventName or category
+    const eventNameRegexes = [...new Set(eventNames)].map(
+      name => new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    );
+    if (eventNameRegexes.length > 0) {
+      orConditions.push({ eventName: { $in: eventNameRegexes } });
+      orConditions.push({ category: { $in: eventNameRegexes } });
+    }
+
+    if (orConditions.length === 0) {
+      return { _id: null };
+    }
+
+    return { $or: orConditions };
+  }
+
+  if (role === 'FACULTY_COORDINATOR' || role === 'CONVENER') {
+    const myEvents = await Events.find({
+      $or: [
+        { 'conveners.employeeId': { $in: empMatch } },
+        { 'facultyCoordinators.employeeId': { $in: empMatch } },
+        { 'facultyCoordinator.employeeId': { $in: empMatch } }
+      ]
+    }).lean();
+
+    const eventIds = myEvents.map(e => e._id.toString());
+    const eventNames = myEvents.map(e => e.eventName).filter(Boolean);
+
+    const orConditions = [];
+    if (eventIds.length > 0) {
+      orConditions.push({ eventId: { $in: eventIds } });
+    }
+    const eventNameRegexes = [...new Set(eventNames)].map(
+      name => new RegExp(`^${name.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    );
+    if (eventNameRegexes.length > 0) {
+      orConditions.push({ eventName: { $in: eventNameRegexes } });
+      orConditions.push({ category: { $in: eventNameRegexes } });
+    }
+
+    if (orConditions.length === 0) {
+      return { _id: null };
+    }
+
+    return { $or: orConditions };
+  }
+
+  return {};
+};
+
 exports.getRegistrations = async (req, res) => {
   try {
     const { email, roll, teamId } = req.query;
-    let query = {};
+    const andConditions = [];
+
+    const roleFilter = await getRoleFilterQuery(req);
+    if (Object.keys(roleFilter).length > 0) {
+      andConditions.push(roleFilter);
+    }
 
     if (teamId && teamId.trim()) {
       const cleanTeamId = teamId.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query.teamId = { $regex: new RegExp(`^${cleanTeamId}$`, 'i') };
-    }
-
-    const activeRole = req.headers['active-role'];
-    if (activeRole === 'SCHOOL_COORDINATOR') {
-      const jwt = require('jsonwebtoken');
-      const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
-      if (token) {
-        try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          const empId = decoded.institutionId;
-          if (empId) {
-            const EventSchools = require('../EventSchools/EventSchools.model');
-            const Events = require('../Events/Events.model');
-
-            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
-            const mySchoolNames = mySchools.map(g => new RegExp(`^${g.name}$`, 'i'));
-
-            const myEvents = await Events.find({
-              $or: [
-                { 'conveners.employeeId': empId },
-                { 'facultyCoordinators.employeeId': empId },
-                { 'facultyCoordinator.employeeId': empId }
-              ]
-            }).select('eventName');
-            const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
-
-            query.$or = [
-              { schoolId: { $in: mySchoolNames } },
-              { eventName: { $in: myEventNames } }
-            ];
-          }
-        } catch (err) {
-          console.error('Error decoding token for SCHOOL_COORDINATOR filter', err);
-        }
-      }
+      andConditions.push({ teamId: { $regex: new RegExp(`^${cleanTeamId}$`, 'i') } });
     }
 
     if (email && email.trim()) {
       const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       if (roll && roll.trim()) {
         const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        query.$and = [
-          ...(query.$and || []),
-          { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
-          { 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } }
-        ];
+        andConditions.push({
+          $or: [
+            {
+              $and: [
+                { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
+                { 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } }
+              ]
+            },
+            { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } }
+          ]
+        });
       } else {
-        query['participants.email'] = { $regex: new RegExp(`^${cleanEmail}$`, 'i') };
+        andConditions.push({ 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } });
       }
     } else if (roll && roll.trim()) {
       const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      query['participants.roll'] = { $regex: new RegExp(`^${cleanRoll}$`, 'i') };
+      andConditions.push({ 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } });
     }
 
-    let payments = await PaymentRegistration.find(query).sort({ createdAt: -1 }).lean();
-
-    if (payments.length === 0 && email && email.trim() && roll && roll.trim()) {
-      const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const fallbackQuery = { ...query };
-      delete fallbackQuery.$and;
-      fallbackQuery['participants.email'] = { $regex: new RegExp(`^${cleanEmail}$`, 'i') };
-      payments = await PaymentRegistration.find(fallbackQuery).sort({ createdAt: -1 }).lean();
-    }
+    const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
+    let payments = await PaymentRegistration.find(finalQuery).sort({ createdAt: -1 }).lean();
 
     return res.json({ payments });
   } catch (err) {

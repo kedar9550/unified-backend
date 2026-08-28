@@ -248,31 +248,47 @@ exports.getAllEvents = async (req, res, next) => {
         let filterQuery = {};
         const activeRole = req.headers['active-role'];
 
-        if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'SCHOOL_COORDINATOR') {
+        if (activeRole === 'EVENT_COORDINATOR' || activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
             const jwt = require('jsonwebtoken');
             const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
 
             if (token) {
                 try {
                     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                    const empId = decoded.institutionId;
+                    const empId = decoded.institutionId || decoded.employeeId || decoded.employeeCode || decoded.id || decoded.userId;
 
                     if (empId) {
-                        const Group = require('../EventSchools/EventSchools.model');
-                        const myGroups = await Group.find({ 'coordinator.employeeId': empId }).select('_id');
-                        const myGroupIds = myGroups.map(g => g._id);
+                        const empIdStr = String(empId).trim();
+                        const empIdNum = Number(empIdStr);
+                        const empMatch = isNaN(empIdNum) ? [empIdStr] : [empIdStr, empIdNum];
 
-                        filterQuery = {
-                            $or: [
-                                { eventSchool: { $in: myGroupIds } },
-                                { 'conveners.employeeId': empId },
-                                { 'facultyCoordinators.employeeId': empId },
-                                { 'facultyCoordinator.employeeId': empId }
-                            ]
-                        };
+                        if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'EVENT_COORDINATOR') {
+                            const Group = require('../EventSchools/EventSchools.model');
+                            const myGroups = await Group.find({
+                                'coordinator.employeeId': { $in: empMatch }
+                            }).select('_id');
+                            const myGroupIds = myGroups.map(g => g._id);
+
+                            filterQuery = {
+                                $or: [
+                                    { eventSchool: { $in: myGroupIds } },
+                                    { 'conveners.employeeId': { $in: empMatch } },
+                                    { 'facultyCoordinators.employeeId': { $in: empMatch } },
+                                    { 'facultyCoordinator.employeeId': { $in: empMatch } }
+                                ]
+                            };
+                        } else if (activeRole === 'FACULTY_COORDINATOR') {
+                            filterQuery = {
+                                $or: [
+                                    { 'conveners.employeeId': { $in: empMatch } },
+                                    { 'facultyCoordinators.employeeId': { $in: empMatch } },
+                                    { 'facultyCoordinator.employeeId': { $in: empMatch } }
+                                ]
+                            };
+                        }
                     }
                 } catch (err) {
-                    console.error('Error decoding token for EVENT_COORDINATOR filter', err);
+                    console.error('Error decoding token for event filter', err);
                 }
             }
         }
