@@ -92,6 +92,7 @@ exports.createEvent = async (req, res, next) => {
             extraAmountPerHead,
             overview,
             rules,
+            themes,
             conveners,
             venueType,
             building,
@@ -143,8 +144,10 @@ exports.createEvent = async (req, res, next) => {
         }
 
         const parsedRules = Array.isArray(rules) ? rules.filter((rule) => rule && rule.trim()) : [];
+        const parsedThemes = Array.isArray(themes) ? themes.filter((theme) => theme && theme.trim()) : [];
         const parsedConveners = typeof conveners === 'string' ? JSON.parse(conveners || '[]') : Array.isArray(conveners) ? conveners : [];
         const parsedFacultyCoordinators = normalizeCoordinators(req.body.facultyCoordinators || req.body.facultyCoordinator);
+        const parsedStudentCoordinators = typeof req.body.studentCoordinators === 'string' ? JSON.parse(req.body.studentCoordinators || '[]') : Array.isArray(req.body.studentCoordinators) ? req.body.studentCoordinators : [];
 
         const userId = req.user ? (req.user._id || req.user.userId) : null;
         if (!userId) {
@@ -187,10 +190,12 @@ exports.createEvent = async (req, res, next) => {
             extraAmountPerHead: Number(extraAmountPerHead) || 0,
             overview,
             rules: parsedRules,
+            themes: parsedThemes,
             bannerImage: bannerImageUrl,
             conveners: parsedConveners,
             facultyCoordinator: parsedFacultyCoordinators[0] || {},
             facultyCoordinators: parsedFacultyCoordinators,
+            studentCoordinators: parsedStudentCoordinators,
             createdBy: userId,
         });
 
@@ -385,6 +390,7 @@ exports.updateEvent = async (req, res, next) => {
             extraAmountPerHead,
             overview,
             rules,
+            themes,
             venueType,
             building,
             floor,
@@ -430,7 +436,9 @@ exports.updateEvent = async (req, res, next) => {
         }
 
         const parsedRules = Array.isArray(rules) ? rules.filter((rule) => rule && rule.trim()) : [];
+        const parsedThemes = Array.isArray(themes) ? themes.filter((theme) => theme && theme.trim()) : [];
         const parsedFacultyCoordinators = normalizeCoordinators(req.body.facultyCoordinators || req.body.facultyCoordinator);
+        const parsedStudentCoordinators = typeof req.body.studentCoordinators === 'string' ? JSON.parse(req.body.studentCoordinators || '[]') : Array.isArray(req.body.studentCoordinators) ? req.body.studentCoordinators : [];
 
         let parsedDepartments = [];
         if (department) {
@@ -460,6 +468,7 @@ exports.updateEvent = async (req, res, next) => {
             extraAmountPerHead: Number(extraAmountPerHead) || 0,
             overview,
             rules: parsedRules,
+            themes: parsedThemes,
         };
 
         if (bannerImage) {
@@ -470,9 +479,13 @@ exports.updateEvent = async (req, res, next) => {
             updatedFields.bannerImage = null;
         }
 
-        if (parsedFacultyCoordinators.length > 0) {
-            updatedFields.facultyCoordinator = parsedFacultyCoordinators[0];
+        if (req.body.facultyCoordinators || req.body.facultyCoordinator) {
+            updatedFields.facultyCoordinator = parsedFacultyCoordinators[0] || {};
             updatedFields.facultyCoordinators = parsedFacultyCoordinators;
+        }
+
+        if (req.body.studentCoordinators) {
+            updatedFields.studentCoordinators = parsedStudentCoordinators;
         }
 
         const updatedEvent = await Events.findByIdAndUpdate(
