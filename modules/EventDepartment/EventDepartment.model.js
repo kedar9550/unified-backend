@@ -7,6 +7,10 @@ const EventDepartmentSchema = new mongoose.Schema({
         trim: true,
         maxlength: [200, 'Department name cannot exceed 200 characters']
     },
+    alternativeNames: {
+        type: String,
+        trim: true
+    },
     status: {
         type: String,
         enum: ['Active', 'Inactive'],

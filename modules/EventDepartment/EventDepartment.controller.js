@@ -3,7 +3,7 @@ const EventDepartment = require('./EventDepartment.model');
 // ─── CREATE ───────────────────────────────────────────────────────────────────
 exports.createDepartment = async (req, res, next) => {
     try {
-        const { name, status } = req.body;
+        const { name, status, alternativeNames } = req.body;
 
         if (!name) {
             return res.status(400).json({
@@ -19,6 +19,7 @@ exports.createDepartment = async (req, res, next) => {
 
         const department = await EventDepartment.create({
             name:      name.trim(),
+            alternativeNames: alternativeNames ? alternativeNames.trim() : '',
             status:    status || 'Active',
             createdBy: userId
         });
@@ -65,9 +66,10 @@ exports.updateDepartment = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Department not found.' });
         }
 
-        const { name, status } = req.body;
+        const { name, status, alternativeNames } = req.body;
 
         if (name)    department.name    = name.trim();
+        if (alternativeNames !== undefined) department.alternativeNames = alternativeNames.trim();
         if (status)  department.status  = status;
 
         await department.save();
