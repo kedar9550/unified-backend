@@ -73,7 +73,7 @@ exports.createEventSchool = async (req, res, next) => {
     const bannerFile = req.files?.banner?.[0] ?? null;
 
     try {
-        const { name, shortName, content, status, coordinator, removeBanner } = req.body;
+        const { name, shortName, content, status, coordinator, removeBanner, orderNo } = req.body;
         const normalizedCoordinator = normalizeCoordinator(coordinator);
 
         if (!name || !shortName || !content) {
@@ -97,6 +97,7 @@ exports.createEventSchool = async (req, res, next) => {
             banner: bannerFile ? `/uploads/event_schools/${bannerFile.filename}` : null,
             coordinator: normalizedCoordinator || {},
             status: status || 'Active',
+            orderNo: orderNo ? Number(orderNo) : 0,
             createdBy: userId
         });
 
@@ -145,7 +146,7 @@ exports.getAllEventSchools = async (req, res, next) => {
         }
 
         const eventSchoolsData = await EventSchools.find(filterQuery)
-            .sort({ createdAt: -1 });
+            .sort({ orderNo: 1, createdAt: -1 });
 
         let eventSchools = JSON.parse(JSON.stringify(eventSchoolsData));
         const empIds = eventSchools
@@ -194,7 +195,7 @@ exports.updateEventSchool = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Event School not found.' });
         }
 
-        const { name, shortName, content, status, coordinator, removeBanner } = req.body;
+        const { name, shortName, content, status, coordinator, removeBanner, orderNo } = req.body;
         const normalizedCoordinator = normalizeCoordinator(coordinator);
 
         if (name) eventSchool.name = name.trim();
@@ -202,6 +203,7 @@ exports.updateEventSchool = async (req, res, next) => {
         if (content) eventSchool.content = content.trim();
         if (status) eventSchool.status = status;
         if (normalizedCoordinator) eventSchool.coordinator = normalizedCoordinator;
+        if (orderNo !== undefined) eventSchool.orderNo = Number(orderNo);
 
         if (bannerFile) { 
             deleteFile(eventSchool.banner); 
