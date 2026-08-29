@@ -36,6 +36,10 @@ const EventSchoolsSchema = new mongoose.Schema({
         type: String,
         enum: ['Active', 'Inactive'],
         default: 'Active'
+    },
+    orderNo: {
+        type: Number,
+        default: 0
     }
 }, {
     timestamps: true,
