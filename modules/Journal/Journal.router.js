@@ -40,6 +40,7 @@ router.post('/', protect, upload.fields([
 
 router.get('/', protect, journalController.getMyJournals);
 router.post('/wos-type', journalController.getClarivateJournalType);
+router.post('/fetch-doi', journalController.fetchDoiDetails);
 router.get('/:id', protect, journalController.getJournalById);
 
 // HOD: View pending and Action
