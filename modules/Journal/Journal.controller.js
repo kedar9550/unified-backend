@@ -9,7 +9,7 @@ const { isFutureYearMonth } = require('../../utils/validationHelper');
 exports.createJournal = async (req, res) => {
     try {
         const data = req.body;
-        
+
         // Validation
         if (!data.doi || !data.doi.trim()) {
             return res.status(400).json({ success: false, message: "DOI is mandatory." });
@@ -31,9 +31,9 @@ exports.createJournal = async (req, res) => {
         });
 
         if (existingActiveJournal) {
-            return res.status(400).json({ 
-                success: false, 
-                message: `A journal submission with this DOI (${cleanedDoi}) or Paper Title already exists and is either Pending or Approved. Duplicates are not allowed unless the previous submission was rejected.` 
+            return res.status(400).json({
+                success: false,
+                message: `A journal submission with this DOI (${cleanedDoi}) or Paper Title already exists and is either Pending or Approved. Duplicates are not allowed unless the previous submission was rejected.`
             });
         }
 
@@ -62,9 +62,9 @@ exports.createJournal = async (req, res) => {
         for (const field of filesToCheck) {
             if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                return res.status(400).json({ 
-                    success: false, 
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.` 
+                return res.status(400).json({
+                    success: false,
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
             }
         }
@@ -96,13 +96,13 @@ exports.createJournal = async (req, res) => {
         // Fetch JCR Impact Factor from JournalImpactFactor collection
         const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
         const searchName = (data.journalName || '').trim().toUpperCase();
-        const jifRecord = await JournalImpactFactor.findOne({ 
-            journalName: new RegExp(`^${escapeRegex(searchName)}$`) 
+        const jifRecord = await JournalImpactFactor.findOne({
+            journalName: new RegExp(`^${escapeRegex(searchName)}$`)
         });
-        
+
         const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;
 
-        
+
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
         const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
@@ -114,8 +114,9 @@ exports.createJournal = async (req, res) => {
             appraisalClaimant,
             jcrImpactFactor,
             status: 'Pending at HOD'
-        ,
-            incentiveClaimant: computedIncentiveClaimant});
+            ,
+            incentiveClaimant: computedIncentiveClaimant
+        });
 
         if (req.files) {
             if (req.files.publishedPaper) journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
@@ -129,7 +130,7 @@ exports.createJournal = async (req, res) => {
         try {
             const { getHODByDepartment } = require('../../utils/hodHelper');
             const NotificationService = require('../notification/notification.service');
-            
+
             // Re-fetch applicant to ensure department is populated or available
             const emp = await Employee.findById(req.user.userId);
             if (emp && (emp.coreDepartment || emp.department)) {
@@ -170,7 +171,7 @@ exports.createJournal = async (req, res) => {
 exports.getMyJournals = async (req, res) => {
     try {
         const user = await Employee.findById(req.user.userId);
-        
+
         const escapeRegex = (string) => {
             return string.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
         };
@@ -223,7 +224,7 @@ exports.getJournalById = async (req, res) => {
             })
             .populate('academicYear', 'year')
 
-            
+
         if (!journal) {
             return res.status(404).json({ success: false, message: 'Journal not found' });
         }
@@ -242,19 +243,19 @@ exports.getPendingAtHOD = async (req, res) => {
     try {
         const Employee = require('../employee/employee.model');
         const deptIds = await getHODDepartments(req.user);
-        
+
         const facultyIds = await Employee.find({
             $or: [
                 { coreDepartment: { $in: deptIds } },
                 { department: { $in: deptIds } }
             ]
         }).distinct('_id');
-        
-        const journals = await Journal.find({ 
+
+        const journals = await Journal.find({
             facultyId: { $in: facultyIds },
             status: 'Pending at HOD'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
-        
+
         res.json({ success: true, data: journals });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -270,9 +271,9 @@ exports.hodAction = async (req, res) => {
         const { action, comment, hIndex, jcrImpactFactor, impactFactor } = req.body;
 
         const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
-        const updates = { 
-            status, 
-            hodComment: comment 
+        const updates = {
+            status,
+            hodComment: comment
         };
 
         if (hIndex !== undefined) updates.hIndex = hIndex;
@@ -332,6 +333,33 @@ exports.rndAction = async (req, res) => {
         if (req.body.journalType !== undefined) journal.journalType = req.body.journalType;
         if (req.body.appraisalEligible !== undefined) journal.appraisalEligible = req.body.appraisalEligible;
 
+        // Auto-assign logic for Appraisal Claimant
+        if (status === 'Approved' && req.body.appraisalEligible === 'Yes') {
+            const AppraisalConfig = require('../Appraisal/AppraisalConfig.model');
+            const isAppraisalActive = await AppraisalConfig.findOne({ academicYearId: journal.academicYear, isActive: true });
+            
+            if (isAppraisalActive) {
+                let auFacultyCount = 1; // The applicant is always 1 AU Faculty
+                const eligibleClaimants = [journal.facultyId.toString()];
+
+                if (journal.coAuthors && journal.coAuthors.length > 0) {
+                    journal.coAuthors.forEach(ca => {
+                        if (ca.affiliation === 'Aditya University' && ca.CoAuthorType === 'faculty' && ca.employeeId) {
+                            if (!eligibleClaimants.includes(ca.employeeId.toString())) {
+                                auFacultyCount++;
+                                eligibleClaimants.push(ca.employeeId.toString());
+                            }
+                        }
+                    });
+                }
+
+                // If only 1 AU Faculty, auto-assign to applicant
+                if (auFacultyCount === 1) {
+                    journal.appraisalClaimant = journal.facultyId;
+                }
+            }
+        }
+
         if (status === 'Approved' && (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') && journal.appraisalClaimant) {
             journal.incentiveClaimant = journal.appraisalClaimant;
         }
@@ -353,28 +381,29 @@ exports.getClarivateJournalType = async (req, res) => {
     }
 
     try {
+        const clarivateUrl = process.env.CLARIVATE_RANK_SEARCH_API_URL || 'https://mjl.clarivate.com/api/mjl/jprof/public/rank-search';
         const response = await axios.post(
-            'https://mjl.clarivate.com/api/mjl/jprof/public/rank-search',
+            clarivateUrl,
             {
-                searchValue:      issn,
-                pageNum:          1,
-                pageSize:         10,
-                sortOrder:        [{ name: 'RELEVANCE', order: 'DESC' }],
+                searchValue: issn,
+                pageNum: 1,
+                pageSize: 10,
+                sortOrder: [{ name: 'RELEVANCE', order: 'DESC' }],
                 filters: [{
-                    filterName:    'COVERED_LATEST_JEDI',
-                    matchType:     'BOOLEAN_EXACT',
+                    filterName: 'COVERED_LATEST_JEDI',
+                    matchType: 'BOOLEAN_EXACT',
                     caseSensitive: false,
-                    values:        [{ type: 'VALUE', value: 'true' }]
+                    values: [{ type: 'VALUE', value: 'true' }]
                 }],
                 searchIdentifier: 'proxy-' + Date.now()
             },
             {
                 headers: {
-                    'Accept':        'application/json',
-                    'Content-Type':  'application/json',
-                    'x-1p-appid':    'mjl',
-                    'origin':        'https://mjl.clarivate.com',
-                    'referer':       'https://mjl.clarivate.com/search-results',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'x-1p-appid': 'mjl',
+                    'origin': 'https://mjl.clarivate.com',
+                    'referer': 'https://mjl.clarivate.com/search-results',
                     'authorization': 'Bearer'
                 }
             }
@@ -399,24 +428,24 @@ exports.getClarivateJournalType = async (req, res) => {
                 products.forEach(prod => {
                     const desc = (prod?.description || '').toUpperCase();
                     if (desc.includes('SCIENCE CITATION INDEX EXPANDED')) types.add('SCIE');
-                    else if (desc.includes('SCIENCE CITATION INDEX'))     types.add('SCI');
-                    if (desc.includes('SOCIAL SCIENCES CITATION'))        types.add('SSCI');
-                    if (desc.includes('ARTS & HUMANITIES'))               types.add('AHCI');
-                    if (desc.includes('EMERGING SOURCES'))                types.add('ESCI');
+                    else if (desc.includes('SCIENCE CITATION INDEX')) types.add('SCI');
+                    if (desc.includes('SOCIAL SCIENCES CITATION')) types.add('SSCI');
+                    if (desc.includes('ARTS & HUMANITIES')) types.add('AHCI');
+                    if (desc.includes('EMERGING SOURCES')) types.add('ESCI');
                 });
             }
         });
 
         return res.json({
-            success:      true,
-            inWoS:        types.size > 0,
-            journalType:  types.size > 0 ? [...types].join(' / ') : null,
+            success: true,
+            inWoS: types.size > 0,
+            journalType: types.size > 0 ? [...types].join(' / ') : null,
             totalRecords: response.data?.totalRecords || 0
         });
 
     } catch (err) {
-        const status  = err.response?.status || 500;
-        const message = err.response?.data   || err.message;
+        const status = err.response?.status || 500;
+        const message = err.response?.data || err.message;
         console.error('Clarivate proxy error:', status, message);
         return res.status(status).json({ success: false, message: typeof message === 'object' ? JSON.stringify(message) : message });
     }
@@ -456,6 +485,313 @@ exports.updateJournalMetrics = async (req, res) => {
         res.json({ success: true, data: journal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+exports.fetchDoiDetails = async (req, res) => {
+    const { doi } = req.body;
+    if (!doi) {
+        return res.status(400).json({ success: false, message: 'DOI is required' });
+    }
+
+    try {
+        const ELSEVIER_API_KEY = process.env.SCOPUS_API_KEY;
+        const headers = {
+            "X-ELS-APIKey": ELSEVIER_API_KEY,
+            Accept: "application/json",
+        };
+
+        const cleanDoi = doi.trim();
+        let metadata = {
+            title: "",
+            journalName: "",
+            vol: "",
+            issue: "",
+            pageRange: "",
+            month: "",
+            year: "",
+            issn: "",
+            eissn: "",
+            isScopus: "No",
+            journalQuartile: "None",
+            journalType: "None"
+        };
+
+        let foundInScopus = false;
+
+        // Step 1: Scopus API Check
+        try {
+            const scopusBaseUrl = process.env.SCOPUS_SEARCH_API_URL || 'https://api.elsevier.com/content/search/scopus';
+            const scopusUrl = `${scopusBaseUrl}?query=DOI(${encodeURIComponent(cleanDoi)})`;
+            const scopusRes = await axios.get(scopusUrl, { headers });
+
+            const entry = scopusRes.data?.["search-results"]?.entry?.[0];
+            if (entry && !entry.error && (entry["dc:title"] || entry["prism:publicationName"])) {
+                if (entry.subtype === "cp" || entry["prism:aggregationType"] === "Conference Proceeding") {
+                    return res.status(400).json({ success: false, message: "Only journal papers are allowed. Conference papers are not accepted." });
+                }
+
+                foundInScopus = true;
+                metadata.isScopus = "Yes";
+                metadata.title = entry["dc:title"] || "";
+                metadata.journalName = entry["prism:publicationName"] || "";
+                metadata.vol = entry["prism:volume"] || "";
+                metadata.issue = entry["prism:issueIdentifier"] || "";
+                metadata.pageRange = entry["prism:pageRange"] || "";
+
+                const rawIssn = entry["prism:issn"] || "";
+                const rawEissn = entry["prism:eIssn"] || "";
+                if (rawIssn) metadata.issn = rawIssn.split(" ")[0].replace(/-/g, "");
+                if (rawEissn) metadata.eissn = rawEissn.split(" ")[0].replace(/-/g, "");
+
+                const coverDisplayDate = entry["prism:coverDisplayDate"] || "";
+                if (coverDisplayDate) {
+                    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                    const shortMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                    const yearMatch = coverDisplayDate.match(/\b(19|20)\d{2}\b/);
+                    if (yearMatch) metadata.year = yearMatch[0];
+                    for (let i = 0; i < 12; i++) {
+                        if (
+                            coverDisplayDate.toLowerCase().includes(monthNames[i].toLowerCase()) ||
+                            coverDisplayDate.toLowerCase().includes(shortMonths[i].toLowerCase())
+                        ) {
+                            metadata.month = monthNames[i];
+                            break;
+                        }
+                    }
+                    if (!metadata.month) {
+                        const isoMatch = coverDisplayDate.match(/\d{4}-(\d{2})/);
+                        if (isoMatch) metadata.month = monthNames[parseInt(isoMatch[1], 10) - 1] || "";
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Scopus API Error:", err.message);
+            // Handle rate limit or unauth separately if needed, but for now we just fallback
+            if (err.response && err.response.status === 429) {
+                return res.status(429).json({ success: false, message: "Elsevier/Scopus API rate limit exceeded. Please try again later or fill fields manually." });
+            }
+        }
+
+        // Step 1B: If not found in Scopus, use Crossref
+        let foundInCrossref = false;
+        if (!foundInScopus) {
+            try {
+                const crossrefBaseUrl = process.env.CROSSREF_API_URL || 'https://api.crossref.org/works';
+                const crossrefUrl = `${crossrefBaseUrl}/${encodeURIComponent(cleanDoi)}`;
+                const crossrefRes = await axios.get(crossrefUrl);
+                const item = crossrefRes.data?.message;
+
+                if (item && item.title && item.title.length > 0) {
+                    foundInCrossref = true;
+                    metadata.isScopus = "No";
+                    metadata.title = item.title[0] || "";
+                    metadata.journalName = (item["container-title"] && item["container-title"][0]) || "";
+                    metadata.vol = item.volume || "";
+                    metadata.issue = item.issue || "";
+                    metadata.pageRange = item.page || "";
+
+                    if (item.ISSN && item.ISSN.length > 0) {
+                        // Crossref can return multiple ISSNs (print, electronic)
+                        const issn1 = item.ISSN[0].replace(/-/g, "");
+                        const issn2 = item.ISSN.length > 1 ? item.ISSN[1].replace(/-/g, "") : "";
+                        if (item["issn-type"]) {
+                            item["issn-type"].forEach(t => {
+                                if (t.type === "print") metadata.issn = t.value.replace(/-/g, "");
+                                if (t.type === "electronic") metadata.eissn = t.value.replace(/-/g, "");
+                            });
+                        }
+                        if (!metadata.issn && !metadata.eissn) {
+                            metadata.issn = issn1;
+                            metadata.eissn = issn2;
+                        }
+                    }
+
+                    // Extract date
+                    const published = item["published-print"] || item["published-online"] || item.published || item.created;
+                    if (published && published["date-parts"] && published["date-parts"][0]) {
+                        const parts = published["date-parts"][0];
+                        if (parts[0]) metadata.year = parts[0].toString();
+                        if (parts[1]) {
+                            const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                            metadata.month = monthNames[parts[1] - 1] || "";
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error("Crossref API Error:", err.message);
+            }
+        }
+
+        if (!foundInScopus && !foundInCrossref) {
+            return res.status(404).json({
+                success: false,
+                message: "DOI not found in Scopus or Crossref. Please enter details manually."
+            });
+        }
+
+        const activeIssn = metadata.issn || metadata.eissn;
+
+        // Step 2: Calculate Quartile (Only if found in Scopus)
+        if (foundInScopus && activeIssn) {
+            try {
+                let serialDataFetched = false;
+                let serialEntry = {};
+
+                const fetchSerial = async (issnToTry) => {
+                    if (!issnToTry) return false;
+                    const serialBaseUrl = process.env.SCOPUS_SERIAL_API_URL || 'https://api.elsevier.com/content/serial/title/issn';
+                    const serialRes = await axios.get(
+                        `${serialBaseUrl}/${issnToTry}?view=CITESCORE`,
+                        { headers }
+                    );
+                    serialEntry = serialRes.data?.["serial-metadata-response"]?.entry?.[0] || {};
+                    return true;
+                };
+
+                serialDataFetched = await fetchSerial(metadata.issn).catch(() => false);
+                if (!serialDataFetched && metadata.eissn) {
+                    serialDataFetched = await fetchSerial(metadata.eissn).catch(() => false);
+                }
+
+                if (serialDataFetched) {
+                    const csYearInfo = serialEntry?.citeScoreYearInfoList?.citeScoreYearInfo;
+                    let highestPercentile = null;
+
+                    if (Array.isArray(csYearInfo) && csYearInfo.length > 0) {
+                        const sortedYears = [...csYearInfo].sort((a, b) => parseInt(b["@year"] || 0) - parseInt(a["@year"] || 0));
+                        const latestYearInfo = sortedYears[0];
+                        const infoList = latestYearInfo.citeScoreInformationList || [];
+                        let percentiles = [];
+
+                        infoList.forEach(info => {
+                            const csInfo = info.citeScoreInfo || [];
+                            csInfo.forEach(cs => {
+                                const subjectRanks = cs.citeScoreSubjectRank || [];
+                                subjectRanks.forEach(sr => {
+                                    if (sr.percentile) {
+                                        const pVal = parseFloat(sr.percentile);
+                                        if (!isNaN(pVal)) percentiles.push(pVal);
+                                    }
+                                });
+                            });
+                        });
+
+                        if (percentiles.length > 0) {
+                            highestPercentile = Math.max(...percentiles);
+                        }
+                    }
+
+                    if (highestPercentile !== null) {
+                        if (highestPercentile >= 75) metadata.journalQuartile = "Q1";
+                        else if (highestPercentile >= 50) metadata.journalQuartile = "Q2";
+                        else if (highestPercentile >= 25) metadata.journalQuartile = "Q3";
+                        else metadata.journalQuartile = "Q4";
+                    }
+                }
+            } catch (err) {
+                console.error("Scopus Serial API Error:", err.message);
+            }
+        }
+
+        // Step 3: Clarivate/WoS Type Check
+        if (activeIssn) {
+            try {
+                const formatISSNWithHyphen = (raw) => {
+                    if (!raw) return "";
+                    const digits = raw.replace(/-/g, "");
+                    if (digits.length === 8) return digits.slice(0, 4) + "-" + digits.slice(4);
+                    return digits;
+                };
+
+                let wosDataFetched = false;
+
+                // Helper to perform the Clarivate search using the proxy we already have logic for
+                // Note: Since we are inside the same controller, we can't easily call our own `exports.getClarivateJournalType`
+                // because it expects `req` and `res`. So we implement the axios call directly here or extract a helper.
+
+                const fetchWoSType = async (issnToTry) => {
+                    if (!issnToTry) return false;
+                    const wosIssn = formatISSNWithHyphen(issnToTry);
+                    const clarivateUrl = process.env.CLARIVATE_RANK_SEARCH_API_URL || 'https://mjl.clarivate.com/api/mjl/jprof/public/rank-search';
+                    const response = await axios.post(
+                        clarivateUrl,
+                        {
+                            searchValue: wosIssn,
+                            pageNum: 1,
+                            pageSize: 10,
+                            sortOrder: [{ name: 'RELEVANCE', order: 'DESC' }],
+                            filters: [{
+                                filterName: 'COVERED_LATEST_JEDI',
+                                matchType: 'BOOLEAN_EXACT',
+                                caseSensitive: false,
+                                values: [{ type: 'VALUE', value: 'true' }]
+                            }],
+                            searchIdentifier: 'proxy-' + Date.now()
+                        },
+                        {
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'x-1p-appid': 'mjl',
+                                'origin': 'https://mjl.clarivate.com',
+                                'referer': 'https://mjl.clarivate.com/search-results',
+                                'authorization': 'Bearer'
+                            }
+                        }
+                    );
+
+                    const profiles = response.data?.journalProfiles || [];
+                    const types = new Set();
+
+                    profiles.forEach(p => {
+                        const jp = p?.journalProfile || {};
+                        const jcrCategories = jp.jcrCategories || [];
+                        jcrCategories.forEach(cat => {
+                            const edition = (cat?.jcrEdition || '').toUpperCase();
+                            if (['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'].includes(edition)) {
+                                types.add(edition);
+                            }
+                        });
+
+                        if (types.size === 0) {
+                            const products = jp.products || [];
+                            products.forEach(prod => {
+                                const desc = (prod?.description || '').toUpperCase();
+                                if (desc.includes('SCIENCE CITATION INDEX EXPANDED')) types.add('SCIE');
+                                else if (desc.includes('SCIENCE CITATION INDEX')) types.add('SCI');
+                                if (desc.includes('SOCIAL SCIENCES CITATION')) types.add('SSCI');
+                                if (desc.includes('ARTS & HUMANITIES')) types.add('AHCI');
+                                if (desc.includes('EMERGING SOURCES')) types.add('ESCI');
+                            });
+                        }
+                    });
+
+                    if (types.size > 0) {
+                        metadata.journalType = [...types].join(' / ');
+                        return true;
+                    }
+                    return false;
+                };
+
+                wosDataFetched = await fetchWoSType(metadata.issn).catch(() => false);
+                if (!wosDataFetched && metadata.eissn) {
+                    wosDataFetched = await fetchWoSType(metadata.eissn).catch(() => false);
+                }
+
+            } catch (err) {
+                console.error("Clarivate Proxy Error in fetchDoiDetails:", err.message);
+            }
+        }
+
+        return res.json({
+            success: true,
+            data: metadata
+        });
+
+    } catch (err) {
+        console.error("fetchDoiDetails Overall Error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error while fetching DOI details." });
     }
 };
 

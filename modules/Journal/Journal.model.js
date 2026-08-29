@@ -24,6 +24,9 @@ const JournalSchema = new mongoose.Schema({
     college: { type: String },
     panNumber: { type: String },
     doi: { type: String, required: true, trim: true, unique: true, sparse: true },
+    issn: { type: String },
+    eissn: { type: String },
+    isScopus: { type: String, enum: ['Yes', 'No'], required: true },
 
     publicationScope: { type: String, required: true },
     totalAuthors: { type: Number, required: true },
