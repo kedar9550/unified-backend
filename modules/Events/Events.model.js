@@ -114,6 +114,10 @@ const EventsSchema = new mongoose.Schema({
         type: [String],
         default: []
     },
+    themes: {
+        type: [String],
+        default: []
+    },
     bannerImage: {
         type: String,
     },
@@ -141,6 +145,15 @@ const EventsSchema = new mongoose.Schema({
     },
     facultyCoordinators: {
         type: [FacultyCoordinatorSchema],
+        default: []
+    },
+    studentCoordinators: {
+        type: [{
+            rollNo: { type: String, trim: true },
+            name: { type: String, trim: true },
+            department: { type: String, trim: true },
+            branch: { type: String, trim: true }
+        }],
         default: []
     },
     createdBy: {
