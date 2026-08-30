@@ -17,23 +17,36 @@ const sendNotificationEmail = async (inquiry) => {
     const receiverEmail = process.env.RECEIVER_EMAIL || 'veda2026@adityauniversity.in';
     const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
     const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+    const smtpHost = process.env.SMTP_HOST || 'smtp.office365.com';
+    const smtpPort = Number(process.env.SMTP_PORT) || 587;
+    const smtpSecure = process.env.SMTP_SECURE === 'true';
 
     if (smtpUser && smtpPass) {
-      const transporter = process.env.SMTP_HOST
-        ? nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT || 587,
-            secure: process.env.SMTP_SECURE === 'true',
-            auth: { user: smtpUser, pass: smtpPass },
-          })
-        : nodemailer.createTransport({
-            service: 'gmail',
-            auth: { user: smtpUser, pass: smtpPass },
-          });
+      const transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: { user: smtpUser, pass: smtpPass },
+        tls: {
+          ciphers: 'SSLv3',
+          rejectUnauthorized: false,
+        },
+      });
+
+      const targetEmails = new Set();
+      if (receiverEmail) {
+        receiverEmail.split(',').forEach((email) => {
+          if (email && email.trim()) targetEmails.add(email.trim());
+        });
+      }
+      if (inquiry.email && inquiry.email.trim()) {
+        targetEmails.add(inquiry.email.trim());
+      }
 
       const mailOptions = {
         from: `"VEDA 2026 Portal" <${smtpUser}>`,
-        to: `${receiverEmail}, ${inquiry.email}`,
+        to: Array.from(targetEmails).join(', '),
+        replyTo: inquiry.email,
         subject: `[VEDA 2026] Inquiry Received: ${inquiry.subject}`,
         html: `
           <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
@@ -52,7 +65,7 @@ const sendNotificationEmail = async (inquiry) => {
       };
 
       await transporter.sendMail(mailOptions);
-      console.log(`[INQUIRY EMAIL] Sent email to ${inquiry.email}`);
+      console.log(`[INQUIRY EMAIL] Successfully sent email to: ${Array.from(targetEmails).join(', ')}`);
     } else {
       console.log(`[INQUIRY EMAIL] SMTP not configured. Notification for inquiry ${inquiry._id} logged successfully.`);
     }
@@ -106,6 +119,63 @@ exports.getAllInquiries = async (req, res) => {
       success: true,
       count: inquiries.length,
       data: inquiries,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
+
+// Update inquiry status
+exports.updateInquiryStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const updatedInquiry = await Inquiry.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedInquiry) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inquiry not found',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Status updated successfully',
+      data: updatedInquiry,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+};
+
+// Delete inquiry
+exports.deleteInquiry = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deletedInquiry = await Inquiry.findByIdAndDelete(id);
+
+    if (!deletedInquiry) {
+      return res.status(404).json({
+        success: false,
+        error: 'Inquiry not found',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Inquiry deleted successfully',
     });
   } catch (error) {
     return res.status(500).json({
