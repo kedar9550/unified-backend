@@ -762,7 +762,7 @@ exports.sendInvoiceMailInternal = async (data) => {
 
         const path = require('path');
         const fs = require('fs');
-        const logoPath = path.resolve(__dirname, '../../../unified-frontend/src/assets/Aditya University Gold Logo.png');
+        const logoPath = path.resolve(__dirname, '../../assets/Aditya University Gold Logo.png');
         
         let mailAttachments = [];
         if (fs.existsSync(logoPath)) {

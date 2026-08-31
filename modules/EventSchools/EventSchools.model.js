@@ -22,7 +22,7 @@ const EventSchoolsSchema = new mongoose.Schema({
     banner: {
         type: String,
     },
-    coordinator: {
+    coordinators: [{
         employeeId: {
             type: String,
             required: [true, 'Coordinator ID is required']
@@ -31,7 +31,7 @@ const EventSchoolsSchema = new mongoose.Schema({
             type: String,
             required: [true, 'Coordinator name is required']
         }
-    },
+    }],
     status: {
         type: String,
         enum: ['Active', 'Inactive'],
