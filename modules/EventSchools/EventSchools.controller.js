@@ -24,8 +24,8 @@ const cleanupFiles = (files = []) => {
     });
 };
 
-const assignSchoolCoordinatorRole = async (coordinator) => {
-    if (!coordinator || !coordinator.employeeId) return;
+const assignSchoolCoordinatorRole = async (coordinators) => {
+    if (!Array.isArray(coordinators) || coordinators.length === 0) return;
 
     const roleDoc = await Role.findOne({ name: 'SCHOOL COORDINATOR', app: 'UNIFIED_SYSTEM' });
     if (!roleDoc) {
@@ -33,48 +33,58 @@ const assignSchoolCoordinatorRole = async (coordinator) => {
         return;
     }
 
-    const employee = await Employee.findOne({ institutionId: coordinator.employeeId });
-    if (!employee) {
-        console.warn(`Employee not found for school coordinator ${coordinator.employeeId}`);
-        return;
-    }
+    for (const coordinator of coordinators) {
+        if (!coordinator || !coordinator.employeeId) continue;
+        const employee = await Employee.findOne({ institutionId: coordinator.employeeId });
+        if (!employee) {
+            console.warn(`Employee not found for school coordinator ${coordinator.employeeId}`);
+            continue;
+        }
 
-    await UserAppRole.updateOne(
-        { userId: employee._id, app: 'UNIFIED_SYSTEM', role: roleDoc._id },
-        { $set: { userModel: 'Employee' } },
-        { upsert: true }
-    );
+        await UserAppRole.updateOne(
+            { userId: employee._id, app: 'UNIFIED_SYSTEM', role: roleDoc._id },
+            { $set: { userModel: 'Employee' } },
+            { upsert: true }
+        );
+    }
 };
 
-const normalizeCoordinator = (coordinator) => {
-    if (!coordinator) return null;
-    let parsed = coordinator;
-    if (typeof coordinator === 'string') {
+const normalizeCoordinators = (coordinatorsData) => {
+    if (!coordinatorsData) return [];
+    let parsedArray = coordinatorsData;
+    
+    if (typeof coordinatorsData === 'string') {
         try {
-            parsed = JSON.parse(coordinator);
+            parsedArray = JSON.parse(coordinatorsData);
         } catch (err) {
-            parsed = null;
+            parsedArray = [];
         }
     }
-    if (!parsed) return null;
+    
+    if (!Array.isArray(parsedArray)) {
+        parsedArray = [parsedArray];
+    }
 
-    const employeeId = parsed.institutionId || parsed.employeeId || parsed.employeeCode || parsed._id || parsed.id;
-    if (!employeeId) return null;
+    return parsedArray.map(parsed => {
+        if (!parsed) return null;
+        const employeeId = parsed.institutionId || parsed.employeeId || parsed.employeeCode || parsed._id || parsed.id;
+        if (!employeeId) return null;
 
-    return {
-        employeeId: employeeId.toString(),
-        employeeName: parsed.employeeName || parsed.name || '',
-        department: parsed.department || parsed.departmentName || '',
-        designation: parsed.designation || parsed.title || '',
-    };
+        return {
+            employeeId: employeeId.toString(),
+            employeeName: parsed.employeeName || parsed.name || '',
+            department: parsed.department || parsed.departmentName || '',
+            designation: parsed.designation || parsed.title || '',
+        };
+    }).filter(Boolean);
 };
 
 exports.createEventSchool = async (req, res, next) => {
     const bannerFile = req.files?.banner?.[0] ?? null;
 
     try {
-        const { name, shortName, content, status, coordinator, removeBanner, orderNo } = req.body;
-        const normalizedCoordinator = normalizeCoordinator(coordinator);
+        const { name, shortName, content, status, coordinators, removeBanner, orderNo } = req.body;
+        const normalizedCoordinators = normalizeCoordinators(coordinators);
 
         if (!name || !shortName || !content) {
             cleanupFiles([bannerFile]);
@@ -95,14 +105,14 @@ exports.createEventSchool = async (req, res, next) => {
             shortName: shortName.trim(),
             content: content.trim(),
             banner: bannerFile ? `/uploads/event_schools/${bannerFile.filename}` : null,
-            coordinator: normalizedCoordinator || {},
+            coordinators: normalizedCoordinators,
             status: status || 'Active',
             orderNo: orderNo ? Number(orderNo) : 0,
             createdBy: userId
         });
 
-        if (normalizedCoordinator) {
-            await assignSchoolCoordinatorRole(normalizedCoordinator);
+        if (normalizedCoordinators.length > 0) {
+            await assignSchoolCoordinatorRole(normalizedCoordinators);
         }
 
         return res.status(201).json({
@@ -134,8 +144,8 @@ exports.getAllEventSchools = async (req, res, next) => {
                     if (empId) {
                         filterQuery = { 
                             $or: [
-                                { 'coordinator.employeeId': empId },
-                                { 'coordinator.employeeId': String(empId) }
+                                { 'coordinators.employeeId': empId },
+                                { 'coordinators.employeeId': String(empId) }
                             ]
                         };
                     }
@@ -149,9 +159,17 @@ exports.getAllEventSchools = async (req, res, next) => {
             .sort({ orderNo: 1, createdAt: -1 });
 
         let eventSchools = JSON.parse(JSON.stringify(eventSchoolsData));
-        const empIds = eventSchools
-            .filter(g => g.coordinator && g.coordinator.employeeId)
-            .map(g => g.coordinator.employeeId);
+        
+        let empIds = [];
+        eventSchools.forEach(g => {
+            if (g.coordinators && Array.isArray(g.coordinators)) {
+                g.coordinators.forEach(c => {
+                    if (c.employeeId) empIds.push(c.employeeId);
+                });
+            }
+        });
+        
+        empIds = [...new Set(empIds)]; // unique
 
         if (empIds.length > 0) {
             const employees = await Employee.find({ institutionId: { $in: empIds } }).select('institutionId phone mobile');
@@ -161,8 +179,12 @@ exports.getAllEventSchools = async (req, res, next) => {
             });
 
             eventSchools.forEach(g => {
-                if (g.coordinator && g.coordinator.employeeId) {
-                    g.coordinator.phone = empMap[g.coordinator.employeeId] || 'N/A';
+                if (g.coordinators && Array.isArray(g.coordinators)) {
+                    g.coordinators.forEach(c => {
+                        if (c.employeeId) {
+                            c.phone = empMap[c.employeeId] || 'N/A';
+                        }
+                    });
                 }
             });
         }
@@ -195,14 +217,14 @@ exports.updateEventSchool = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Event School not found.' });
         }
 
-        const { name, shortName, content, status, coordinator, removeBanner, orderNo } = req.body;
-        const normalizedCoordinator = normalizeCoordinator(coordinator);
+        const { name, shortName, content, status, coordinators, removeBanner, orderNo } = req.body;
+        const normalizedCoordinators = normalizeCoordinators(coordinators);
 
         if (name) eventSchool.name = name.trim();
         if (shortName) eventSchool.shortName = shortName.trim();
         if (content) eventSchool.content = content.trim();
         if (status) eventSchool.status = status;
-        if (normalizedCoordinator) eventSchool.coordinator = normalizedCoordinator;
+        if (coordinators !== undefined) eventSchool.coordinators = normalizedCoordinators;
         if (orderNo !== undefined) eventSchool.orderNo = Number(orderNo);
 
         if (bannerFile) { 
@@ -215,8 +237,8 @@ exports.updateEventSchool = async (req, res, next) => {
 
         await eventSchool.save();
 
-        if (normalizedCoordinator) {
-            await assignSchoolCoordinatorRole(normalizedCoordinator);
+        if (normalizedCoordinators.length > 0) {
+            await assignSchoolCoordinatorRole(normalizedCoordinators);
         }
 
         return res.status(200).json({
