@@ -25,6 +25,7 @@
     "multer": "^2.1.1",
     "nodemailer": "^9.0.1",
     "nodemon": "^3.1.14",
+    "pngjs": "^7.0.0",
     "puppeteer": "^25.4.0",
     "razorpay": "^2.0.0",
     "socket.io": "^4.8.3",
