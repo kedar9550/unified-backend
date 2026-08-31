@@ -366,10 +366,14 @@ const sdgData = {
   },
 };
 
+const path = require('path');
+const extractBackgroundColor = require('../utils/extractBackgroundColor');
+
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.UnifiedDb);
-        console.log('MongoDB connected');
+        const mongoUri = process.env.UnifiedDb || process.env.MONGODB_URI || 'mongodb://localhost:27017/unified_portal';
+        await mongoose.connect(mongoUri);
+        console.log('  ✓ Connected to MongoDB');
     } catch (err) {
         console.error('MongoDB connection error:', err);
         process.exit(1);
@@ -377,25 +381,64 @@ const connectDB = async () => {
 };
 
 const seedSdgs = async () => {
-    console.log('\nSeeding SDGs...');
-    
+    console.log('\nSeeding & Migrating SDGs (with automatic backgroundColor extraction)...');
+
     try {
         await connectDB();
-        
-        // Clear existing SDGs
-        await Sdg.deleteMany({});
-        console.log('  ✓ Cleared existing SDGs');
-        
-        const sdgsToInsert = Object.entries(sdgData).map(([number, data]) => ({
-            sdgNumber: number,
-            sdgTitle: data.title,
-            keywords: data.keywords
-        }));
-        
-        await Sdg.insertMany(sdgsToInsert);
-        console.log(`  ✓ Inserted ${sdgsToInsert.length} SDGs`);
-        
-        console.log('\n✅ SDG Seeding completed successfully!');
+
+        let count = 0;
+        for (const [number, data] of Object.entries(sdgData)) {
+            const numMatch = number.match(/\d+/);
+            const paddedNum = numMatch ? numMatch[0].padStart(2, '0') : '01';
+            const defaultImg = `/uploads/sdgs/sdg-en-${paddedNum}.png`;
+            const fullDiskPath = path.join(__dirname, '../uploads/sdgs', `sdg-en-${paddedNum}.png`);
+
+            const extractedBgColor = await extractBackgroundColor(fullDiskPath);
+
+            let sdg = await Sdg.findOne({ sdgNumber: number });
+
+            if (!sdg) {
+                sdg = new Sdg({
+                    sdgNumber: number,
+                    sdgTitle: data.title,
+                    keywords: data.keywords,
+                    imageUrl: defaultImg,
+                    backgroundColor: extractedBgColor,
+                    color: extractedBgColor
+                });
+                await sdg.save();
+            } else {
+                let modified = false;
+                if (!sdg.imageUrl) { sdg.imageUrl = defaultImg; modified = true; }
+                if (extractedBgColor && sdg.backgroundColor !== extractedBgColor) {
+                    sdg.backgroundColor = extractedBgColor;
+                    sdg.color = extractedBgColor;
+                    modified = true;
+                }
+                if (modified) {
+                    await sdg.save();
+                }
+            }
+            count++;
+        }
+
+        // Also process any other custom SDGs in the database to extract and update backgroundColor
+        const allSdgs = await Sdg.find({});
+        for (const sdg of allSdgs) {
+            if (sdg.imageUrl) {
+                const imgFileName = sdg.imageUrl.split('/').pop();
+                const fullDiskPath = path.join(__dirname, '../uploads/sdgs', imgFileName);
+                const bg = await extractBackgroundColor(fullDiskPath);
+                if (bg && sdg.backgroundColor !== bg) {
+                    sdg.backgroundColor = bg;
+                    sdg.color = bg;
+                    await sdg.save();
+                }
+            }
+        }
+
+        console.log(`  ✓ Successfully processed and backfilled ${count} SDGs with imageUrl & backgroundColor`);
+        console.log('\n✅ SDG Seeding & Migration completed successfully!');
     } catch (err) {
         console.error('Seeding failed:', err);
     } finally {
