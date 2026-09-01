@@ -272,7 +272,10 @@ exports.getAllEvents = async (req, res, next) => {
                         if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'EVENT_COORDINATOR') {
                             const Group = require('../EventSchools/EventSchools.model');
                             const myGroups = await Group.find({
-                                'coordinator.employeeId': { $in: empMatch }
+                                $or: [
+                                    { 'coordinators.employeeId': { $in: empMatch } },
+                                    { 'coordinator.employeeId': { $in: empMatch } }
+                                ]
                             }).select('_id');
                             const myGroupIds = myGroups.map(g => g._id);
 
@@ -301,7 +304,7 @@ exports.getAllEvents = async (req, res, next) => {
         }
 
         const events = await Events.find(filterQuery)
-            .populate('eventSchool', 'name coordinator')
+            .populate('eventSchool', 'name coordinator coordinators shortName banner')
             .populate('department', 'name')
             .populate('building', 'name')
             .populate('floor', 'name')
@@ -339,7 +342,7 @@ exports.getAllEvents = async (req, res, next) => {
 exports.getEventById = async (req, res, next) => {
     try {
         const event = await Events.findById(req.params.id)
-            .populate('eventSchool', 'name coordinator')
+            .populate('eventSchool', 'name coordinator coordinators shortName banner')
             .populate('department', 'name')
             .populate('building', 'name')
             .populate('floor', 'name')

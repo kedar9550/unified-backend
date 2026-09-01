@@ -139,13 +139,17 @@ exports.getAllEventSchools = async (req, res, next) => {
             if (token) {
                 try {
                     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-                    const empId = decoded.institutionId;
+                    const empId = decoded.institutionId || decoded.employeeId || decoded.employeeCode || decoded.id || decoded.userId;
 
                     if (empId) {
+                        const empIdStr = String(empId).trim();
+                        const empIdNum = Number(empIdStr);
+                        const empMatch = isNaN(empIdNum) ? [empIdStr] : [empIdStr, empIdNum];
+
                         filterQuery = { 
                             $or: [
-                                { 'coordinators.employeeId': empId },
-                                { 'coordinators.employeeId': String(empId) }
+                                { 'coordinators.employeeId': { $in: empMatch } },
+                                { 'coordinator.employeeId': { $in: empMatch } }
                             ]
                         };
                     }

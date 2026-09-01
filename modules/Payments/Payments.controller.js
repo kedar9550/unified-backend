@@ -76,7 +76,10 @@ const getRoleFilterQuery = async (req) => {
   if (role === 'SCHOOL_COORDINATOR' || role === 'EVENT_COORDINATOR') {
     // 1. Find all schools where coordinator is this employee
     const mySchools = await EventSchools.find({
-      'coordinator.employeeId': { $in: empMatch }
+      $or: [
+        { 'coordinators.employeeId': { $in: empMatch } },
+        { 'coordinator.employeeId': { $in: empMatch } }
+      ]
     }).lean();
 
     const schoolIds = mySchools.map(s => s._id.toString());
@@ -354,7 +357,16 @@ exports.getDashboardStats = async (req, res) => {
             const EventSchools = require('../EventSchools/EventSchools.model');
             const Events = require('../Events/Events.model');
 
-            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
+            const empIdStr = String(empId).trim();
+            const empIdNum = Number(empIdStr);
+            const empMatch = isNaN(empIdNum) ? [empIdStr] : [empIdStr, empIdNum];
+
+            const mySchools = await EventSchools.find({
+              $or: [
+                { 'coordinators.employeeId': { $in: empMatch } },
+                { 'coordinator.employeeId': { $in: empMatch } }
+              ]
+            }).select('name');
             const mySchoolNames = mySchools.map(g => new RegExp(`^${g.name}$`, 'i'));
 
             const myEvents = await Events.find({
@@ -807,26 +819,49 @@ exports.scanBarcode = async (req, res) => {
       if (token) {
         try {
           const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          const empId = decoded.institutionId;
+          const empId = decoded.institutionId || decoded.employeeId || decoded.employeeCode || decoded.id || decoded.userId;
           if (empId) {
+            const empIdStr = String(empId).trim();
+            const empIdNum = Number(empIdStr);
+            const empMatch = isNaN(empIdNum) ? [empIdStr] : [empIdStr, empIdNum];
+
             const EventSchools = require('../EventSchools/EventSchools.model');
             const Events = require('../Events/Events.model');
 
-            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
-            const mySchoolNames = mySchools.map(g => g.name.toLowerCase());
+            const mySchools = await EventSchools.find({
+              $or: [
+                { 'coordinators.employeeId': { $in: empMatch } },
+                { 'coordinator.employeeId': { $in: empMatch } }
+              ]
+            }).select('name shortName _id');
+            const mySchoolNames = mySchools.flatMap(g => [
+              (g.name || '').toLowerCase(),
+              (g.shortName || '').toLowerCase(),
+              g._id.toString()
+            ]).filter(Boolean);
 
             const myEvents = await Events.find({
               $or: [
-                { 'conveners.employeeId': empId },
-                { 'facultyCoordinators.employeeId': empId },
-                { 'facultyCoordinator.employeeId': empId }
+                ...(activeRole === 'SCHOOL_COORDINATOR' ? [{ eventSchool: { $in: mySchools.map(s => s._id) } }] : []),
+                { 'conveners.employeeId': { $in: empMatch } },
+                { 'facultyCoordinators.employeeId': { $in: empMatch } },
+                { 'facultyCoordinator.employeeId': { $in: empMatch } }
               ]
-            }).select('eventName');
-            const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
+            }).select('eventName _id');
+            const myEventNames = myEvents.map(e => (e.eventName || '').toLowerCase());
+            const myEventIds = myEvents.map(e => e._id.toString());
+
+            const regSchoolId = (registration.schoolId || '').toLowerCase();
+            const regEventName = (registration.eventName || '').toLowerCase();
+            const regCategory = (registration.category || '').toLowerCase();
+            const regEventId = (registration.eventId || '').toString();
 
             if (
-              mySchoolNames.includes((registration.schoolId || '').toLowerCase()) ||
-              myEventNames.includes((registration.eventName || '').toLowerCase())
+              mySchoolNames.includes(regSchoolId) ||
+              mySchoolNames.includes(regCategory) ||
+              myEventNames.includes(regEventName) ||
+              myEventNames.includes(regCategory) ||
+              (regEventId && myEventIds.includes(regEventId))
             ) {
               authorized = true;
             }
@@ -1049,26 +1084,49 @@ exports.updateAttendance = async (req, res) => {
       if (token) {
         try {
           const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          const empId = decoded.institutionId;
+          const empId = decoded.institutionId || decoded.employeeId || decoded.employeeCode || decoded.id || decoded.userId;
           if (empId) {
+            const empIdStr = String(empId).trim();
+            const empIdNum = Number(empIdStr);
+            const empMatch = isNaN(empIdNum) ? [empIdStr] : [empIdStr, empIdNum];
+
             const EventSchools = require('../EventSchools/EventSchools.model');
             const Events = require('../Events/Events.model');
 
-            const mySchools = await EventSchools.find({ 'coordinator.employeeId': empId }).select('name');
-            const mySchoolNames = mySchools.map(g => g.name.toLowerCase());
+            const mySchools = await EventSchools.find({
+              $or: [
+                { 'coordinators.employeeId': { $in: empMatch } },
+                { 'coordinator.employeeId': { $in: empMatch } }
+              ]
+            }).select('name shortName _id');
+            const mySchoolNames = mySchools.flatMap(g => [
+              (g.name || '').toLowerCase(),
+              (g.shortName || '').toLowerCase(),
+              g._id.toString()
+            ]).filter(Boolean);
 
             const myEvents = await Events.find({
               $or: [
-                { 'conveners.employeeId': empId },
-                { 'facultyCoordinators.employeeId': empId },
-                { 'facultyCoordinator.employeeId': empId }
+                ...(activeRole === 'SCHOOL_COORDINATOR' ? [{ eventSchool: { $in: mySchools.map(s => s._id) } }] : []),
+                { 'conveners.employeeId': { $in: empMatch } },
+                { 'facultyCoordinators.employeeId': { $in: empMatch } },
+                { 'facultyCoordinator.employeeId': { $in: empMatch } }
               ]
-            }).select('eventName');
-            const myEventNames = myEvents.map(e => e.eventName.toLowerCase());
+            }).select('eventName _id');
+            const myEventNames = myEvents.map(e => (e.eventName || '').toLowerCase());
+            const myEventIds = myEvents.map(e => e._id.toString());
+
+            const regSchoolId = (registration.schoolId || '').toLowerCase();
+            const regEventName = (registration.eventName || '').toLowerCase();
+            const regCategory = (registration.category || '').toLowerCase();
+            const regEventId = (registration.eventId || '').toString();
 
             if (
-              mySchoolNames.includes((registration.schoolId || '').toLowerCase()) ||
-              myEventNames.includes((registration.eventName || '').toLowerCase())
+              mySchoolNames.includes(regSchoolId) ||
+              mySchoolNames.includes(regCategory) ||
+              myEventNames.includes(regEventName) ||
+              myEventNames.includes(regCategory) ||
+              (regEventId && myEventIds.includes(regEventId))
             ) {
               authorized = true;
             }
