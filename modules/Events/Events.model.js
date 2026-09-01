@@ -156,6 +156,11 @@ const EventsSchema = new mongoose.Schema({
         }],
         default: []
     },
+    registrationStop: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'No'
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Employee',
