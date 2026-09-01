@@ -531,15 +531,29 @@ exports.getResearchReports = async (req, res) => {
         let reportData = {
             journals: [],
             textbooks: [],
-            chapters: []
+            chapters: [],
+            conferences: [],
+            patents: [],
+            products: [],
+            projects: [],
+            consultancy: []
         };
 
-        const query = { status: 'Approved' }; // Only approved records for regular reports? 
-        // Or all records? User screenshot shows "Research Incentives", usually implies Approved.
+        const query = {}; 
         
         if (academicYear && academicYear !== 'All') {
             query.academicYear = academicYear;
         }
+
+        const formatAuthors = (authorsArray) => {
+            if (!authorsArray || !Array.isArray(authorsArray)) return 'N/A';
+            return authorsArray.map(author => {
+                const name = author.name || author.authorName || '';
+                const affiliation = author.affiliation || author.affiliationName || '';
+                const empId = author.employeeId ? `, EmpID: ${author.employeeId}` : '';
+                return `${name} (${affiliation}${empId})`;
+            }).join('; ');
+        };
 
         // 1. Fetch Textbooks
         if (!type || type === 'All' || type === 'Text Book') {
@@ -562,7 +576,9 @@ exports.getResearchReports = async (req, res) => {
                 isbn: item.isbn ? `\t${item.isbn}` : 'N/A', // Force string in Excel with tab
                 year: item.academicYear?.year || item.yearOfPublication,
                 amount: item.approvedAmount || 0,
-                panNo: item.facultyId?.panNumber || 'N/A'
+                panNo: item.facultyId?.panNumber || 'N/A',
+                status: item.status || 'Pending at HOD',
+                coAuthorsText: formatAuthors(item.authors)
             }));
         }
 
@@ -588,7 +604,9 @@ exports.getResearchReports = async (req, res) => {
                 year: item.academicYear?.year || item.yearOfPublication,
                 month: item.month,
                 amount: item.approvedAmount || 0,
-                panNo: item.facultyId?.panNumber || 'N/A'
+                panNo: item.facultyId?.panNumber || 'N/A',
+                status: item.status || 'Pending at HOD',
+                coAuthorsText: formatAuthors(item.coAuthors)
             }));
         }
 
@@ -624,9 +642,145 @@ exports.getResearchReports = async (req, res) => {
                     year: item.academicYear?.year || item.publishedYear || 'N/A',
                     amount: item.approvedAmount || 0,
                     panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
-                    category: category
+                    category: category,
+                    status: item.status || 'Pending at HOD',
+                    coAuthorsText: formatAuthors(item.coAuthors)
                 };
             });
+        }
+
+        // 4. Fetch Conferences
+        if (!type || type === 'All' || type === 'Conference') {
+            const conferences = await Conference.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+
+            reportData.conferences = conferences.map(item => ({
+                sNo: '',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                empId: item.facultyId?.institutionId || 'N/A',
+                conferenceName: item.conferenceName || 'N/A',
+                paperTitle: item.title || 'N/A',
+                year: item.academicYear?.year || item.year || 'N/A',
+                amount: item.approvedAmount || 0,
+                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                status: item.status || 'Pending at HOD',
+                coAuthorsText: formatAuthors(item.coAuthors)
+            }));
+        }
+
+        // 5. Fetch Patents
+        if (!type || type === 'All' || type === 'Patent') {
+            const patents = await Patent.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+
+            reportData.patents = patents.map(item => ({
+                sNo: '',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                empId: item.facultyId?.institutionId || 'N/A',
+                title: item.title || 'N/A',
+                filingNo: item.filingNo || 'N/A',
+                year: item.academicYear?.year || 'N/A',
+                amount: item.approvedAmount || 0,
+                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                status: item.status || 'Pending at HOD',
+                coAuthorsText: formatAuthors(item.coInventors)
+            }));
+        }
+
+        // 6. Fetch Funded Projects
+        if (!type || type === 'All' || type === 'Funded Project') {
+            const projects = await FundedProject.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+
+            reportData.projects = projects.map(item => ({
+                sNo: '',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                empId: item.facultyId?.institutionId || 'N/A',
+                title: item.title || 'N/A',
+                agency: item.fundingAgency || 'N/A',
+                year: item.academicYear?.year || item.year || 'N/A',
+                amount: item.approvedAmount || 0,
+                sanctionedAmount: item.sanctionedAmount || 'N/A',
+                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                status: item.status || 'Pending at HOD',
+                projectStatus: item.projectStatus || 'N/A',
+                coAuthorsText: formatAuthors(item.coInvestigators)
+            }));
+        }
+
+        // 7. Fetch Novel Products
+        if (!type || type === 'All' || type === 'Novel Product') {
+            const products = await NovelProduct.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+
+            reportData.products = products.map(item => ({
+                sNo: '',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                empId: item.facultyId?.institutionId || 'N/A',
+                title: item.productName || 'N/A',
+                category: item.category || 'N/A',
+                organization: item.developedOrganization || item.implementedOrganization || 'N/A',
+                year: item.academicYear?.year || item.year || 'N/A',
+                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                status: item.status || 'Pending at HOD',
+                coAuthorsText: formatAuthors(item.coDevelopers)
+            }));
+        }
+
+        // 8. Fetch Consultancy
+        if (!type || type === 'All' || type === 'Consultancy') {
+            const consultancies = await Consultancy.find(query)
+                .populate({
+                    path: 'facultyId',
+                    select: 'name institutionId department coreDepartment panNumber',
+                    populate: { path: 'coreDepartment', select: 'name' }
+                })
+                .populate('academicYear', 'year')
+                .lean();
+
+            reportData.consultancy = consultancies.map(item => ({
+                sNo: '',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                empId: item.facultyId?.institutionId || 'N/A',
+                title: item.title || 'N/A',
+                agency: item.fundingAgency || 'N/A',
+                year: item.academicYear?.year || item.year || 'N/A',
+                amount: item.approvedAmount || 0,
+                sanctionedAmount: item.amount || 'N/A',
+                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                status: item.status || 'Pending at HOD',
+                projectStatus: item.projectStatus || 'N/A',
+                coAuthorsText: formatAuthors(item.coInvestigators)
+            }));
         }
 
         res.json({ success: true, data: reportData });
