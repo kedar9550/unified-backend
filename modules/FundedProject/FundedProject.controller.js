@@ -91,10 +91,36 @@ exports.createProject = async (req, res) => {
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
             appraisalClaimants,
             incentiveClaimant: null,
-            status: 'Pending at HOD'
+            status: 'Pending at R&D'
         });
 
         await project.save();
+
+        // Target: Send notification to the applicant's reporting boss
+        try {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const Employee = require('../employee/employee.model');
+
+            const emp = await Employee.findById(req.user.userId);
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: bossUserId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: 'New Research Submission',
+                        message: `${emp.name || 'A faculty member'} has submitted a new Funded Project: ${project.title}`,
+                        link: `/research/approvals`, 
+                        metadata: { targetRole: "ReportingBoss" }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send funded project notification:", notifErr);
+        }
         res.status(201).json({ success: true, data: project });
     } catch (err) {
         console.error("Create Funded Project Error:", err);

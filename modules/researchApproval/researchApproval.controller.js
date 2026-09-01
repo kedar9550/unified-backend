@@ -71,22 +71,18 @@ exports.getResearchRequests = async (req, res) => {
         // Status Filter Logic
         if (status && status !== 'All') {
             if (status === 'Pending') {
-                if (isResearchAdmin) query.status = 'Pending at R&D';
-                else query.status = 'Pending at HOD';
+                query.status = 'Pending at R&D';
             }
             else if (status === 'Approved') {
-                if (isResearchAdmin) query.status = 'Approved';
-                else query.status = { $in: ['Pending at R&D', 'Approved'] };
+                query.status = 'Approved';
             }
             else if (status === 'Rejected') {
-                if (isResearchAdmin) query.status = 'Rejected by R&D';
-                else query.status = 'Rejected by HOD';
+                query.status = 'Rejected by R&D';
             }
             else query.status = status;
         } else if (!status) {
             // Default view when NO status is provided (initial load)
-            if (isResearchAdmin) query.status = 'Pending at R&D';
-            else if (isHOD) query.status = 'Pending at HOD';
+            query.status = 'Pending at R&D';
         }
 
         // Date Filter
@@ -577,7 +573,7 @@ exports.getResearchReports = async (req, res) => {
                 year: item.academicYear?.year || item.yearOfPublication,
                 amount: item.approvedAmount || 0,
                 panNo: item.facultyId?.panNumber || 'N/A',
-                status: item.status || 'Pending at HOD',
+                status: item.status || 'Pending at R&D',
                 coAuthorsText: formatAuthors(item.authors)
             }));
         }
@@ -605,7 +601,7 @@ exports.getResearchReports = async (req, res) => {
                 month: item.month,
                 amount: item.approvedAmount || 0,
                 panNo: item.facultyId?.panNumber || 'N/A',
-                status: item.status || 'Pending at HOD',
+                status: item.status || 'Pending at R&D',
                 coAuthorsText: formatAuthors(item.coAuthors)
             }));
         }
@@ -643,7 +639,7 @@ exports.getResearchReports = async (req, res) => {
                     amount: item.approvedAmount || 0,
                     panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                     category: category,
-                    status: item.status || 'Pending at HOD',
+                    status: item.status || 'Pending at R&D',
                     coAuthorsText: formatAuthors(item.coAuthors)
                 };
             });
@@ -670,7 +666,7 @@ exports.getResearchReports = async (req, res) => {
                 year: item.academicYear?.year || item.year || 'N/A',
                 amount: item.approvedAmount || 0,
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
-                status: item.status || 'Pending at HOD',
+                status: item.status || 'Pending at R&D',
                 coAuthorsText: formatAuthors(item.coAuthors)
             }));
         }
@@ -696,7 +692,7 @@ exports.getResearchReports = async (req, res) => {
                 year: item.academicYear?.year || 'N/A',
                 amount: item.approvedAmount || 0,
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
-                status: item.status || 'Pending at HOD',
+                status: item.status || 'Pending at R&D',
                 coAuthorsText: formatAuthors(item.coInventors)
             }));
         }
@@ -723,7 +719,7 @@ exports.getResearchReports = async (req, res) => {
                 amount: item.approvedAmount || 0,
                 sanctionedAmount: item.sanctionedAmount || 'N/A',
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
-                status: item.status || 'Pending at HOD',
+                status: item.status || 'Pending at R&D',
                 projectStatus: item.projectStatus || 'N/A',
                 coAuthorsText: formatAuthors(item.coInvestigators)
             }));
@@ -750,7 +746,7 @@ exports.getResearchReports = async (req, res) => {
                 organization: item.developedOrganization || item.implementedOrganization || 'N/A',
                 year: item.academicYear?.year || item.year || 'N/A',
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
-                status: item.status || 'Pending at HOD',
+                status: item.status || 'Pending at R&D',
                 coAuthorsText: formatAuthors(item.coDevelopers)
             }));
         }
@@ -777,7 +773,7 @@ exports.getResearchReports = async (req, res) => {
                 amount: item.approvedAmount || 0,
                 sanctionedAmount: item.amount || 'N/A',
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
-                status: item.status || 'Pending at HOD',
+                status: item.status || 'Pending at R&D',
                 projectStatus: item.projectStatus || 'N/A',
                 coAuthorsText: formatAuthors(item.coInvestigators)
             }));

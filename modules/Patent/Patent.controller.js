@@ -79,7 +79,7 @@ exports.createPatent = async (req, res) => {
             coInventors: resolvedAuthors,
             patentStatus: data.status, // Map 'status' from frontend to 'patentStatus' in model
             appraisalClaimant,
-            status: 'Pending at HOD'
+            status: 'Pending at R&D'
         ,
             incentiveClaimant: computedIncentiveClaimant});
 
@@ -89,6 +89,32 @@ exports.createPatent = async (req, res) => {
         }
 
         await patent.save();
+
+        // Target: Send notification to the applicant's reporting boss
+        try {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const Employee = require('../employee/employee.model');
+
+            const emp = await Employee.findById(req.user.userId);
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: bossUserId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: 'New Research Submission',
+                        message: `${emp.name || 'A faculty member'} has submitted a new Patent: ${patent.title}`,
+                        link: `/research/approvals`, 
+                        metadata: { targetRole: "ReportingBoss" }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send patent notification:", notifErr);
+        }
         res.status(201).json({ success: true, data: patent });
     } catch (err) {
         console.error("Create Patent Error:", err);

@@ -67,10 +67,36 @@ exports.createConsultancy = async (req, res) => {
             coInvestigators: resolvedAuthors,
             appraisalClaimants,
             incentiveClaimant: null,
-            status: 'Pending at HOD'
+            status: 'Pending at R&D'
         });
 
         await consultancy.save();
+
+        // Target: Send notification to the applicant's reporting boss
+        try {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const Employee = require('../employee/employee.model');
+
+            const emp = await Employee.findById(req.user.userId);
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: bossUserId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: 'New Research Submission',
+                        message: `${emp.name || 'A faculty member'} has submitted a new Consultancy: ${consultancy.title}`,
+                        link: `/research/approvals`, 
+                        metadata: { targetRole: "ReportingBoss" }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send consultancy notification:", notifErr);
+        }
         res.status(201).json({ success: true, data: consultancy });
     } catch (err) {
         console.error("Create Consultancy Error:", err);

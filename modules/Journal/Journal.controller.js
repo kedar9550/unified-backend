@@ -113,7 +113,7 @@ exports.createJournal = async (req, res) => {
             numberOfReferencesBelongingToAGEC,
             appraisalClaimant,
             jcrImpactFactor,
-            status: 'Pending at HOD'
+            status: 'Pending at R&D'
             ,
             incentiveClaimant: computedIncentiveClaimant
         });
@@ -126,25 +126,24 @@ exports.createJournal = async (req, res) => {
 
         await journal.save();
 
-        // Target: Send notification to the applicant's HOD
+        // Target: Send notification to the applicant's reporting boss
         try {
-            const { getHODByDepartment } = require('../../utils/hodHelper');
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
             const NotificationService = require('../notification/notification.service');
 
-            // Re-fetch applicant to ensure department is populated or available
             const emp = await Employee.findById(req.user.userId);
-            if (emp && (emp.coreDepartment || emp.department)) {
-                const hodUserId = await getHODByDepartment(emp.coreDepartment || emp.department);
-                if (hodUserId) {
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
                     await NotificationService.sendNotification({
-                        recipientId: hodUserId,
+                        recipientId: bossUserId,
                         senderId: req.user.userId,
                         module: 'Research',
-                        type: 'ACTION_REQUIRED',
-                        title: 'Journal Approval Required',
+                        type: 'INFO',
+                        title: 'New Research Submission',
                         message: `${emp.name || 'A faculty member'} has submitted a new Journal: ${journal.paperTitle}`,
-                        link: `/research/approvals`, // Use correct frontend route for approvals
-                        metadata: { targetRole: "HOD" }
+                        link: `/research/approvals`, 
+                        metadata: { targetRole: "ReportingBoss" }
                     });
                 }
             }
