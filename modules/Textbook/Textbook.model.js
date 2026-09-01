@@ -115,8 +115,8 @@ const TextbookSchema = new mongoose.Schema({
     // Workflow Status
     status: {
         type: String,
-        enum: ['Draft', 'Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected by HOD', 'Rejected by R&D'],
-        default: 'Pending at HOD'
+        enum: ['Draft', 'Pending at R&D', 'Approved', 'Rejected by R&D'],
+        default: 'Pending at R&D'
     },
     
     // Feedback

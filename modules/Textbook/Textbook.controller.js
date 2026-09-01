@@ -105,7 +105,7 @@ exports.createTextbook = async (req, res) => {
             facultyId: req.user.userId,
             authors: finalAuthors,
             appraisalClaimant,
-            status: 'Pending at HOD'
+            status: 'Pending at R&D'
         ,
             incentiveClaimant: computedIncentiveClaimant});
 
@@ -129,6 +129,32 @@ exports.createTextbook = async (req, res) => {
             } catch (e) {
                 console.error("Failed to upsert edition:", e);
             }
+        }
+
+        // Target: Send notification to the applicant's reporting boss
+        try {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const Employee = require('../employee/employee.model');
+
+            const emp = await Employee.findById(req.user.userId);
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: bossUserId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: 'New Research Submission',
+                        message: `${emp.name || 'A faculty member'} has submitted a new Textbook: ${textbook.title}`,
+                        link: `/research/approvals`, 
+                        metadata: { targetRole: "ReportingBoss" }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send textbook notification:", notifErr);
         }
 
         res.status(201).json({ success: true, data: textbook });

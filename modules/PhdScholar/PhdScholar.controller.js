@@ -141,10 +141,36 @@ exports.createPhdApplication = async (req, res) => {
             university: data.university,
             admissionOrAwardDate: data.admissionOrAwardDate,
             document: `/uploads/phdScholars/${req.file.filename}`,
-            status: 'Pending at HOD'
+            status: 'Pending at R&D'
         });
 
         await application.save();
+
+        // Target: Send notification to the applicant's reporting boss
+        try {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const Employee = require('../employee/employee.model');
+
+            const emp = await Employee.findById(req.user.userId);
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: bossUserId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: 'New Research Submission',
+                        message: `${emp.name || 'A faculty member'} has submitted a new Ph.D. Scholar application: ${application.studentName}`,
+                        link: `/research/approvals`, 
+                        metadata: { targetRole: "ReportingBoss" }
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send phd scholar notification:", notifErr);
+        }
         res.status(201).json({ success: true, data: application });
     } catch (err) {
         console.error("Create PhdApplication Error:", err);
