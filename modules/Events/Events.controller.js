@@ -100,6 +100,7 @@ exports.createEvent = async (req, res, next) => {
             ground,
             roomNo,
             department,
+            registrationStop,
         } = req.body;
 
         const bannerImage = req.file;
@@ -196,6 +197,7 @@ exports.createEvent = async (req, res, next) => {
             facultyCoordinator: parsedFacultyCoordinators[0] || {},
             facultyCoordinators: parsedFacultyCoordinators,
             studentCoordinators: parsedStudentCoordinators,
+            registrationStop: registrationStop || 'No',
             createdBy: userId,
         });
 
@@ -397,6 +399,7 @@ exports.updateEvent = async (req, res, next) => {
             ground,
             roomNo,
             department,
+            registrationStop,
             removeBanner,
         } = req.body;
 
@@ -469,6 +472,7 @@ exports.updateEvent = async (req, res, next) => {
             overview,
             rules: parsedRules,
             themes: parsedThemes,
+            registrationStop: registrationStop || 'No',
         };
 
         if (bannerImage) {
