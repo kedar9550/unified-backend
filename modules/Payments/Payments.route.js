@@ -47,5 +47,6 @@ router.put('/registrations/:id/winner', paymentsController.updateWinnerStatus);
 // Participant Photo Upload
 router.post('/registrations/photo', upload.single('photo'), paymentsController.uploadPhoto);
 router.get('/registrations/photo/:roll', paymentsController.checkPhoto);
+router.get('/registrations/photo/:roll/image', paymentsController.servePhoto);
 
 module.exports = router;

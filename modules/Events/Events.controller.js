@@ -52,7 +52,7 @@ const normalizeCoordinators = (coordinatorsInput) => {
 const assignFacultyCoordinatorRole = async (coordinators) => {
     if (!Array.isArray(coordinators) || coordinators.length === 0) return;
 
-    const roleDoc = await Role.findOne({ 
+    const roleDoc = await Role.findOne({
         $or: [
             { name: 'FACULTY COORDINATOR', app: 'UNIFIED_SYSTEM' },
             { key: 'FACULTY_COORDINATOR', app: 'UNIFIED_SYSTEM' }
@@ -310,7 +310,7 @@ exports.getAllEvents = async (req, res, next) => {
             .populate('floor', 'name')
             .populate('ground', 'name')
             .sort({ createdAt: -1 });
-            
+
         const enrichedEvents = await Promise.all(events.map(async (ev) => {
             const eventObj = ev.toObject();
             if (eventObj.facultyCoordinators && eventObj.facultyCoordinators.length > 0) {
@@ -332,7 +332,7 @@ exports.getAllEvents = async (req, res, next) => {
             }
             return eventObj;
         }));
-        
+
         res.status(200).json({ success: true, events: enrichedEvents });
     } catch (error) {
         next(error);
@@ -348,9 +348,9 @@ exports.getEventById = async (req, res, next) => {
             .populate('floor', 'name')
             .populate('ground', 'name');
         if (!event) return res.status(404).json({ success: false, message: 'Event not found.' });
-        
+
         const eventObj = event.toObject();
-        
+
         if (eventObj.facultyCoordinators && eventObj.facultyCoordinators.length > 0) {
             eventObj.facultyCoordinators = await Promise.all(eventObj.facultyCoordinators.map(async (fc) => {
                 if (fc.employeeId) {
@@ -368,7 +368,7 @@ exports.getEventById = async (req, res, next) => {
                 eventObj.facultyCoordinator.phone = emp.phone || emp.mobileNumber;
             }
         }
-        
+
         res.status(200).json({ success: true, event: eventObj });
     } catch (error) {
         next(error);
@@ -434,7 +434,7 @@ exports.updateEvent = async (req, res, next) => {
             if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
             return res.status(400).json({ message: 'Selected group does not exist.' });
         }
-        
+
         const existingEvent = await Events.findById(req.params.id);
         if (!existingEvent) {
             if (bannerImage) deleteFile(`/uploads/events/${bannerImage.filename}`);
@@ -554,38 +554,38 @@ exports.deleteEvent = async (req, res, next) => {
 
 exports.sendInvoiceMailInternal = async (data) => {
     try {
-        const { 
+        const {
             email,
-        invoiceId = 'N/A',
-        invoiceDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
-        eventName = 'Event',
-        teamSize = 1,
-        amountPaid = 0,
-        participants = []
-    } = data;
+            invoiceId = 'N/A',
+            invoiceDate = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+            eventName = 'Event',
+            teamSize = 1,
+            amountPaid = 0,
+            participants = []
+        } = data;
 
-    const targetEmails = new Set();
-    if (email) targetEmails.add(email);
-    participants.forEach(p => {
-        if (p.email) targetEmails.add(p.email);
-    });
+        const targetEmails = new Set();
+        if (email) targetEmails.add(email);
+        participants.forEach(p => {
+            if (p.email) targetEmails.add(p.email);
+        });
 
-    if (targetEmails.size === 0) {
-        throw new Error('No emails provided');
-    }
-
-    const nodemailer = require('nodemailer');
-    const transporter = nodemailer.createTransport({
-        host: 'smtp.office365.com',
-        port: 587,
-        secure: false,
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS
+        if (targetEmails.size === 0) {
+            throw new Error('No emails provided');
         }
-    });
 
-        const participantsHtml = participants.length > 0 
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+            host: 'smtp.office365.com',
+            port: 587,
+            secure: false,
+            auth: {
+                user: process.env.EMAIL_USER,
+                pass: process.env.EMAIL_PASS
+            }
+        });
+
+        const participantsHtml = participants.length > 0
             ? participants.map((p, index) => {
                 const collegeDisplay = p.college === 'Other College' && p.otherCollege ? p.otherCollege : (p.college || 'Aditya University');
                 return `
@@ -672,7 +672,7 @@ exports.sendInvoiceMailInternal = async (data) => {
                             <p style="color: #001a4d; font-size: 15px; font-weight: bold;">Thank you!</p>
                             <p style="color: #333; font-size: 15px; line-height: 1.6; margin-top: 20px;">
                                 Best Regards,<br/>
-                                <strong style="color: #001a4d;">VEDA 2K26 Organizing Team</strong><br/>
+                                <strong style="color: #001a4d;">VEDA 2k26 Organizing Team</strong><br/>
                                 Aditya University
                             </p>
                         </td>
@@ -770,13 +770,13 @@ exports.sendInvoiceMailInternal = async (data) => {
         const path = require('path');
         const fs = require('fs');
         const logoPath = path.resolve(__dirname, '../../assets/Aditya University Gold Logo.png');
-        
+
         let mailAttachments = [];
         if (fs.existsSync(logoPath)) {
             mailAttachments.push({
                 filename: 'Aditya University Gold Logo.png',
                 path: logoPath,
-                cid: 'aditya_logo' 
+                cid: 'aditya_logo'
             });
         }
 

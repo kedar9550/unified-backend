@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const ParticipantSchema = new mongoose.Schema({
   name: { type: String, trim: true },
   college: { type: String, trim: true },
+  branch: { type: String, trim: true },
   otherCollege: { type: String, trim: true },
+  photoUrl: { type: String, trim: true },
   roll: { type: String, trim: true },
   gender: { type: String, trim: true },
   mobile: { type: String, trim: true },
