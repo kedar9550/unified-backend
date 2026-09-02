@@ -38,6 +38,12 @@ router.post('/', protect, upload.fields([
     { name: 'completeJournal', maxCount: 1 }
 ]), journalController.createJournal);
 
+router.put('/:id', protect, upload.fields([
+    { name: 'publishedPaper', maxCount: 1 },
+    { name: 'referencePages', maxCount: 1 },
+    { name: 'completeJournal', maxCount: 1 }
+]), journalController.updateJournal);
+
 router.get('/', protect, journalController.getMyJournals);
 router.post('/wos-type', journalController.getClarivateJournalType);
 router.post('/fetch-doi', journalController.fetchDoiDetails);

@@ -21,19 +21,18 @@ exports.createJournal = async (req, res) => {
         const cleanedDoi = data.doi.trim();
         const trimmedTitle = data.paperTitle.trim();
 
-        // Check if there is an active (Pending or Approved) submission with the same DOI or Title
-        const existingActiveJournal = await Journal.findOne({
+        // Check if there is any submission with the same DOI or Title
+        const existingJournal = await Journal.findOne({
             $or: [
                 { doi: cleanedDoi },
                 { paperTitle: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i') }
-            ],
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+            ]
         });
 
-        if (existingActiveJournal) {
+        if (existingJournal) {
             return res.status(400).json({
                 success: false,
-                message: `A journal submission with this DOI (${cleanedDoi}) or Paper Title already exists and is either Pending or Approved. Duplicates are not allowed unless the previous submission was rejected.`
+                message: `A journal submission with this DOI (${cleanedDoi}) or Paper Title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one.`
             });
         }
 
@@ -160,6 +159,164 @@ exports.createJournal = async (req, res) => {
             const message = `A journal with this ${field === 'paperTitle' ? 'title' : 'DOI'} already exists.`;
             return res.status(400).json({ success: false, message });
         }
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update and resubmit an existing rejected journal publication
+// @route   PUT /api/research/journal/:id
+// @access  Private (Faculty)
+exports.updateJournal = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const journal = await Journal.findById(id);
+        if (!journal) {
+            return res.status(404).json({ success: false, message: "Journal not found." });
+        }
+
+        // Verify ownership
+        if (journal.facultyId.toString() !== req.user.userId) {
+            return res.status(403).json({ success: false, message: "Not authorized to edit this journal." });
+        }
+
+        // Ensure it's in a rejected state (or just allow if it's the owner, but strictly we can check status)
+        if (!journal.status.includes('Rejected')) {
+            return res.status(400).json({ success: false, message: "Only rejected journals can be edited and resubmitted." });
+        }
+
+        // Validate DOI and Title for duplicates (excluding self)
+        if (data.doi || data.paperTitle) {
+            const checkDoi = (data.doi || journal.doi).trim();
+            const checkTitle = (data.paperTitle || journal.paperTitle).trim();
+
+            const existingJournal = await Journal.findOne({
+                _id: { $ne: id },
+                $or: [
+                    { doi: checkDoi },
+                    { paperTitle: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i') }
+                ]
+            });
+
+            if (existingJournal) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Another journal submission with this DOI or Paper Title already exists.`
+                });
+            }
+        }
+
+        // Date Validation (Not future)
+        if (data.publishedYear || data.publishedMonth) {
+            const year = data.publishedYear || journal.publishedYear || journal.year;
+            const month = data.publishedMonth || journal.publishedMonth || journal.month;
+            if (isFutureYearMonth(year, month)) {
+                return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+            }
+        }
+
+        // Validate completeJournal type strictly to PDF or DOCX (no images allowed)
+        if (req.files && req.files.completeJournal) {
+            const path = require('path');
+            const ext = path.extname(req.files.completeJournal[0].originalname).toLowerCase();
+            if (ext !== '.pdf' && ext !== '.docx') {
+                return res.status(400).json({ success: false, message: "Complete Journal must be a PDF or DOCX file." });
+            }
+        }
+
+        // Check file sizes
+        if (req.files) {
+            const filesToCheck = ['publishedPaper', 'referencePages', 'completeJournal'];
+            for (const field of filesToCheck) {
+                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+                    const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    return res.status(400).json({
+                        success: false,
+                        message: `${label} is too large. Maximum allowed size is 500KB.`
+                    });
+                }
+            }
+        }
+
+        // Parse co-authors
+        let parsedCoAuthors = journal.coAuthors;
+        if (data.coAuthors) {
+            if (typeof data.coAuthors === 'string') {
+                try {
+                    parsedCoAuthors = JSON.parse(data.coAuthors);
+                } catch (e) {
+                    parsedCoAuthors = [];
+                }
+            } else if (Array.isArray(data.coAuthors)) {
+                parsedCoAuthors = data.coAuthors;
+            }
+        }
+
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
+        let numberOfReferencesBelongingToAGEC = journal.numberOfReferencesBelongingToAGEC;
+        if (data.agecReferencingNumbers !== undefined) {
+            if (data.agecReferencingNumbers.trim()) {
+                if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
+                    return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
+                }
+                numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
+            } else {
+                numberOfReferencesBelongingToAGEC = 0;
+            }
+        }
+
+        // Fetch JCR Impact Factor if journalName changed
+        let jcrImpactFactor = journal.jcrImpactFactor;
+        if (data.journalName) {
+            const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
+            const searchName = data.journalName.trim().toUpperCase();
+            const jifRecord = await JournalImpactFactor.findOne({
+                journalName: new RegExp(`^${escapeRegex(searchName)}$`)
+            });
+            jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : (data.jcrImpactFactor !== undefined ? data.jcrImpactFactor : journal.jcrImpactFactor);
+        }
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantEmpId = applicant ? applicant.institutionId : null;
+        const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : journal.applyIncentive;
+        const computedIncentiveClaimant = (applyIncentive === 'Yes' || applyIncentive === 'yes') ? applicantEmpId : null;
+
+        // Update fields
+        Object.keys(data).forEach(key => {
+            if (key !== 'coAuthors' && key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+                journal[key] = data[key];
+            }
+        });
+
+        journal.coAuthors = resolvedAuthors;
+        journal.numberOfReferencesBelongingToAGEC = numberOfReferencesBelongingToAGEC;
+        journal.appraisalClaimant = appraisalClaimant;
+        journal.jcrImpactFactor = jcrImpactFactor;
+        journal.incentiveClaimant = computedIncentiveClaimant;
+        journal.status = 'Pending at R&D'; // Resubmit
+        
+        // Reset comments since it is a new submission effectively
+        journal.hodComment = '';
+        journal.rndComment = '';
+
+        if (req.files) {
+            if (req.files.publishedPaper) journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
+            if (req.files.referencePages) journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            if (req.files.completeJournal) journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
+        }
+
+        // Handle case where user wants to remove an existing file without replacing it?
+        // Usually they must provide either existing or new. We'll enforce required fields in frontend.
+
+        await journal.save();
+
+        res.json({ success: true, data: journal });
+    } catch (err) {
+        console.error("Update Journal Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };
