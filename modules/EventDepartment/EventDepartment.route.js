@@ -7,7 +7,7 @@ const eventDepartmentController = require('./EventDepartment.controller');
 router.post(
     '/',
     protect,
-    authorize('STUDENT_EVENT_ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN'),
     eventDepartmentController.createDepartment
 );
 
@@ -18,14 +18,14 @@ router.get('/:id', eventDepartmentController.getDepartmentById);
 router.put(
     '/:id',
     protect,
-    authorize('STUDENT_EVENT_ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN'),
     eventDepartmentController.updateDepartment
 );
 
 router.delete(
     '/:id',
     protect,
-    authorize('STUDENT_EVENT_ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN'),
     eventDepartmentController.deleteDepartment
 );
 

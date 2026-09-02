@@ -47,7 +47,7 @@ const getRoleFilterQuery = async (req) => {
 
   const role = String(activeRole).toUpperCase().trim();
   // Unrestricted admin roles
-  if (['STUDENT_EVENT_ADMIN', 'ADMIN', 'SUPER_ADMIN', 'MANAGEMENT', 'DEVELOPER'].includes(role)) {
+  if (['STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN', 'ADMIN', 'SUPER_ADMIN', 'MANAGEMENT', 'DEVELOPER'].includes(role)) {
     return {};
   }
 

@@ -76,7 +76,7 @@ const uploadImages = (req, res, next) => {
 router.post(
     '/',
     protect,
-    authorize('STUDENT_EVENT_ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN'),
     uploadImages,
     eventSchoolsController.createEventSchool
 );
@@ -88,7 +88,7 @@ router.get('/:id', protect, eventSchoolsController.getEventSchoolById);
 router.put(
     '/:id',
     protect,
-    authorize('STUDENT_EVENT_ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN'),
     uploadImages,
     eventSchoolsController.updateEventSchool
 );
@@ -96,7 +96,7 @@ router.put(
 router.delete(
     '/:id',
     protect,
-    authorize('STUDENT_EVENT_ADMIN'),
+    authorize('STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN'),
     eventSchoolsController.deleteEventSchool
 );
 
