@@ -179,6 +179,19 @@ app.use('/api/payments', require('./modules/Payments/Payments.route'));
 app.get('/api/proxy/student-photo/:roll', async (req, res) => {
     try {
         const { roll } = req.params;
+        const fs = require('fs');
+        const path = require('path');
+        const dir = path.join(__dirname, 'uploads/othercollegephotos');
+        
+        if (fs.existsSync(dir)) {
+            const files = fs.readdirSync(dir);
+            const photoFile = files.reverse().find(f => f.startsWith(`photo-${roll}-`));
+            if (photoFile) {
+                const photoPath = path.join(dir, photoFile);
+                return res.sendFile(photoPath);
+            }
+        }
+
         const axios = require('axios');
         const response = await axios.get(`https://info.aec.edu.in/adityacentral/StudentPhotos/${roll}.jpg`, {
             responseType: 'arraybuffer'

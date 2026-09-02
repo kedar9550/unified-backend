@@ -1222,6 +1222,22 @@ exports.uploadPhoto = async (req, res) => {
   }
 };
 
+
+exports.servePhoto = async (req, res) => {
+  try {
+    const roll = req.params.roll;
+    const fs = require('fs');
+    const path = require('path');
+    const dir = path.join(__dirname, '../../uploads/othercollegephotos');
+    if (!fs.existsSync(dir)) return res.status(404).end();
+    const files = fs.readdirSync(dir);
+    const photoFile = files.reverse().find(f => f.startsWith('photo-' + roll + '-'));
+    if (photoFile) return res.sendFile(path.join(dir, photoFile));
+    return res.status(404).end();
+  } catch (err) {
+    return res.status(500).end();
+  }
+};
 exports.checkPhoto = async (req, res) => {
   try {
     const roll = req.params.roll;
