@@ -628,14 +628,25 @@ exports.sendInvoiceMailInternal = async (data) => {
                             <p style="color: #333; line-height: 1.6; font-size: 15px;">Please find your invoice details along with the participant information below.</p>
                             
                             <div style="margin-top: 30px; margin-bottom: 15px;">
-                                <h3 style="color: #001a4d; font-size: 16px; margin: 0; display: inline-block; vertical-align: middle;">📅 REGISTRATION SUMMARY</h3>
+                                <h3 style="color: #001a4d; font-size: 16px; margin: 0; display: inline-block; vertical-align: middle;">
+                                    <div style="width: 20px; height: 22px; border: 1px solid #ccc; border-radius: 3px; background: white; text-align: center; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                        <div style="background-color: #e53935; color: white; font-size: 6px; font-weight: bold; padding: 1px 0; line-height: 1;">AUG</div>
+                                        <div style="color: #333; font-size: 10px; font-weight: bold; line-height: 1.2;">17</div>
+                                    </div>
+                                    REGISTRATION SUMMARY
+                                </h3>
                             </div>
                             
                             <!-- 3 Cards -->
                             <table width="100%" cellpadding="0" cellspacing="0">
                                 <tr>
                                     <td width="31%" align="center" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px 5px;">
-                                        <div style="background-color: #1a73e8; color: white; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; font-size: 20px; margin: 0 auto 10px;">📅</div>
+                                        <div style="background-color: #1a73e8; width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center;">
+                                            <div style="width: 18px; height: 20px; border: 1px solid #fff; border-radius: 3px; background: white; text-align: center; overflow: hidden; display: inline-block; margin-top: 9px;">
+                                                <div style="background-color: #e53935; color: white; font-size: 5px; font-weight: bold; padding: 1px 0; line-height: 1;">AUG</div>
+                                                <div style="color: #333; font-size: 9px; font-weight: bold; line-height: 1.2;">17</div>
+                                            </div>
+                                        </div>
                                         <div style="font-size: 24px; font-weight: bold; color: #001a4d; margin-bottom: 5px;">1</div>
                                         <div style="font-size: 12px; color: #666;">Events Registered</div>
                                     </td>
@@ -647,9 +658,9 @@ exports.sendInvoiceMailInternal = async (data) => {
                                     </td>
                                     <td width="3%"></td>
                                     <td width="32%" align="center" style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px 5px;">
-                                        <div style="background-color: #f4b400; color: white; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; font-size: 20px; margin: 0 auto 10px;">🛡️</div>
-                                        <div style="font-size: 14px; font-weight: bold; color: #0f9d58; margin-bottom: 5px;">Active Student</div>
-                                        <div style="font-size: 12px; color: #666;">Verification Status</div>
+                                        <div style="background-color: #e8f0fe; color: #1a73e8; width: 40px; height: 40px; line-height: 40px; border-radius: 50%; font-size: 20px; margin: 0 auto 10px;">📅</div>
+                                        <div style="font-size: 13px; font-weight: bold; color: #001a4d; margin-bottom: 5px; white-space: nowrap;">11 - 12 SEP, 2026</div>
+                                        <div style="font-size: 12px; color: #666;">Event Date</div>
                                     </td>
                                 </tr>
                             </table>
@@ -692,7 +703,13 @@ exports.sendInvoiceMailInternal = async (data) => {
                                 </table>
                                 <hr style="border: none; border-top: 1px solid #e0e0e0; margin-bottom: 20px;" />
 
-                                <h3 style="color: #001a4d; font-size: 16px; margin: 0 0 15px 0;">📅 EVENT DETAILS</h3>
+                                <h3 style="color: #001a4d; font-size: 16px; margin: 0 0 15px 0; display: flex; align-items: center;">
+                                    <div style="width: 20px; height: 22px; border: 1px solid #ccc; border-radius: 3px; background: white; text-align: center; overflow: hidden; display: inline-block; margin-right: 5px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                        <div style="background-color: #e53935; color: white; font-size: 6px; font-weight: bold; padding: 1px 0; line-height: 1;">AUG</div>
+                                        <div style="color: #333; font-size: 10px; font-weight: bold; line-height: 1.2;">17</div>
+                                    </div>
+                                    EVENT DETAILS
+                                </h3>
                                 <table width="100%" cellpadding="12" cellspacing="0" style="border: 1px solid #e0e0e0; border-radius: 8px;">
                                     <tr>
                                         <td width="50%" style="border-right: 1px solid #e0e0e0; font-size: 14px; color: #666;">Event Name<br/><strong style="color: #001a4d; font-size: 16px;">${eventName}</strong></td>
@@ -780,10 +797,12 @@ exports.sendInvoiceMailInternal = async (data) => {
             });
         }
 
+
+
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: Array.from(targetEmails).join(','),
-            subject: 'Invoice Confirmation - VEDA 2K26',
+            subject: 'Invoice Confirmation - VEDA 2k26',
             html: htmlContent,
             attachments: mailAttachments
         };
