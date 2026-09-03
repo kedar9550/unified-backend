@@ -273,6 +273,41 @@ exports.deleteRegistration = async (req, res) => {
   }
 };
 
+exports.addParticipants = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { participants, eventName, category } = req.body;
+    
+    const registration = await PaymentRegistration.findById(id);
+    if (!registration) {
+      return res.status(404).json({ error: 'Registration not found' });
+    }
+
+    const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
+      ...p,
+      accommodation: p.accommodation || "No",
+      barcode: require('crypto').randomBytes(4).toString('hex').toUpperCase()
+    }));
+
+    // Generate a teamId if it doesn't have one
+    let newTeamId = registration.teamId;
+    if (!newTeamId || newTeamId.trim() === '-' || newTeamId.trim() === '') {
+      newTeamId = `VD26-${require('crypto').randomBytes(3).toString('hex').toUpperCase()}`;
+    }
+
+    registration.participants = participantsData;
+    registration.teamId = newTeamId;
+    registration.eventName = eventName || registration.eventName;
+    registration.category = category || registration.category;
+
+    await registration.save();
+    return res.json({ ok: true, message: 'Participants added successfully', teamId: newTeamId });
+  } catch (err) {
+    console.error('addParticipants error', err);
+    return res.status(500).json({ error: 'Unable to add participants', details: err.message });
+  }
+};
+
 exports.verifyPayment = async (req, res) => {
   console.log(req.body);
   try {
