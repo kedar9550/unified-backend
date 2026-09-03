@@ -3,7 +3,7 @@ const PaymentRegistration = require('./PaymentRegistration.model');
 
 exports.createOrder = async (req, res) => {
   try {
-    const { amount: frontendAmount, eventId, teamSize, extraTeamSize, currency, receipt } = req.body;
+    const { amount: frontendAmount, eventId, teamSize, extraTeamSize, currency, receipt, participants, teamId, category: reqCategory } = req.body;
     let amountInPaisa = 0;
 
     if (eventId) {
@@ -47,14 +47,21 @@ exports.createOrder = async (req, res) => {
         }
       }
       
+      const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
+        ...p,
+        accommodation: p.accommodation || "No",
+      }));
+
       const registration = new PaymentRegistration({
         eventId: eventId || '',
         eventName: eventName,
-        category: category,
+        category: reqCategory || category,
         amount: amountInPaisa / 100,
         amountRupees: amountInPaisa / 100,
         currency: currency || 'INR',
+        teamId: teamId || '',
         teamSize: Number(teamSize) || 1,
+        participants: participantsData,
         razorpayOrderId: order.id,
         razorpayPaymentId: 'PENDING',
         razorpaySignature: 'PENDING',
@@ -247,6 +254,22 @@ exports.getRegistrations = async (req, res) => {
   } catch (err) {
     console.error('Payments.getRegistrations error', err);
     return res.status(500).json({ error: 'Unable to fetch payment registrations', details: err.message });
+  }
+};
+
+exports.deleteRegistration = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const registration = await PaymentRegistration.findById(id);
+    if (!registration) {
+      return res.status(404).json({ error: 'Registration not found' });
+    }
+
+    await PaymentRegistration.findByIdAndDelete(id);
+    return res.json({ ok: true, message: 'Registration deleted successfully' });
+  } catch (err) {
+    console.error('deleteRegistration error', err);
+    return res.status(500).json({ error: 'Unable to delete registration', details: err.message });
   }
 };
 

@@ -26,6 +26,7 @@ router.get('/stats', paymentsController.getDashboardStats);
 
 // List payment registrations
 router.get('/registrations', paymentsController.getRegistrations);
+router.delete('/registrations/:id', paymentsController.deleteRegistration);
 
 // Create a new Razorpay order
 router.post('/create-order', paymentsController.createOrder);
