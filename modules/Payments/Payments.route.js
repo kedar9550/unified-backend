@@ -33,6 +33,11 @@ router.post('/create-order', paymentsController.createOrder);
 // Verify a completed payment and save registration details
 router.post('/verify-payment', paymentsController.verifyPayment);
 
+// Manual Approve & Verify Gateway
+router.put('/registrations/manual-approve/:id', paymentsController.manualApprovePayment);
+router.get('/registrations/verify-gateway/:id', paymentsController.verifyGatewayPayment);
+router.get('/registrations/branch/:roll', paymentsController.getStudentBranch);
+
 // Scan participant barcode
 router.post('/scan-barcode', paymentsController.scanBarcode);
 router.post('/scan-accommodation', paymentsController.scanAccommodationBarcode);

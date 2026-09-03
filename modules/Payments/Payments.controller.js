@@ -34,6 +34,38 @@ exports.createOrder = async (req, res) => {
     }
 
     const order = await paymentsService.createOrder({ amount: amountInPaisa, currency, receipt });
+
+    try {
+      let eventName = '';
+      let category = '';
+      if (eventId) {
+        const Events = require('../Events/Events.model');
+        const event = await Events.findById(eventId);
+        if (event) {
+          eventName = event.eventName;
+          category = event.category || event.groupCategory || '';
+        }
+      }
+      
+      const registration = new PaymentRegistration({
+        eventId: eventId || '',
+        eventName: eventName,
+        category: category,
+        amount: amountInPaisa / 100,
+        amountRupees: amountInPaisa / 100,
+        currency: currency || 'INR',
+        teamSize: Number(teamSize) || 1,
+        razorpayOrderId: order.id,
+        razorpayPaymentId: 'PENDING',
+        razorpaySignature: 'PENDING',
+        paymentStatus: 'PENDING',
+        verified: false,
+      });
+      await registration.save();
+    } catch (err) {
+      console.error('Error creating pending registration:', err);
+    }
+
     return res.json({ orderId: order.id, order, amountInPaisa });
   } catch (err) {
     console.error('Payments.createOrder error', err);
@@ -268,33 +300,40 @@ exports.verifyPayment = async (req, res) => {
       return res.status(400).json({ error: 'Invalid amount value' });
     }
 
-    const registration = new PaymentRegistration({
-      eventId: eventId || '',
-      schoolId: schoolId || '',
-      category: category || '',
-      eventName: eventName || '',
-      amount: amountValue,
-      amountRupees: amountValue,
-      currency,
-      teamId: teamId || '',
-      teamSize: Number(teamSize) || 1,
-      participants: (Array.isArray(participants) ? participants : []).map(p => ({
-        ...p,
-        accommodation: p.accommodation || "No",
-        barcode: require('crypto').randomBytes(4).toString('hex').toUpperCase()
-      })),
-      receipt: receipt || '',
-      razorpayOrderId: order_id,
-      razorpayPaymentId: payment_id,
-      razorpaySignature: signature,
-      paymentStatus: 'PAID',
-      verified: true,
-      rawPaymentData: fetchedPayment
-        ? { ...(rawPaymentData || req.body), razorpayCompleteResponse: fetchedPayment }
-        : (rawPaymentData || req.body),
-    });
+    const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
+      ...p,
+      accommodation: p.accommodation || "No",
+      barcode: require('crypto').randomBytes(4).toString('hex').toUpperCase()
+    }));
 
-    await registration.save();
+    const rawPaymentUpdate = fetchedPayment
+      ? { ...(rawPaymentData || req.body), razorpayCompleteResponse: fetchedPayment }
+      : (rawPaymentData || req.body);
+
+    const registration = await PaymentRegistration.findOneAndUpdate(
+      { razorpayOrderId: order_id },
+      {
+        $set: {
+          eventId: eventId || '',
+          schoolId: schoolId || '',
+          category: category || '',
+          eventName: eventName || '',
+          amount: amountValue,
+          amountRupees: amountValue,
+          currency,
+          teamId: teamId || '',
+          teamSize: Number(teamSize) || 1,
+          participants: participantsData,
+          receipt: receipt || '',
+          razorpayPaymentId: payment_id,
+          razorpaySignature: signature,
+          paymentStatus: 'PAID',
+          verified: true,
+          rawPaymentData: rawPaymentUpdate,
+        }
+      },
+      { new: true, upsert: true }
+    );
 
     // Send invoice email asynchronously
     try {
@@ -323,6 +362,99 @@ exports.verifyPayment = async (req, res) => {
   } catch (err) {
     console.error('Payments.verifyPayment error', err);
     return res.status(500).json({ error: 'Unable to verify payment', details: err.message });
+  }
+};
+
+exports.manualApprovePayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const registration = await PaymentRegistration.findById(id);
+    if (!registration) {
+      return res.status(404).json({ error: 'Registration not found' });
+    }
+
+    registration.paymentStatus = 'PAID';
+    registration.verified = true;
+    registration.razorpayPaymentId = 'MANUAL_APPROVAL';
+    
+    // Auto-generate barcodes for participants if missing
+    if (Array.isArray(registration.participants)) {
+      registration.participants.forEach(p => {
+        if (!p.barcode) {
+          p.barcode = require('crypto').randomBytes(4).toString('hex').toUpperCase();
+        }
+      });
+    }
+
+    await registration.save();
+    return res.json({ ok: true, message: 'Payment manually approved', registration });
+  } catch (err) {
+    console.error('manualApprovePayment error', err);
+    return res.status(500).json({ error: 'Unable to manually approve', details: err.message });
+  }
+};
+
+exports.verifyGatewayPayment = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const registration = await PaymentRegistration.findById(id);
+    if (!registration) {
+      return res.status(404).json({ error: 'Registration not found' });
+    }
+
+    if (!registration.razorpayOrderId) {
+      return res.status(400).json({ error: 'No Razorpay Order ID to verify' });
+    }
+
+    // Try fetching order payments from razorpay
+    const paymentsService = require('./Payments.service');
+    const Razorpay = require('razorpay');
+    const instance = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+
+    const orderPayments = await instance.orders.fetchPayments(registration.razorpayOrderId);
+    
+    if (orderPayments && orderPayments.items && orderPayments.items.length > 0) {
+      // Find a captured or authorized payment
+      const successfulPayment = orderPayments.items.find(p => p.status === 'captured' || p.status === 'authorized');
+      
+      if (successfulPayment) {
+        registration.paymentStatus = 'PAID';
+        registration.verified = true;
+        registration.razorpayPaymentId = successfulPayment.id;
+        registration.rawPaymentData = { ...registration.rawPaymentData, razorpayCompleteResponse: successfulPayment };
+        
+        if (Array.isArray(registration.participants)) {
+          registration.participants.forEach(p => {
+            if (!p.barcode) {
+              p.barcode = require('crypto').randomBytes(4).toString('hex').toUpperCase();
+            }
+          });
+        }
+        await registration.save();
+        return res.json({ ok: true, status: 'PAID', message: 'Payment verified successfully from gateway', registration });
+      } else {
+        return res.json({ ok: true, status: 'PENDING', message: 'Gateway shows payment as failed or pending' });
+      }
+    }
+    return res.json({ ok: true, status: 'PENDING', message: 'No successful payment found on gateway' });
+  } catch (err) {
+    console.error('verifyGatewayPayment error', err);
+    return res.status(500).json({ error: 'Unable to verify from gateway', details: err.message });
+  }
+};
+
+exports.getStudentBranch = async (req, res) => {
+  try {
+    const { roll } = req.params;
+    const response = await fetch(`https://info.aec.edu.in/adityaapi/api/studentdata/${roll}`);
+    const data = await response.json();
+    return res.json(data);
+  } catch (err) {
+    console.error('Error fetching student branch:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch from Aditya API', details: err.message });
   }
 };
 
