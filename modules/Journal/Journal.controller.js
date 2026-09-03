@@ -303,10 +303,35 @@ exports.updateJournal = async (req, res) => {
         journal.hodComment = '';
         journal.rndComment = '';
 
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {
+                    console.error("Failed to delete old file:", oldPath, e);
+                }
+            }
+        };
+
         if (req.files) {
-            if (req.files.publishedPaper) journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
-            if (req.files.referencePages) journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
-            if (req.files.completeJournal) journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
+            if (req.files.publishedPaper) {
+                deleteOldFile(journal.publishedPaper);
+                journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
+            }
+            if (req.files.referencePages) {
+                deleteOldFile(journal.referencePages);
+                journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            }
+            if (req.files.completeJournal) {
+                deleteOldFile(journal.completeJournal);
+                journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
+            }
         }
 
         // Handle case where user wants to remove an existing file without replacing it?
