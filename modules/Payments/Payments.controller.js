@@ -516,6 +516,22 @@ exports.getStudentBranch = async (req, res) => {
   }
 };
 
+// ─── Year normalization helper ──────────────────────────────────────────────
+const normalizeYear = (year) => {
+  if (!year) return null;
+  const str = String(year).trim().toUpperCase();
+  if (['1', 'I', '1ST', 'FIRST', '1ST YEAR', '1 YEAR', 'I YEAR', 'I-YEAR', 'I-YEARS'].includes(str)) return '1';
+  if (['2', 'II', '2ND', 'SECOND', '2ND YEAR', '2 YEAR', 'II YEAR', 'II-YEAR', 'II-YEARS'].includes(str)) return '2';
+  if (['3', 'III', '3RD', 'THIRD', '3RD YEAR', '3 YEAR', 'III YEAR', 'III-YEAR', 'III-YEARS'].includes(str)) return '3';
+  if (['4', 'IV', '4TH', 'FOURTH', '4TH YEAR', '4 YEAR', 'IV YEAR', 'IV-YEAR', 'IV-YEARS'].includes(str)) return '4';
+
+  if (str.startsWith('1') || str.includes('1ST') || str.includes('FIRST')) return '1';
+  if (str.startsWith('2') || str.includes('2ND') || str.includes('SECOND')) return '2';
+  if (str.startsWith('3') || str.includes('3RD') || str.includes('THIRD')) return '3';
+  if (str.startsWith('4') || str.includes('4TH') || str.includes('FOURTH')) return '4';
+  return null;
+};
+
 // ─── Campus classification helper ────────────────────────────────────────────
 const classifyCampus = (college = '') => {
   const lower = college.toLowerCase();
@@ -531,55 +547,23 @@ const classifyCampus = (college = '') => {
 // ─── Dashboard Statistics ─────────────────────────────────────────────────────
 exports.getDashboardStats = async (req, res) => {
   try {
-    let query = {};
-    const activeRole = req.headers['active-role'];
-
-    if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
-      const jwt = require('jsonwebtoken');
-      const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
-
-      if (token) {
-        try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          const empId = decoded.institutionId;
-
-          if (empId) {
-            const EventSchools = require('../EventSchools/EventSchools.model');
-            const Events = require('../Events/Events.model');
-
-            const empIdStr = String(empId).trim();
-            const empIdNum = Number(empIdStr);
-            const empMatch = isNaN(empIdNum) ? [empIdStr] : [empIdStr, empIdNum];
-
-            const mySchools = await EventSchools.find({
-              $or: [
-                { 'coordinators.employeeId': { $in: empMatch } },
-                { 'coordinator.employeeId': { $in: empMatch } }
-              ]
-            }).select('name');
-            const mySchoolNames = mySchools.map(g => new RegExp(`^${g.name}$`, 'i'));
-
-            const myEvents = await Events.find({
-              $or: [
-                { 'conveners.employeeId': empId },
-                { 'facultyCoordinators.employeeId': empId },
-                { 'facultyCoordinator.employeeId': empId }
-              ]
-            }).select('eventName');
-            const myEventNames = myEvents.map(e => new RegExp(`^${e.eventName}$`, 'i'));
-
-            query.$or = [
-              { schoolId: { $in: mySchoolNames } },
-              { eventName: { $in: myEventNames } }
-            ];
-          }
-        } catch (err) {
-          console.error('Error decoding token for SCHOOL_COORDINATOR filter in stats', err);
-        }
+    const andConditions = [
+      {
+        $or: [
+          { paymentStatus: 'PAID' },
+          { paymentStatus: 'paid' },
+          { verified: true }
+        ]
       }
+    ];
+
+    const roleFilter = await getRoleFilterQuery(req);
+    if (roleFilter && Object.keys(roleFilter).length > 0) {
+      andConditions.push(roleFilter);
     }
 
-    const allPayments = await PaymentRegistration.find(query).lean();
+    const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
+    const allPayments = await PaymentRegistration.find(finalQuery).lean();
 
     // Flatten all participants with their parent payment context
     const participants = [];
@@ -601,18 +585,22 @@ exports.getDashboardStats = async (req, res) => {
     // ─── Year-wise counts ─────────────────────────────────
     const yearCounts = { '1': 0, '2': 0, '3': 0, '4': 0, other: 0 };
     participants.forEach((p) => {
-      const y = String(p.year || '').trim();
-      if (yearCounts[y] !== undefined) yearCounts[y]++;
-      else yearCounts.other++;
+      const normalized = normalizeYear(p.year);
+      if (normalized && yearCounts[normalized] !== undefined) {
+        yearCounts[normalized]++;
+      } else {
+        yearCounts.other++;
+      }
     });
 
     // ─── Campus-wise counts ───────────────────────────────
     const campusMap = {};
+    const romanMap = { '1': 'I', '2': 'II', '3': 'III', '4': 'IV' };
     participants.forEach((p) => {
       const campus = classifyCampus(p.college || p.otherCollege || '');
       if (!campusMap[campus]) campusMap[campus] = { I: 0, II: 0, III: 0, IV: 0, total: 0 };
-      const y = String(p.year || '').trim();
-      const key = y === '1' ? 'I' : y === '2' ? 'II' : y === '3' ? 'III' : y === '4' ? 'IV' : 'I';
+      const normalized = normalizeYear(p.year);
+      const key = normalized ? romanMap[normalized] : 'I';
       campusMap[campus][key]++;
       campusMap[campus].total++;
     });
@@ -964,10 +952,10 @@ exports.getDashboardStats = async (req, res) => {
       totalStudents,
       totalAttended,
       yearCounts,
+      yearWise: yearCounts,
       campusWise: campusMap,
       departmentStats,
       schoolStats,
-      schoolStats: schoolStats,
       genderStats: genderMap,
       campusGenderStats: campusGenderMap,
       accommodation: {
