@@ -104,16 +104,49 @@ exports.createJournal = async (req, res) => {
 
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
-        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+        let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+
+        let finalFacultyId = req.user.userId;
+        let finalStatus = 'Pending at R&D';
+        let finalAppraisalEligible = 'No'; // default
+
+        if (data.isDirectEntry === 'true') {
+            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+                return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
+            }
+
+            finalFacultyId = targetFaculty._id;
+            finalStatus = 'Approved';
+            finalAppraisalEligible = 'Yes'; // Auto eligible when directly approved by R&D
+            computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
+        }
+
         const journal = new Journal({
             ...data,
-            facultyId: req.user.userId,
+            facultyId: finalFacultyId,
             coAuthors: resolvedAuthors,
             numberOfReferencesBelongingToAGEC,
             appraisalClaimant,
             jcrImpactFactor,
-            status: 'Pending at R&D'
-            ,
+            status: finalStatus,
+            appraisalEligible: finalAppraisalEligible,
             incentiveClaimant: computedIncentiveClaimant
         });
 
@@ -146,6 +179,20 @@ exports.createJournal = async (req, res) => {
                     });
                 }
             }
+            
+            // If direct entry, maybe notify the faculty?
+            if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
+                 await NotificationService.sendNotification({
+                    recipientId: finalFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'SUCCESS',
+                    title: 'Journal Publication Added',
+                    message: `R&D has directly added an approved Journal Publication for you: ${journal.paperTitle}`,
+                    link: `/faculty/research-metrics`
+                 });
+            }
+            
         } catch (notifErr) {
             console.error("Failed to send journal notification:", notifErr);
             // Non-blocking error
