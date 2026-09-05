@@ -121,6 +121,11 @@ const EventsSchema = new mongoose.Schema({
     bannerImage: {
         type: String,
     },
+    whatsappLink: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     conveners: {
         type: [ConvenerSchema],
         default: []
