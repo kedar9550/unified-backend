@@ -101,6 +101,7 @@ exports.createEvent = async (req, res, next) => {
             roomNo,
             department,
             registrationStop,
+            whatsappLink,
         } = req.body;
 
         const bannerImage = req.file;
@@ -198,6 +199,7 @@ exports.createEvent = async (req, res, next) => {
             facultyCoordinators: parsedFacultyCoordinators,
             studentCoordinators: parsedStudentCoordinators,
             registrationStop: registrationStop || 'No',
+            whatsappLink: whatsappLink || '',
             createdBy: userId,
         });
 
@@ -404,6 +406,7 @@ exports.updateEvent = async (req, res, next) => {
             department,
             registrationStop,
             removeBanner,
+            whatsappLink,
         } = req.body;
 
         const bannerImage = req.file;
@@ -476,6 +479,7 @@ exports.updateEvent = async (req, res, next) => {
             rules: parsedRules,
             themes: parsedThemes,
             registrationStop: registrationStop || 'No',
+            whatsappLink: whatsappLink || '',
         };
 
         if (bannerImage) {
