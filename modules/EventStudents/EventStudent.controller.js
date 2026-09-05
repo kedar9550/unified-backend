@@ -1,4 +1,5 @@
 const EventStudent = require('./EventStudent.model');
+const PaymentRegistration = require('../Payments/PaymentRegistration.model');
 const bcrypt = require('bcryptjs');
 
 exports.registerStudent = async (req, res) => {
@@ -66,3 +67,37 @@ exports.loginStudent = async (req, res) => {
     return res.status(500).json({ error: 'Login failed', details: err.message });
   }
 };
+
+exports.updateStudent = async (req, res) => {
+  try {
+    const { id, name, college, otherCollege, roll, gender, mobile, email } = req.body;
+    if (!id || !roll) {
+      return res.status(400).json({ error: 'ID and Roll Number are required' });
+    }
+
+    const updatedStudent = await EventStudent.findByIdAndUpdate(
+      id,
+      { name, college, otherCollege, roll, gender, mobile, email },
+      { new: true }
+    );
+
+    if (!updatedStudent) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Update the participant mobile number in paymentregistrations matching the roll number
+    if (mobile) {
+      await PaymentRegistration.updateMany(
+        { "participants.roll": roll },
+        { "$set": { "participants.$[elem].mobile": mobile } },
+        { arrayFilters: [{ "elem.roll": roll }] }
+      );
+    }
+
+    return res.status(200).json({ success: true, student: updatedStudent });
+  } catch (err) {
+    console.error('Error updating event student:', err);
+    return res.status(500).json({ error: 'Unable to update student', details: err.message });
+  }
+};
+
