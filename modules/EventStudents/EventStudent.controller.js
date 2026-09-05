@@ -10,7 +10,14 @@ exports.registerStudent = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    const existing = await EventStudent.findOne({ email });
+    const cleanEmail = email.trim();
+    const escapedEmail = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existing = await EventStudent.findOne({
+      $or: [
+        { email: cleanEmail.toLowerCase() },
+        { email: { $regex: new RegExp(`^${escapedEmail}$`, 'i') } }
+      ]
+    });
     if (existing) {
       return res.status(400).json({ error: 'Email already registered. Please login instead.' });
     }
@@ -20,13 +27,13 @@ exports.registerStudent = async (req, res) => {
     const hashedPassword = await bcrypt.hash(plainPassword, salt);
 
     const newStudent = new EventStudent({
-      name,
+      name: name.trim(),
       college,
       otherCollege,
-      roll,
+      roll: roll.trim().toUpperCase(),
       gender,
-      mobile,
-      email,
+      mobile: mobile.trim(),
+      email: cleanEmail.toLowerCase(),
       password: hashedPassword
     });
 
@@ -46,7 +53,14 @@ exports.loginStudent = async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     
-    const student = await EventStudent.findOne({ email });
+    const cleanEmail = email.trim();
+    const escapedEmail = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const student = await EventStudent.findOne({
+      $or: [
+        { email: cleanEmail.toLowerCase() },
+        { email: { $regex: new RegExp(`^${escapedEmail}$`, 'i') } }
+      ]
+    });
     if (!student) {
       return res.status(404).json({ error: 'Account not found. Please register.' });
     }
@@ -75,9 +89,22 @@ exports.updateStudent = async (req, res) => {
       return res.status(400).json({ error: 'ID and Roll Number are required' });
     }
 
+    const cleanRoll = roll.trim().toUpperCase();
+    const updateData = {
+      name,
+      college,
+      otherCollege,
+      roll: cleanRoll,
+      gender,
+      mobile: mobile ? mobile.trim() : mobile
+    };
+    if (email) {
+      updateData.email = email.trim().toLowerCase();
+    }
+
     const updatedStudent = await EventStudent.findByIdAndUpdate(
       id,
-      { name, college, otherCollege, roll, gender, mobile, email },
+      updateData,
       { new: true }
     );
 
@@ -88,9 +115,9 @@ exports.updateStudent = async (req, res) => {
     // Update the participant mobile number in paymentregistrations matching the roll number
     if (mobile) {
       await PaymentRegistration.updateMany(
-        { "participants.roll": roll },
+        { "participants.roll": cleanRoll },
         { "$set": { "participants.$[elem].mobile": mobile } },
-        { arrayFilters: [{ "elem.roll": roll }] }
+        { arrayFilters: [{ "elem.roll": cleanRoll }] }
       );
     }
 
@@ -100,4 +127,3 @@ exports.updateStudent = async (req, res) => {
     return res.status(500).json({ error: 'Unable to update student', details: err.message });
   }
 };
-
