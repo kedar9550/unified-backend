@@ -211,8 +211,19 @@ const getRoleFilterQuery = async (req) => {
 
 exports.getRegistrations = async (req, res) => {
   try {
-    const { email, roll, teamId } = req.query;
+    const { email, roll, teamId, paymentStatus, payment } = req.query;
     const andConditions = [];
+
+    const statusFilter = paymentStatus || payment;
+    if (statusFilter && statusFilter.trim()) {
+      const cleanStatus = statusFilter.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { paymentStatus: { $regex: new RegExp(`^${cleanStatus}$`, "i") } },
+          { payment: { $regex: new RegExp(`^${cleanStatus}$`, "i") } }
+        ]
+      });
+    }
 
     const roleFilter = await getRoleFilterQuery(req);
     if (Object.keys(roleFilter).length > 0) {
