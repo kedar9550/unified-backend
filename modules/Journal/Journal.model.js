@@ -21,6 +21,8 @@ const JournalSchema = new mongoose.Schema({
         ref: 'AcademicYear',
         required: true
     },
+    isInstitutionRecord: { type: String, enum: ['Yes', 'No'], default: 'No' },
+    entryType: { type: String, enum: ['Self', 'Admin'], default: 'Self' },
     college: { type: String },
     panNumber: { type: String },
     doi: { type: String, required: true, trim: true, unique: true, sparse: true },

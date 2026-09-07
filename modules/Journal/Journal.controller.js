@@ -109,6 +109,7 @@ exports.createJournal = async (req, res) => {
         let finalFacultyId = req.user.userId;
         let finalStatus = 'Pending at R&D';
         let finalAppraisalEligible = 'No'; // default
+        let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
             if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
@@ -134,7 +135,8 @@ exports.createJournal = async (req, res) => {
 
             finalFacultyId = targetFaculty._id;
             finalStatus = 'Approved';
-            finalAppraisalEligible = 'Yes'; // Auto eligible when directly approved by R&D
+            finalEntryType = 'Admin';
+            finalAppraisalEligible = data.appraisalEligible || 'Yes'; // use provided or default
             computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
         }
 
@@ -147,7 +149,8 @@ exports.createJournal = async (req, res) => {
             jcrImpactFactor,
             status: finalStatus,
             appraisalEligible: finalAppraisalEligible,
-            incentiveClaimant: computedIncentiveClaimant
+            incentiveClaimant: computedIncentiveClaimant,
+            entryType: finalEntryType
         });
 
         if (req.files) {
@@ -742,7 +745,8 @@ exports.fetchDoiDetails = async (req, res) => {
             eissn: "",
             isScopus: "No",
             journalQuartile: "None",
-            journalType: "None"
+            journalType: "None",
+            citations: ""
         };
 
         let foundInScopus = false;
@@ -766,6 +770,7 @@ exports.fetchDoiDetails = async (req, res) => {
                 metadata.vol = entry["prism:volume"] || "";
                 metadata.issue = entry["prism:issueIdentifier"] || "";
                 metadata.pageRange = entry["prism:pageRange"] || "";
+                metadata.citations = entry["citedby-count"] ? entry["citedby-count"].toString() : "";
 
                 const rawIssn = entry["prism:issn"] || "";
                 const rawEissn = entry["prism:eIssn"] || "";
@@ -818,6 +823,7 @@ exports.fetchDoiDetails = async (req, res) => {
                     metadata.vol = item.volume || "";
                     metadata.issue = item.issue || "";
                     metadata.pageRange = item.page || "";
+                    metadata.citations = item["is-referenced-by-count"] !== undefined ? item["is-referenced-by-count"].toString() : "";
 
                     if (item.ISSN && item.ISSN.length > 0) {
                         // Crossref can return multiple ISSNs (print, electronic)
