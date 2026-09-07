@@ -46,6 +46,13 @@ router.post('/', protect, upload.fields([
 router.get('/', protect, textbookController.getMyTextbooks);
 router.get('/:id', protect, textbookController.getTextbookById);
 
+// Faculty: Update/Resubmit rejected textbook
+router.put('/:id', protect, upload.fields([
+    { name: 'coverPage', maxCount: 1 },
+    { name: 'authorAffiliation', maxCount: 1 },
+    { name: 'index', maxCount: 1 }
+]), textbookController.updateTextbook);
+
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize('HOD'), textbookController.getPendingAtHOD);
 router.put('/hod-action/:id', protect, authorize('HOD'), textbookController.hodAction);

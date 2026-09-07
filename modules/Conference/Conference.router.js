@@ -51,6 +51,12 @@ router.post('/', protect, upload.fields([
 router.get('/', protect, conferenceController.getMyConferences);
 router.get('/:id', protect, conferenceController.getConferenceById);
 
+// Faculty: Update/Resubmit rejected conference
+router.put('/:id', protect, upload.fields([
+    { name: 'certificate', maxCount: 1 },
+    { name: 'proceedings', maxCount: 1 }
+]), conferenceController.updateConference);
+
 // HOD: Action
 router.put('/hod-action/:id', protect, authorize('HOD'), conferenceController.hodAction);
 

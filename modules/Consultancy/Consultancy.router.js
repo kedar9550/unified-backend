@@ -8,6 +8,9 @@ router.post('/', protect, consultancyController.createConsultancy);
 router.get('/', protect, consultancyController.getMyConsultancies);
 router.get('/:id', protect, consultancyController.getConsultancyById);
 
+// Faculty: Update/Resubmit rejected consultancy
+router.put('/:id', protect, consultancyController.updateConsultancy);
+
 // HOD: Action
 router.put('/hod-action/:id', protect, authorize('HOD'), consultancyController.hodAction);
 

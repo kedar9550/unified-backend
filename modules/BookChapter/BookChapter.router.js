@@ -42,6 +42,14 @@ router.post('/', protect, upload.fields([
 router.get('/', protect, bookChapterController.getMyBookChapters);
 router.get('/:id', protect, bookChapterController.getBookChapterById);
 
+// Faculty: Update/Resubmit rejected book chapter
+router.put('/:id', protect, upload.fields([
+    { name: 'coverPage', maxCount: 1 },
+    { name: 'authorAffiliation', maxCount: 1 },
+    { name: 'index', maxCount: 1 },
+    { name: 'softCopy', maxCount: 1 }
+]), bookChapterController.updateBookChapter);
+
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize('HOD'), bookChapterController.getPendingAtHOD);
 router.put('/hod-action/:id', protect, authorize('HOD'), bookChapterController.hodAction);

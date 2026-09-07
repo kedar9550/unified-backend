@@ -37,6 +37,9 @@ router.post('/', protect, upload.single('sanctionOrder'), projectController.crea
 router.get('/', protect, projectController.getMyProjects);
 router.get('/:id', protect, projectController.getProjectById);
 
+// Faculty: Update/Resubmit rejected project
+router.put('/:id', protect, upload.single('sanctionOrder'), projectController.updateProject);
+
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize('HOD'), projectController.getPendingAtHOD);
 router.put('/hod-action/:id', protect, authorize('HOD'), projectController.hodAction);

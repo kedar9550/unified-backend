@@ -40,6 +40,12 @@ router.post('/', protect, upload.fields([
 router.get('/', protect, patentController.getMyPatents);
 router.get('/:id', protect, patentController.getPatentById);
 
+// Faculty: Update/Resubmit rejected patent
+router.put('/:id', protect, upload.fields([
+    { name: 'eFilingReceipt', maxCount: 1 },
+    { name: 'form1', maxCount: 1 }
+]), patentController.updatePatent);
+
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize('HOD'), patentController.getPendingAtHOD);
 router.put('/hod-action/:id', protect, authorize('HOD'), patentController.hodAction);
