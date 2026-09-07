@@ -40,6 +40,8 @@ router.post('/verify-payment', paymentsController.verifyPayment);
 router.put('/registrations/manual-approve/:id', paymentsController.manualApprovePayment);
 router.get('/registrations/verify-gateway/:id', paymentsController.verifyGatewayPayment);
 router.get('/registrations/branch/:roll', paymentsController.getStudentBranch);
+router.get('/payment-details/:paymentId', paymentsController.getRazorpayPaymentDetails);
+router.post('/manual-registration', paymentsController.manualAddRegistration);
 
 // Scan participant barcode
 router.post('/scan-barcode', paymentsController.scanBarcode);
