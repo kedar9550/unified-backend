@@ -496,6 +496,10 @@ const searchUser = async (req, res) => {
                     coreDepartment: 1,
                     designation: 1,
                     leadership: 1,
+                    isActive: 1,
+                    phone: 1,
+                    panNumber: 1,
+                    college: 1,
                     userType: { $literal: 'Employee' },
                     roles: 1
                 }
@@ -505,6 +509,43 @@ const searchUser = async (req, res) => {
 
 
         res.status(200).json(users);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+/**
+ * Get Employee by exact institutionId (for R&D data entry faculty lookup)
+ */
+const getEmployeeByEmpId = async (req, res) => {
+    try {
+        const { empId } = req.params;
+        if (!empId) return res.status(400).json({ message: "Employee ID required" });
+
+        const emp = await Employee.findOne({ institutionId: empId.trim() })
+            .populate("department", "name code")
+            .populate("coreDepartment", "name code")
+            .select("name institutionId designation department coreDepartment phone panNumber college isActive");
+
+        if (!emp) {
+            return res.status(404).json({ success: false, message: "Faculty not found" });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                _id: emp._id,
+                name: emp.name,
+                institutionId: emp.institutionId,
+                designation: emp.designation,
+                department: emp.department?.code || emp.department?.name || "",
+                coreDepartment: emp.coreDepartment?.code || emp.coreDepartment?.name || "",
+                phone: emp.phone || "",
+                panNumber: emp.panNumber || "",
+                college: emp.college || "",
+                isActive: emp.isActive,
+            }
+        });
     } catch (error) {
         res.status(500).json({ message: error.message });
     }
@@ -1690,5 +1731,6 @@ module.exports = {
     verifySignupOtp,
     saveFcmToken,
     getPublicDepartments,
-    downloadBulkTemplate
+    downloadBulkTemplate,
+    getEmployeeByEmpId
 };
