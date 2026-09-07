@@ -42,6 +42,9 @@ router.get('/', protect, phdScholarController.getMyApplications);
 router.get('/by-faculty/:facultyId', protect, authorize('HOD', 'RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), phdScholarController.getApplicationsByFaculty);
 router.get('/:id', protect, phdScholarController.getApplicationById);
 
+// Faculty: Update/Resubmit rejected application
+router.put('/:id', protect, upload.single('document'), phdScholarController.updatePhdApplication);
+
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize('HOD'), phdScholarController.getPendingAtHOD);
 router.put('/hod-action/:id', protect, authorize('HOD'), phdScholarController.hodAction);

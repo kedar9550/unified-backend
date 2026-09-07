@@ -36,14 +36,13 @@ exports.createBookChapter = async (req, res) => {
 
         // 2. Duplicate Validation
         const existingRecord = await BookChapter.findOne({
-            chapterTitle: new RegExp(`^${escapeRegex(trimmedChapterTitle)}$`, 'i'),
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+            chapterTitle: new RegExp(`^${escapeRegex(trimmedChapterTitle)}$`, 'i')
         });
 
         if (existingRecord) {
             return res.status(400).json({
                 success: false,
-                message: "A book chapter with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed."
+                message: "A book chapter with this title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
             });
         }
 
@@ -71,15 +70,49 @@ exports.createBookChapter = async (req, res) => {
 
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
-        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+        let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+
+        let finalFacultyId = req.user.userId;
+        let finalStatus = 'Pending at R&D';
+        let finalEntryType = 'Self';
+
+        if (data.isDirectEntry === 'true') {
+            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+                return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
+            }
+
+            finalFacultyId = targetFaculty._id;
+            finalStatus = 'Approved';
+            finalEntryType = 'Admin';
+            computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
+        }
+
         const bookChapter = new BookChapter({
             ...data,
             chapterTitle: trimmedChapterTitle,
-            facultyId: req.user.userId,
+            facultyId: finalFacultyId,
             coAuthors: resolvedAuthors,
             appraisalClaimant,
-            status: 'Pending at R&D',
-            incentiveClaimant: computedIncentiveClaimant
+            status: finalStatus,
+            incentiveClaimant: computedIncentiveClaimant,
+            entryType: finalEntryType
         });
 
         if (req.files) {
@@ -95,9 +128,9 @@ exports.createBookChapter = async (req, res) => {
         try {
             const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
             const NotificationService = require('../notification/notification.service');
-            const Employee = require('../employee/employee.model');
+            const EmployeeModel = require('../employee/employee.model');
 
-            const emp = await Employee.findById(req.user.userId);
+            const emp = await EmployeeModel.findById(req.user.userId);
             if (emp) {
                 const bossUserId = await getReportingBossId(req.user.userId);
                 if (bossUserId) {
@@ -113,6 +146,18 @@ exports.createBookChapter = async (req, res) => {
                     });
                 }
             }
+
+            if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
+                 await NotificationService.sendNotification({
+                    recipientId: finalFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'SUCCESS',
+                    title: 'Book Chapter Publication Added',
+                    message: `R&D has directly added an approved Book Chapter for you: ${bookChapter.chapterTitle}`,
+                    link: `/faculty/research-metrics`
+                 });
+            }
         } catch (notifErr) {
             console.error("Failed to send book chapter notification:", notifErr);
         }
@@ -125,6 +170,147 @@ exports.createBookChapter = async (req, res) => {
             const message = `A book chapter with this ${field === 'chapterTitle' ? 'title' : 'DOI'} already exists.`;
             return res.status(400).json({ success: false, message });
         }
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update and resubmit an existing rejected book chapter
+// @route   PUT /api/research/book-chapter/:id
+// @access  Private (Faculty)
+exports.updateBookChapter = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const bookChapter = await BookChapter.findById(id);
+        if (!bookChapter) {
+            return res.status(404).json({ success: false, message: "Book Chapter not found." });
+        }
+
+        // Verify ownership
+        if (bookChapter.facultyId.toString() !== req.user.userId) {
+            return res.status(403).json({ success: false, message: "Not authorized to edit this book chapter." });
+        }
+
+        if (!bookChapter.status.includes('Rejected')) {
+            return res.status(400).json({ success: false, message: "Only rejected book chapters can be edited and resubmitted." });
+        }
+
+        // Validate file sizes
+        const filesToCheck = ['coverPage', 'authorAffiliation', 'index', 'softCopy'];
+        if (req.files) {
+            for (const field of filesToCheck) {
+                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+                    const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    return res.status(400).json({
+                        success: false,
+                        message: `${label} is too large. Maximum allowed size is 500KB.`
+                    });
+                }
+            }
+        }
+
+        // Validate Title for duplicates
+        if (data.chapterTitle) {
+            const checkTitle = data.chapterTitle.trim();
+            const existingRecord = await BookChapter.findOne({
+                _id: { $ne: id },
+                chapterTitle: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+            });
+
+            if (existingRecord) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A book chapter with this title already exists."
+                });
+            }
+        }
+
+        // Date Validation
+        if (data.year || data.month) {
+            const year = data.year || bookChapter.year;
+            const month = data.month || bookChapter.month;
+            if (isFutureYearMonth(year, month)) {
+                return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+            }
+        }
+
+        // Parse co-authors
+        let parsedCoAuthors = bookChapter.coAuthors;
+        if (data.coAuthors) {
+            if (typeof data.coAuthors === 'string') {
+                try {
+                    parsedCoAuthors = JSON.parse(data.coAuthors);
+                } catch (e) {
+                    parsedCoAuthors = [];
+                }
+            } else if (Array.isArray(data.coAuthors)) {
+                parsedCoAuthors = data.coAuthors;
+            }
+        }
+
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantEmpId = applicant ? applicant.institutionId : null;
+        const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : bookChapter.applyIncentive;
+        const computedIncentiveClaimant = (applyIncentive === 'Yes' || applyIncentive === 'yes') ? applicantEmpId : null;
+
+        // Update fields
+        Object.keys(data).forEach(key => {
+            if (key !== 'coAuthors' && key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+                bookChapter[key] = data[key];
+            }
+        });
+
+        bookChapter.chapterTitle = data.chapterTitle ? data.chapterTitle.trim() : bookChapter.chapterTitle;
+        bookChapter.coAuthors = resolvedAuthors;
+        bookChapter.appraisalClaimant = appraisalClaimant;
+        bookChapter.incentiveClaimant = computedIncentiveClaimant;
+        bookChapter.status = 'Pending at R&D'; // Resubmit
+        bookChapter.hodComment = '';
+        bookChapter.rndComment = '';
+
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {}
+            }
+        };
+
+        if (req.files) {
+            if (req.files.coverPage) {
+                deleteOldFile(bookChapter.coverPage);
+                bookChapter.coverPage = `/uploads/book-chapters/${req.files.coverPage[0].filename}`;
+            }
+            if (req.files.authorAffiliation) {
+                deleteOldFile(bookChapter.authorAffiliation);
+                bookChapter.authorAffiliation = `/uploads/book-chapters/${req.files.authorAffiliation[0].filename}`;
+            }
+            if (req.files.index) {
+                deleteOldFile(bookChapter.index);
+                bookChapter.index = `/uploads/book-chapters/${req.files.index[0].filename}`;
+            }
+            if (req.files.softCopy) {
+                deleteOldFile(bookChapter.softCopy);
+                bookChapter.softCopy = `/uploads/book-chapters/${req.files.softCopy[0].filename}`;
+            }
+        }
+
+        await bookChapter.save();
+
+        res.json({ success: true, data: bookChapter });
+    } catch (err) {
+        console.error("Update Book Chapter Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };
