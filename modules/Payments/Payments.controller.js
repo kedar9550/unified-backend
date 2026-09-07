@@ -536,6 +536,300 @@ exports.getStudentBranch = async (req, res) => {
   }
 };
 
+exports.getRazorpayPaymentDetails = async (req, res) => {
+  try {
+    const { paymentId } = req.params;
+    if (!paymentId || !paymentId.trim()) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+
+    const cleanPaymentId = paymentId.trim();
+
+    // Check if registration already exists in database
+    const existingRegistration = await PaymentRegistration.findOne({
+      $or: [
+        { razorpayPaymentId: cleanPaymentId },
+        { razorpayOrderId: cleanPaymentId }
+      ]
+    }).lean();
+
+    // Fetch from Razorpay
+    const Razorpay = require('razorpay');
+    const instance = new Razorpay({
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET,
+    });
+
+    let paymentData = null;
+    let foundOnGateway = false;
+    try {
+      if (cleanPaymentId.startsWith('order_')) {
+        const orderPayments = await instance.orders.fetchPayments(cleanPaymentId);
+        if (orderPayments && orderPayments.items && orderPayments.items.length > 0) {
+          paymentData = orderPayments.items.find(p => p.status === 'captured' || p.status === 'authorized') || orderPayments.items[0];
+          foundOnGateway = true;
+        }
+      } else {
+        paymentData = await instance.payments.fetch(cleanPaymentId);
+        foundOnGateway = true;
+      }
+    } catch (rzpErr) {
+      console.warn('Razorpay fetch warning:', rzpErr.message);
+      if (existingRegistration) {
+        return res.json({
+          ok: true,
+          foundOnGateway: false,
+          payment: {
+            id: existingRegistration.razorpayPaymentId,
+            order_id: existingRegistration.razorpayOrderId,
+            amount: Math.round((existingRegistration.amountRupees || existingRegistration.amount || 0) * 100),
+            currency: existingRegistration.currency || 'INR',
+            status: existingRegistration.paymentStatus?.toLowerCase() || 'captured',
+            created_at: existingRegistration.paidAt ? Math.floor(new Date(existingRegistration.paidAt).getTime() / 1000) : null,
+          },
+          existingRegistration,
+          fromDatabaseOnly: true
+        });
+      }
+
+      // If not on gateway, allow manual entry with warning instead of blocking the user
+      return res.json({
+        ok: true,
+        foundOnGateway: false,
+        warning: `Payment ID not found on active Razorpay account (${rzpErr.error?.description || rzpErr.message || 'The id provided does not exist'}). You can enter amount details and proceed with manual mapping.`,
+        payment: {
+          id: cleanPaymentId,
+          order_id: '',
+          amount: 0,
+          currency: 'INR',
+          status: 'PAID',
+          created_at: Math.floor(Date.now() / 1000),
+          isManualOverride: true
+        },
+        existingRegistration: null
+      });
+    }
+
+    if (!paymentData) {
+      return res.json({
+        ok: true,
+        foundOnGateway: false,
+        warning: 'Payment not found on Razorpay. You can enter amount details and proceed manually.',
+        payment: {
+          id: cleanPaymentId,
+          order_id: '',
+          amount: 0,
+          currency: 'INR',
+          status: 'PAID',
+          created_at: Math.floor(Date.now() / 1000),
+          isManualOverride: true
+        },
+        existingRegistration: existingRegistration || null
+      });
+    }
+
+    return res.json({
+      ok: true,
+      foundOnGateway: true,
+      payment: paymentData,
+      existingRegistration
+    });
+  } catch (err) {
+    console.error('getRazorpayPaymentDetails error:', err);
+    return res.status(500).json({ error: 'Server error retrieving payment details', details: err.message });
+  }
+};
+
+exports.manualAddRegistration = async (req, res) => {
+  try {
+    const {
+      paymentId,
+      orderId,
+      eventId,
+      schoolId,
+      category,
+      eventName,
+      teamSize,
+      amount,
+      amountRupees,
+      currency = 'INR',
+      participants = []
+    } = req.body;
+
+    if (!paymentId || !paymentId.trim()) {
+      return res.status(400).json({ error: 'Payment ID is required' });
+    }
+    if (!eventId) {
+      return res.status(400).json({ error: 'Event must be selected' });
+    }
+    if (!Array.isArray(participants) || participants.length === 0) {
+      return res.status(400).json({ error: 'At least one participant is required' });
+    }
+
+    const cleanPaymentId = paymentId.trim();
+
+    // Check if already registered
+    let existing = await PaymentRegistration.findOne({
+      $or: [
+        { razorpayPaymentId: cleanPaymentId },
+        ...(orderId ? [{ razorpayOrderId: orderId.trim() }] : [])
+      ]
+    });
+
+    // Attempt to fetch fresh payment info from Razorpay
+    let fetchedPayment = null;
+    try {
+      const paymentsService = require('./Payments.service');
+      fetchedPayment = await paymentsService.fetchPayment(cleanPaymentId);
+    } catch (rzpErr) {
+      console.warn('Could not re-fetch from Razorpay, using provided info:', rzpErr.message);
+    }
+
+    const parsedAmount = fetchedPayment
+      ? fetchedPayment.amount / 100
+      : Number(amountRupees ?? amount ?? 0);
+
+    const crypto = require('crypto');
+    const participantsData = participants.map(p => ({
+      name: p.name ? p.name.trim() : '',
+      college: p.college || 'Aditya University',
+      otherCollege: p.college === 'Other College' ? (p.otherCollege ? p.otherCollege.trim() : '') : '',
+      roll: p.roll ? p.roll.trim().toUpperCase() : '',
+      gender: p.gender || 'Other',
+      mobile: p.mobile ? String(p.mobile).trim() : '',
+      email: p.email ? p.email.trim().toLowerCase() : '',
+      year: p.year ? String(p.year).trim() : '',
+      department: p.department ? p.department.trim() : '',
+      branch: p.branch ? p.branch.trim() : '',
+      location: p.location ? p.location.trim() : '',
+      accommodation: p.accommodation || 'No',
+      barcode: p.barcode || crypto.randomBytes(4).toString('hex').toUpperCase(),
+      attended: p.attended || false,
+      scanCount: p.scanCount || 0
+    }));
+
+    // Generate unique team ID (VD26-XXXXXX) if not present
+    let teamId = existing?.teamId;
+    if (!teamId || teamId.trim() === '' || teamId.trim() === '-') {
+      teamId = `VD26-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    }
+
+    const receipt = existing?.receipt || `event-${eventId}-${Date.now()}`;
+    const resolvedOrderId = fetchedPayment?.order_id || orderId || existing?.razorpayOrderId || `order_manual_${Date.now()}`;
+
+    const rawPaymentUpdate = fetchedPayment
+      ? { razorpayCompleteResponse: fetchedPayment, manuallyAdded: true, manuallyAddedAt: new Date() }
+      : { manuallyAdded: true, manuallyAddedAt: new Date(), ...(existing?.rawPaymentData || {}) };
+
+    let registration;
+    if (existing) {
+      existing.eventId = eventId;
+      existing.schoolId = schoolId || existing.schoolId;
+      existing.category = category || existing.category;
+      existing.eventName = eventName || existing.eventName;
+      existing.amount = parsedAmount;
+      existing.amountRupees = parsedAmount;
+      existing.currency = currency;
+      existing.teamId = teamId;
+      existing.teamSize = Number(teamSize) || participantsData.length;
+      existing.participants = participantsData;
+      existing.receipt = receipt;
+      existing.razorpayOrderId = resolvedOrderId;
+      existing.razorpayPaymentId = cleanPaymentId;
+      existing.razorpaySignature = 'MANUAL_ADD_VERIFIED';
+      existing.paymentStatus = 'PAID';
+      existing.verified = true;
+      existing.rawPaymentData = rawPaymentUpdate;
+      if (fetchedPayment?.created_at) {
+        existing.paidAt = new Date(fetchedPayment.created_at * 1000);
+      }
+      registration = await existing.save();
+    } else {
+      registration = await PaymentRegistration.create({
+        eventId,
+        schoolId,
+        category,
+        eventName,
+        amount: parsedAmount,
+        amountRupees: parsedAmount,
+        currency,
+        teamId,
+        teamSize: Number(teamSize) || participantsData.length,
+        participants: participantsData,
+        receipt,
+        razorpayOrderId: resolvedOrderId,
+        razorpayPaymentId: cleanPaymentId,
+        razorpaySignature: 'MANUAL_ADD_VERIFIED',
+        paymentStatus: 'PAID',
+        verified: true,
+        paidAt: fetchedPayment?.created_at ? new Date(fetchedPayment.created_at * 1000) : new Date(),
+        rawPaymentData: rawPaymentUpdate,
+      });
+    }
+
+    // Upsert participants into EventStudent for login/profile access
+    try {
+      const EventStudent = require('../EventStudents/EventStudent.model');
+      for (const p of participantsData) {
+        if (p.roll && p.email && p.name) {
+          await EventStudent.findOneAndUpdate(
+            { roll: p.roll },
+            {
+              $set: {
+                name: p.name,
+                college: p.college,
+                otherCollege: p.otherCollege,
+                gender: p.gender,
+                mobile: p.mobile,
+                email: p.email,
+              },
+              $setOnInsert: {
+                password: '123456'
+              }
+            },
+            { upsert: true, new: true }
+          );
+        }
+      }
+    } catch (studentErr) {
+      console.warn('Could not upsert into EventStudent:', studentErr.message);
+    }
+
+    // Send invoice email asynchronously
+    try {
+      const eventsController = require('../Events/Events.controller');
+      const emailPayload = {
+        email: participantsData[0]?.email || '',
+        invoiceId: `INV/${new Date().getFullYear()}/${registration._id.toString().substring(18)}`.toUpperCase(),
+        invoiceDate: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' }),
+        eventName: eventName || '',
+        teamSize: Number(teamSize) || participantsData.length,
+        amountPaid: parsedAmount,
+        participants: participantsData,
+      };
+
+      if (emailPayload.email) {
+        eventsController.sendInvoiceMailInternal(emailPayload).catch(e => {
+          console.error('Background invoice email failed:', e);
+        });
+      }
+    } catch (mailErr) {
+      console.error('Failed to initiate invoice mail after manual registration', mailErr);
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: 'Registration created and verified successfully',
+      teamId,
+      registrationId: registration._id,
+      registration
+    });
+  } catch (err) {
+    console.error('manualAddRegistration error:', err);
+    return res.status(500).json({ error: 'Failed to create manual registration', details: err.message });
+  }
+};
+
 // ─── Year normalization helper ──────────────────────────────────────────────
 const normalizeYear = (year) => {
   if (!year) return null;
