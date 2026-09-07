@@ -26,6 +26,7 @@ router.get('/stats', paymentsController.getDashboardStats);
 
 // List payment registrations
 router.get('/registrations', paymentsController.getRegistrations);
+router.get('/passes', paymentsController.getPasses);
 router.delete('/registrations/:id', paymentsController.deleteRegistration);
 router.put('/registrations/:id/participants', paymentsController.addParticipants);
 

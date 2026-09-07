@@ -268,6 +268,15 @@ exports.getRegistrations = async (req, res) => {
   }
 };
 
+exports.getPasses = async (req, res) => {
+  Object.defineProperty(req, 'query', {
+    value: { ...(req.query || {}), paymentStatus: 'PAID' },
+    writable: true,
+    configurable: true
+  });
+  return exports.getRegistrations(req, res);
+};
+
 exports.deleteRegistration = async (req, res) => {
   try {
     const { id } = req.params;
@@ -999,6 +1008,13 @@ exports.scanBarcode = async (req, res) => {
       return res.status(404).json({ error: 'Pass not found or invalid barcode.' });
     }
 
+    const regPaymentStatus = (registration.paymentStatus || registration.payment || '').toString().trim().toUpperCase();
+    if (regPaymentStatus !== 'PAID') {
+      return res.status(400).json({
+        error: `Pass is invalid. Payment status is ${regPaymentStatus || 'UNPAID'}. Only passes with PAID status are eligible for attendance.`
+      });
+    }
+
     // Verify SCHOOL_COORDINATOR and FACULTY_COORDINATOR access
     const activeRole = req.headers['active-role'];
     if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
@@ -1265,6 +1281,13 @@ exports.updateAttendance = async (req, res) => {
       return res.status(404).json({ error: 'Registration or participant not found.' });
     }
 
+    const regPaymentStatus = (registration.paymentStatus || registration.payment || '').toString().trim().toUpperCase();
+    if (regPaymentStatus !== 'PAID') {
+      return res.status(400).json({
+        error: `Cannot update attendance. Payment status is ${regPaymentStatus || 'UNPAID'}. Only passes with PAID status can be updated.`
+      });
+    }
+
     const activeRole = req.headers['active-role'];
     if (activeRole === 'SCHOOL_COORDINATOR' || activeRole === 'FACULTY_COORDINATOR') {
       const jwt = require('jsonwebtoken');
@@ -1371,6 +1394,13 @@ exports.updateWinnerStatus = async (req, res) => {
     const registration = await PaymentRegistration.findById(id);
     if (!registration) {
       return res.status(404).json({ error: 'Registration not found.' });
+    }
+
+    const regPaymentStatus = (registration.paymentStatus || registration.payment || '').toString().trim().toUpperCase();
+    if (regPaymentStatus !== 'PAID') {
+      return res.status(400).json({
+        error: `Cannot update winner status. Registration payment status is ${regPaymentStatus || 'UNPAID'}. Only PAID registrations are eligible.`
+      });
     }
 
     if (status === true) {
