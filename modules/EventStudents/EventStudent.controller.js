@@ -112,11 +112,20 @@ exports.updateStudent = async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Update the participant mobile number in paymentregistrations matching the roll number
+    // Update the participant mobile and college in paymentregistrations matching the roll number
+    const participantSet = {};
     if (mobile) {
+      participantSet["participants.$[elem].mobile"] = mobile.trim();
+    }
+    if (college) {
+      participantSet["participants.$[elem].college"] = college;
+      participantSet["participants.$[elem].otherCollege"] = college === 'Other College' ? (otherCollege ? otherCollege.trim() : '') : '';
+    }
+
+    if (Object.keys(participantSet).length > 0) {
       await PaymentRegistration.updateMany(
         { "participants.roll": cleanRoll },
-        { "$set": { "participants.$[elem].mobile": mobile } },
+        { "$set": participantSet },
         { arrayFilters: [{ "elem.roll": cleanRoll }] }
       );
     }
