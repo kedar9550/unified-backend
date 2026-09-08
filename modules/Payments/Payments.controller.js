@@ -917,10 +917,35 @@ exports.getDashboardStats = async (req, res) => {
     const Events = require('../Events/Events.model');
     const EventDepartment = require('../EventDepartment/EventDepartment.model');
 
-    const [allSchools, allEvents, allEventDepts] = await Promise.all([
+    const participantDeptAggPromise = PaymentRegistration.aggregate([
+      {
+        $match: roleFilter && Object.keys(roleFilter).length > 0
+          ? { $and: [{ paymentStatus: 'PAID' }, roleFilter] }
+          : { paymentStatus: 'PAID' }
+      },
+      {
+        $unwind: '$participants'
+      },
+      {
+        $group: {
+          _id: '$participants.department',
+          participantCount: {
+            $sum: 1
+          }
+        }
+      },
+      {
+        $sort: {
+          participantCount: -1
+        }
+      }
+    ]);
+
+    const [allSchools, allEvents, allEventDepts, participantDeptAgg] = await Promise.all([
       EventSchools.find({}).lean(),
       Events.find({}).populate('eventSchool').populate('department').lean(),
       EventDepartment.find({}).sort({ name: 1 }).lean(),
+      participantDeptAggPromise,
     ]);
 
     const schoolById = new Map();
@@ -1256,6 +1281,14 @@ exports.getDashboardStats = async (req, res) => {
         revenue: Math.round(revenue * 100) / 100,
       }));
 
+    const participantDeptStats = (participantDeptAgg || [])
+      .filter((d) => d._id)
+      .map((d) => ({
+        dept: d._id,
+        name: d._id,
+        participantCount: d.participantCount,
+      }));
+
     return res.json({
       totalTeams,
       totalStudents,
@@ -1265,6 +1298,7 @@ exports.getDashboardStats = async (req, res) => {
       campusWise: campusMap,
       departmentStats,
       schoolStats,
+      participantDeptStats,
       genderStats: genderMap,
       campusGenderStats: campusGenderMap,
       accommodation: {
