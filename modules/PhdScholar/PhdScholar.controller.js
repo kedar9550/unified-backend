@@ -102,14 +102,13 @@ exports.createPhdApplication = async (req, res) => {
         const existingEmp = await PhdApplication.findOne({
             rollNumber: rollNo,
             facultyId: req.user.userId,
-            scholarStatus: data.scholarStatus,
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+            scholarStatus: data.scholarStatus
         });
 
         if (existingEmp) {
             return res.status(400).json({
                 success: false,
-                message: `You have already submitted a pending or approved application for this scholar with status "${data.scholarStatus}".`
+                message: `You have already submitted an application for this scholar with status "${data.scholarStatus}". If it was rejected, please use the Edit & Resubmit option instead.`
             });
         }
 
@@ -129,8 +128,39 @@ exports.createPhdApplication = async (req, res) => {
             });
         }
 
+        let finalFacultyId = req.user.userId;
+        let finalStatus = 'Pending at R&D';
+        let finalEntryType = 'Self';
+
+        if (data.isDirectEntry === 'true') {
+            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+                return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
+            }
+
+            finalFacultyId = targetFaculty._id;
+            finalStatus = 'Approved';
+            finalEntryType = 'Admin';
+        }
+
         const application = new PhdApplication({
-            facultyId: req.user.userId,
+            facultyId: finalFacultyId,
             academicYear: data.academicYear,
             rollNumber: rollNo,
             studentName: data.studentName,
@@ -141,18 +171,37 @@ exports.createPhdApplication = async (req, res) => {
             university: data.university,
             admissionOrAwardDate: data.admissionOrAwardDate,
             document: `/uploads/phdScholars/${req.file.filename}`,
-            status: 'Pending at R&D'
+            status: finalStatus,
+            entryType: finalEntryType
         });
 
         await application.save();
+        
+        // If Approved immediately (Direct Entry), upsert Master Tracking record
+        if (finalStatus === 'Approved') {
+            await PhdScholar.findOneAndUpdate(
+                { rollNumber: application.rollNumber },
+                {
+                    rollNumber: application.rollNumber,
+                    studentName: application.studentName,
+                    course: application.course,
+                    branch: application.branch,
+                    currentStatus: application.scholarStatus,
+                    scholarType: application.scholarType || "Full-Time",
+                    university: application.university || "Aditya University",
+                    guideId: application.facultyId
+                },
+                { upsert: true, new: true }
+            );
+        }
 
         // Target: Send notification to the applicant's reporting boss
         try {
             const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
             const NotificationService = require('../notification/notification.service');
-            const Employee = require('../employee/employee.model');
+            const EmployeeModel = require('../employee/employee.model');
 
-            const emp = await Employee.findById(req.user.userId);
+            const emp = await EmployeeModel.findById(req.user.userId);
             if (emp) {
                 const bossUserId = await getReportingBossId(req.user.userId);
                 if (bossUserId) {
@@ -168,12 +217,119 @@ exports.createPhdApplication = async (req, res) => {
                     });
                 }
             }
+
+            if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
+                 await NotificationService.sendNotification({
+                    recipientId: finalFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'SUCCESS',
+                    title: 'Ph.D. Scholar Application Added',
+                    message: `R&D has directly added an approved Ph.D. Scholar application for you: ${application.studentName}`,
+                    link: `/faculty/research-metrics`
+                 });
+            }
         } catch (notifErr) {
             console.error("Failed to send phd scholar notification:", notifErr);
         }
         res.status(201).json({ success: true, data: application });
     } catch (err) {
         console.error("Create PhdApplication Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update and resubmit an existing rejected Ph.D. Scholar application
+// @route   PUT /api/research/phd-scholar/:id
+// @access  Private (Faculty)
+exports.updatePhdApplication = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const application = await PhdApplication.findById(id);
+        if (!application) {
+            return res.status(404).json({ success: false, message: "Ph.D. Scholar application not found." });
+        }
+
+        // Verify ownership
+        if (application.facultyId.toString() !== req.user.userId) {
+            return res.status(403).json({ success: false, message: "Not authorized to edit this application." });
+        }
+
+        if (!application.status.includes('Rejected')) {
+            return res.status(400).json({ success: false, message: "Only rejected applications can be edited and resubmitted." });
+        }
+
+        const rollNo = data.rollNumber ? data.rollNumber.trim().toUpperCase() : application.rollNumber;
+
+        // Date Validation
+        if (data.admissionOrAwardDate && new Date(data.admissionOrAwardDate) > new Date()) {
+            return res.status(400).json({ success: false, message: "Admission or Award Date cannot be in the future." });
+        }
+
+        // Validate file size
+        if (req.file) {
+            if (req.file.size > 500 * 1024) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `Supporting document is too large. Maximum allowed size is 500KB.` 
+                });
+            }
+        }
+
+        // Duplicate checks
+        const checkScholarStatus = data.scholarStatus || application.scholarStatus;
+        const existingEmp = await PhdApplication.findOne({
+            _id: { $ne: id },
+            rollNumber: rollNo,
+            facultyId: req.user.userId,
+            scholarStatus: checkScholarStatus
+        });
+
+        if (existingEmp) {
+            return res.status(400).json({
+                success: false,
+                message: `You already have an application for this scholar with status "${checkScholarStatus}".`
+            });
+        }
+
+        // Update fields
+        Object.keys(data).forEach(key => {
+            if (key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+                application[key] = data[key];
+            }
+        });
+
+        application.rollNumber = rollNo;
+        application.status = 'Pending at R&D'; // Resubmit
+        application.hodComment = '';
+        application.rndComment = '';
+
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {}
+            }
+        };
+
+        if (req.file) {
+            deleteOldFile(application.document);
+            application.document = `/uploads/phdScholars/${req.file.filename}`;
+        }
+
+        await application.save();
+
+        res.json({ success: true, data: application });
+    } catch (err) {
+        console.error("Update PhdApplication Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };

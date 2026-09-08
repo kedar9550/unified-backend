@@ -80,14 +80,13 @@ exports.createConference = async (req, res) => {
 
         // 2. Duplicate Validation
         const existingRecord = await Conference.findOne({
-            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i')
         });
 
         if (existingRecord) {
             return res.status(400).json({
                 success: false,
-                message: "A conference paper entry with this title already exists and is either Pending or Approved. Duplicate submissions are not allowed."
+                message: "A conference paper entry with this title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
             });
         }
 
@@ -138,25 +137,58 @@ exports.createConference = async (req, res) => {
         const userAuthorPos = parseInt(data.userAuthorPosition) || 1;
         const totalAuths = parseInt(data.totalAuthors) || 1;
 
-        
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
-        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+        let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+
+        let finalFacultyId = req.user.userId;
+        let finalStatus = 'Pending at R&D';
+        let finalEntryType = 'Self';
+
+        if (data.isDirectEntry === 'true') {
+            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+                return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
+            }
+
+            finalFacultyId = targetFaculty._id;
+            finalStatus = 'Approved';
+            finalEntryType = 'Admin';
+            computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
+        }
+
         const conference = new Conference({
             ...data,
             title: trimmedTitle,
-            facultyId: req.user.userId,
+            facultyId: finalFacultyId,
             doi: data.doi || null,
-            scopusSubtype,                  // ← NEW: store confirmed subtype
+            scopusSubtype,
             userAuthorPosition: userAuthorPos,
             totalAuthors: totalAuths,
             coAuthors: resolvedAuthors,
             certificate,
             proceedings,
             appraisalClaimant,
-            status: 'Pending at R&D'
-        ,
-            incentiveClaimant: computedIncentiveClaimant});
+            status: finalStatus,
+            incentiveClaimant: computedIncentiveClaimant,
+            entryType: finalEntryType
+        });
 
         await conference.save();
 
@@ -164,9 +196,9 @@ exports.createConference = async (req, res) => {
         try {
             const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
             const NotificationService = require('../notification/notification.service');
-            const Employee = require('../employee/employee.model');
+            const EmployeeModel = require('../employee/employee.model');
 
-            const emp = await Employee.findById(req.user.userId);
+            const emp = await EmployeeModel.findById(req.user.userId);
             if (emp) {
                 const bossUserId = await getReportingBossId(req.user.userId);
                 if (bossUserId) {
@@ -182,6 +214,18 @@ exports.createConference = async (req, res) => {
                     });
                 }
             }
+
+            if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
+                 await NotificationService.sendNotification({
+                    recipientId: finalFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'SUCCESS',
+                    title: 'Conference Publication Added',
+                    message: `R&D has directly added an approved Conference Publication for you: ${conference.title}`,
+                    link: `/faculty/research-metrics`
+                 });
+            }
         } catch (notifErr) {
             console.error("Failed to send conference notification:", notifErr);
         }
@@ -193,6 +237,140 @@ exports.createConference = async (req, res) => {
             const message = `A conference with this ${field === 'title' ? 'title' : 'DOI'} already exists.`;
             return res.status(400).json({ success: false, message });
         }
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update and resubmit an existing rejected conference publication
+// @route   PUT /api/research/conference/:id
+// @access  Private (Faculty)
+exports.updateConference = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const conference = await Conference.findById(id);
+        if (!conference) {
+            return res.status(404).json({ success: false, message: "Conference not found." });
+        }
+
+        // Verify ownership
+        if (conference.facultyId.toString() !== req.user.userId) {
+            return res.status(403).json({ success: false, message: "Not authorized to edit this conference." });
+        }
+
+        if (!conference.status.includes('Rejected')) {
+            return res.status(400).json({ success: false, message: "Only rejected conferences can be edited and resubmitted." });
+        }
+
+        // Validate Title for duplicates (excluding self)
+        if (data.title) {
+            const checkTitle = data.title.trim();
+            const existingConference = await Conference.findOne({
+                _id: { $ne: id },
+                title: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+            });
+
+            if (existingConference) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Another conference paper entry with this title already exists.`
+                });
+            }
+        }
+
+        // Date Validation
+        if (data.year || data.month) {
+            const year = data.year || conference.year;
+            const month = data.month || conference.month;
+            if (isFutureYearMonth(year, month)) {
+                return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+            }
+        }
+
+        let scopusSubtype = conference.scopusSubtype;
+        if (data.doi && data.doi !== conference.doi) {
+            const scopusCheck = await validateScopusConferencePaper(data.doi);
+            if (!scopusCheck.valid) {
+                return res.status(422).json({
+                    success: false,
+                    message: scopusCheck.message
+                });
+            }
+            if (!scopusCheck.skipped) {
+                scopusSubtype = scopusCheck.subtype || "cp";
+            }
+        }
+
+        // Parse co-authors
+        let parsedCoAuthors = conference.coAuthors;
+        if (data.coAuthors) {
+            if (typeof data.coAuthors === 'string') {
+                try {
+                    parsedCoAuthors = JSON.parse(data.coAuthors);
+                } catch (e) {
+                    parsedCoAuthors = [];
+                }
+            } else if (Array.isArray(data.coAuthors)) {
+                parsedCoAuthors = data.coAuthors;
+            }
+        }
+
+        const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
+        const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantEmpId = applicant ? applicant.institutionId : null;
+        const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : conference.applyIncentive;
+        const computedIncentiveClaimant = (applyIncentive === 'Yes' || applyIncentive === 'yes') ? applicantEmpId : null;
+
+        // Update fields
+        Object.keys(data).forEach(key => {
+            if (key !== 'coAuthors' && key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+                conference[key] = data[key];
+            }
+        });
+
+        conference.title = data.title ? data.title.trim() : conference.title;
+        conference.coAuthors = resolvedAuthors;
+        conference.scopusSubtype = scopusSubtype;
+        conference.appraisalClaimant = appraisalClaimant;
+        conference.incentiveClaimant = computedIncentiveClaimant;
+        conference.status = 'Pending at R&D'; // Resubmit
+        conference.hodComment = '';
+        conference.rndComment = '';
+
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {}
+            }
+        };
+
+        if (req.files) {
+            if (req.files.certificate) {
+                deleteOldFile(conference.certificate);
+                conference.certificate = `/uploads/conferences/${req.files.certificate[0].filename}`;
+            }
+            if (req.files.proceedings) {
+                deleteOldFile(conference.proceedings);
+                conference.proceedings = `/uploads/conferences/${req.files.proceedings[0].filename}`;
+            }
+        }
+
+        await conference.save();
+
+        res.json({ success: true, data: conference });
+    } catch (err) {
+        console.error("Update Conference Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };

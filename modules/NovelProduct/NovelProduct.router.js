@@ -38,6 +38,9 @@ router.post('/', protect, upload.single('document'), novelProductController.crea
 router.get('/', protect, novelProductController.getMyNovelProducts);
 router.get('/:id', protect, novelProductController.getNovelProductById);
 
+// Faculty: Update/Resubmit rejected product
+router.put('/:id', protect, upload.single('document'), novelProductController.updateNovelProduct);
+
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize('HOD'), novelProductController.getPendingAtHOD);
 router.put('/hod-action/:id', protect, authorize('HOD'), novelProductController.hodAction);

@@ -39,14 +39,13 @@ exports.createTextbook = async (req, res) => {
         }
 
         const existingRecord = await Textbook.findOne({
-            isbn: data.isbn,
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+            isbn: data.isbn
         });
 
         if (existingRecord) {
             return res.status(400).json({ 
                 success: false, 
-                message: "A textbook with this ISBN already exists and is either Pending or Approved. Duplicate submissions are not allowed." 
+                message: "A textbook with this ISBN already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one." 
             });
         }
 
@@ -97,17 +96,51 @@ exports.createTextbook = async (req, res) => {
         
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
-        const computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+        let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
+
+        let finalFacultyId = req.user.userId;
+        let finalStatus = 'Pending at R&D';
+        let finalEntryType = 'Self';
+
+        if (data.isDirectEntry === 'true') {
+            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+                return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
+            }
+
+            finalFacultyId = targetFaculty._id;
+            finalStatus = 'Approved';
+            finalEntryType = 'Admin';
+            computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
+        }
+
         const textbook = new Textbook({
             ...data,
             isbn: data.isbn, // use normalized isbn
             college: data.college || 'Not Set',
-            facultyId: req.user.userId,
+            facultyId: finalFacultyId,
             authors: finalAuthors,
             appraisalClaimant,
-            status: 'Pending at R&D'
-        ,
-            incentiveClaimant: computedIncentiveClaimant});
+            status: finalStatus,
+            incentiveClaimant: computedIncentiveClaimant,
+            entryType: finalEntryType
+        });
 
         if (req.files) {
             if (req.files.coverPage) textbook.coverPage = `/uploads/textbooks/${req.files.coverPage[0].filename}`;
@@ -135,9 +168,9 @@ exports.createTextbook = async (req, res) => {
         try {
             const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
             const NotificationService = require('../notification/notification.service');
-            const Employee = require('../employee/employee.model');
+            const EmployeeModel = require('../employee/employee.model');
 
-            const emp = await Employee.findById(req.user.userId);
+            const emp = await EmployeeModel.findById(req.user.userId);
             if (emp) {
                 const bossUserId = await getReportingBossId(req.user.userId);
                 if (bossUserId) {
@@ -153,6 +186,18 @@ exports.createTextbook = async (req, res) => {
                     });
                 }
             }
+
+            if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
+                 await NotificationService.sendNotification({
+                    recipientId: finalFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'SUCCESS',
+                    title: 'Textbook Publication Added',
+                    message: `R&D has directly added an approved Textbook for you: ${textbook.title}`,
+                    link: `/faculty/research-metrics`
+                 });
+            }
         } catch (notifErr) {
             console.error("Failed to send textbook notification:", notifErr);
         }
@@ -165,6 +210,166 @@ exports.createTextbook = async (req, res) => {
             const message = `A textbook with this ${field} already exists.`;
             return res.status(400).json({ success: false, message });
         }
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update and resubmit an existing rejected textbook
+// @route   PUT /api/research/textbook/:id
+// @access  Private (Faculty)
+exports.updateTextbook = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const textbook = await Textbook.findById(id);
+        if (!textbook) {
+            return res.status(404).json({ success: false, message: "Textbook not found." });
+        }
+
+        if (textbook.facultyId.toString() !== req.user.userId) {
+            return res.status(403).json({ success: false, message: "Not authorized to edit this textbook." });
+        }
+
+        if (!textbook.status.includes('Rejected')) {
+            return res.status(400).json({ success: false, message: "Only rejected textbooks can be edited and resubmitted." });
+        }
+
+        if (data.isbn) {
+            data.isbn = data.isbn.trim().replace(/-/g, '');
+            const existingRecord = await Textbook.findOne({
+                _id: { $ne: id },
+                isbn: data.isbn
+            });
+
+            if (existingRecord) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A textbook with this ISBN already exists."
+                });
+            }
+        }
+
+        if (data.year || data.month) {
+            const year = data.year || textbook.year;
+            const month = data.month || textbook.month;
+            if (isFutureYearMonth(year, month)) {
+                return res.status(400).json({ success: false, message: "Publication date cannot be in the future." });
+            }
+        }
+
+        let finalAuthors = textbook.authors;
+        let hasOtherAusAuthors = false;
+        
+        if (data.authors) {
+            let parsedAuthors = [];
+            if (typeof data.authors === 'string') {
+                try {
+                    parsedAuthors = JSON.parse(data.authors);
+                } catch (e) {
+                    parsedAuthors = [];
+                }
+            } else if (Array.isArray(data.authors)) {
+                parsedAuthors = data.authors;
+            }
+
+            const loggedInUser = await Employee.findById(req.user.userId);
+            finalAuthors = [];
+            
+            for (const author of parsedAuthors) {
+                const isUser = Number(author.authorPosition) === Number(data.userAuthorPosition || textbook.userAuthorPosition);
+                const empId = isUser ? loggedInUser.institutionId : (author.employeeId || author.empId || null);
+                const isAUS = isUser || author.affiliationType === 'Aditya University';
+
+                if (!isUser && isAUS) {
+                    hasOtherAusAuthors = true;
+                }
+
+                finalAuthors.push({
+                    authorPosition: author.authorPosition,
+                    authorName: isUser ? loggedInUser.name : author.authorName,
+                    affiliationType: isUser ? 'Aditya University' : (author.affiliationType || 'Others'),
+                    employeeId: isAUS && empId ? String(empId).trim() : null,
+                    affiliationName: isUser ? 'Aditya University' : (author.affiliationName || ''),
+                    isIncentiveApplicant: isUser ? (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') : false,
+                    contributorOnly: isUser ? (data.applyIncentive === 'No' || data.applyIncentive === 'no') : true
+                });
+            }
+        } else {
+             // Calculate hasOtherAusAuthors based on existing authors if not updated
+             finalAuthors.forEach(a => {
+                 if (a.affiliationType === 'Aditya University' && a.employeeId !== textbook.authors.find(x => x.isIncentiveApplicant)?.employeeId) {
+                     hasOtherAusAuthors = true;
+                 }
+             });
+        }
+
+        const { getDefaultClaimant } = require('../../utils/claimantHelper');
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : textbook.applyIncentive;
+        const computedIncentiveClaimant = (applyIncentive === 'Yes' || applyIncentive === 'yes') ? applicant.institutionId : null;
+
+        Object.keys(data).forEach(key => {
+            if (key !== 'authors' && key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+                textbook[key] = data[key];
+            }
+        });
+
+        textbook.authors = finalAuthors;
+        textbook.appraisalClaimant = appraisalClaimant;
+        textbook.incentiveClaimant = computedIncentiveClaimant;
+        textbook.status = 'Pending at R&D';
+        textbook.hodComment = '';
+        textbook.rndComment = '';
+
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, '');
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {}
+            }
+        };
+
+        if (req.files) {
+            if (req.files.coverPage) {
+                deleteOldFile(textbook.coverPage);
+                textbook.coverPage = `/uploads/textbooks/${req.files.coverPage[0].filename}`;
+            }
+            if (req.files.authorAffiliation) {
+                deleteOldFile(textbook.authorAffiliation);
+                textbook.authorAffiliation = `/uploads/textbooks/${req.files.authorAffiliation[0].filename}`;
+            }
+            if (req.files.index) {
+                deleteOldFile(textbook.index);
+                textbook.index = `/uploads/textbooks/${req.files.index[0].filename}`;
+            }
+        }
+
+        await textbook.save();
+
+        if (data.edition) {
+            try {
+                const normalizedEdition = data.edition.replace(/\s+/g, ' ').trim();
+                const Edition = require('./Edition.model');
+                await Edition.updateOne(
+                    { name: normalizedEdition },
+                    { $setOnInsert: { name: normalizedEdition } },
+                    { upsert: true }
+                );
+            } catch (e) {}
+        }
+
+        res.json({ success: true, data: textbook });
+    } catch (err) {
+        console.error("Update Textbook Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };

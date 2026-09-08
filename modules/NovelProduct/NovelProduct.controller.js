@@ -32,14 +32,13 @@ exports.createNovelProduct = async (req, res) => {
         const existingRecord = await NovelProduct.findOne({
             facultyId: req.user.userId,
             academicYear: data.academicYear,
-            productName: new RegExp(`^${escapeRegex(data.productName.trim())}$`, 'i'),
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
+            productName: new RegExp(`^${escapeRegex(data.productName.trim())}$`, 'i')
         });
 
         if (existingRecord) {
             return res.status(400).json({
                 success: false,
-                message: "You have already submitted a pending or approved entry for this Product/Technology in this academic year."
+                message: "You have already submitted an entry for this Product/Technology in this academic year. If it was rejected, please use the Edit & Resubmit option."
             });
         }
 
@@ -63,8 +62,39 @@ exports.createNovelProduct = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
+        let finalFacultyId = req.user.userId;
+        let finalStatus = 'Pending at R&D';
+        let finalEntryType = 'Self';
+
+        if (data.isDirectEntry === 'true') {
+            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+                return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
+            }
+
+            finalFacultyId = targetFaculty._id;
+            finalStatus = 'Approved';
+            finalEntryType = 'Admin';
+        }
+
         const product = new NovelProduct({
-            facultyId: req.user.userId,
+            facultyId: finalFacultyId,
             academicYear: data.academicYear,
             productName: data.productName.trim(),
             description: data.description.trim(),
@@ -79,7 +109,8 @@ exports.createNovelProduct = async (req, res) => {
             applyIncentive: 'No',
             appraisalClaimants,
             incentiveClaimant: null,
-            status: 'Pending at R&D'
+            status: finalStatus,
+            entryType: finalEntryType
         });
 
         await product.save();
@@ -88,9 +119,9 @@ exports.createNovelProduct = async (req, res) => {
         try {
             const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
             const NotificationService = require('../notification/notification.service');
-            const Employee = require('../employee/employee.model');
+            const EmployeeModel = require('../employee/employee.model');
 
-            const emp = await Employee.findById(req.user.userId);
+            const emp = await EmployeeModel.findById(req.user.userId);
             if (emp) {
                 const bossUserId = await getReportingBossId(req.user.userId);
                 if (bossUserId) {
@@ -100,11 +131,23 @@ exports.createNovelProduct = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: 'New Research Submission',
-                        message: `${emp.name || 'A faculty member'} has submitted a new Novel Product: ${product.title}`,
+                        message: `${emp.name || 'A faculty member'} has submitted a new Novel Product: ${product.productName}`,
                         link: `/research/approvals`, 
                         metadata: { targetRole: "ReportingBoss" }
                     });
                 }
+            }
+
+            if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
+                 await NotificationService.sendNotification({
+                    recipientId: finalFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'SUCCESS',
+                    title: 'Novel Product Added',
+                    message: `R&D has directly added an approved Novel Product for you: ${product.productName}`,
+                    link: `/faculty/research-metrics`
+                 });
             }
         } catch (notifErr) {
             console.error("Failed to send novel product notification:", notifErr);
@@ -115,6 +158,135 @@ exports.createNovelProduct = async (req, res) => {
         if (err.code === 11000) {
             return res.status(400).json({ success: false, message: "A Novel Product with this Product / Technology Name already exists." });
         }
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update and resubmit an existing rejected Novel Product
+// @route   PUT /api/research/novel-product/:id
+// @access  Private (Faculty)
+exports.updateNovelProduct = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const product = await NovelProduct.findById(id);
+        if (!product) {
+            return res.status(404).json({ success: false, message: "Novel Product / Technology not found." });
+        }
+
+        // Verify ownership
+        if (product.facultyId.toString() !== req.user.userId) {
+            return res.status(403).json({ success: false, message: "Not authorized to edit this product." });
+        }
+
+        if (!product.status.includes('Rejected')) {
+            return res.status(400).json({ success: false, message: "Only rejected products can be edited and resubmitted." });
+        }
+
+        // Validate Implemented category
+        const checkCategory = data.category || product.category;
+        const checkOrganization = data.organizationName !== undefined ? data.organizationName : product.implementedOrganization;
+
+        if (checkCategory === 'Implemented' && (!checkOrganization || !checkOrganization.trim())) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "Organization Name is mandatory when category is 'Implemented'." 
+            });
+        }
+
+        // Validate file size
+        if (req.file) {
+            if (req.file.size > 500 * 1024) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `Supporting document is too large. Maximum allowed size is 500KB.` 
+                });
+            }
+        }
+
+        // Duplicate checks
+        const checkProductName = data.productName ? data.productName.trim() : product.productName;
+        const existingRecord = await NovelProduct.findOne({
+            _id: { $ne: id },
+            facultyId: req.user.userId,
+            academicYear: data.academicYear || product.academicYear,
+            productName: new RegExp(`^${escapeRegex(checkProductName)}$`, 'i')
+        });
+
+        if (existingRecord) {
+            return res.status(400).json({
+                success: false,
+                message: "You already have an entry for this Product/Technology in this academic year."
+            });
+        }
+
+        // Parse co-developers
+        let parsedCoDevelopers = product.coDevelopers;
+        if (data.coDevelopers) {
+            if (typeof data.coDevelopers === 'string') {
+                try {
+                    parsedCoDevelopers = JSON.parse(data.coDevelopers);
+                } catch (e) {
+                    parsedCoDevelopers = [];
+                }
+            } else if (Array.isArray(data.coDevelopers)) {
+                parsedCoDevelopers = data.coDevelopers;
+            }
+        }
+
+        const { resolveCoAuthorsAndClaims } = require('../../utils/claimantHelper');
+        const { resolvedAuthors } = await resolveCoAuthorsAndClaims(parsedCoDevelopers, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantInstId = applicant ? applicant.institutionId : null;
+        const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
+        const appraisalClaimants = [...new Set(claimantsList)];
+
+        // Update fields
+        Object.keys(data).forEach(key => {
+            if (key !== 'coDevelopers' && key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+                product[key] = data[key];
+            }
+        });
+
+        product.productName = checkProductName;
+        if (data.description) product.description = data.description.trim();
+        product.developedOrganization = checkCategory === 'Developed' && data.developedOrganization ? data.developedOrganization.trim() : undefined;
+        product.implementedOrganization = checkCategory === 'Implemented' && data.organizationName ? data.organizationName.trim() : undefined;
+        
+        product.coDevelopers = resolvedAuthors;
+        product.appraisalClaimants = appraisalClaimants;
+        product.applyIncentive = 'No';
+        product.incentiveClaimant = null;
+        product.status = 'Pending at R&D'; // Resubmit
+        product.hodComment = '';
+        product.rndComment = '';
+
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {}
+            }
+        };
+
+        if (req.file) {
+            deleteOldFile(product.document);
+            product.document = `/uploads/novelProducts/${req.file.filename}`;
+        }
+
+        await product.save();
+
+        res.json({ success: true, data: product });
+    } catch (err) {
+        console.error("Update NovelProduct Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };

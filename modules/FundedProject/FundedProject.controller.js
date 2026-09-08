@@ -30,6 +30,18 @@ exports.createProject = async (req, res) => {
 
         const trimmedTitle = data.title.trim();
 
+        // 2. Duplicate Validation
+        const existingRecord = await FundedProject.findOne({
+            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i')
+        });
+
+        if (existingRecord) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "A funded project with this title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one." 
+            });
+        }
+
         // 3. Numeric Fields Validation
         if (data.duration) {
             const numDuration = Number(data.duration);
@@ -82,16 +94,48 @@ exports.createProject = async (req, res) => {
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
         const appraisalClaimants = [...new Set(claimantsList)];
 
+        let finalFacultyId = req.user.userId;
+        let finalStatus = 'Pending at R&D';
+        let finalEntryType = 'Self';
+
+        if (data.isDirectEntry === 'true') {
+            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+                return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
+            }
+
+            finalFacultyId = targetFaculty._id;
+            finalStatus = 'Approved';
+            finalEntryType = 'Admin';
+        }
+
         const project = new FundedProject({
             ...data,
             applyIncentive: 'No',
             title: trimmedTitle,
-            facultyId: req.user.userId,
+            facultyId: finalFacultyId,
             coInvestigators: resolvedAuthors,
             sanctionOrder: `/uploads/funded-projects/${req.file.filename}`,
             appraisalClaimants,
             incentiveClaimant: null,
-            status: 'Pending at R&D'
+            status: finalStatus,
+            entryType: finalEntryType
         });
 
         await project.save();
@@ -100,9 +144,9 @@ exports.createProject = async (req, res) => {
         try {
             const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
             const NotificationService = require('../notification/notification.service');
-            const Employee = require('../employee/employee.model');
+            const EmployeeModel = require('../employee/employee.model');
 
-            const emp = await Employee.findById(req.user.userId);
+            const emp = await EmployeeModel.findById(req.user.userId);
             if (emp) {
                 const bossUserId = await getReportingBossId(req.user.userId);
                 if (bossUserId) {
@@ -118,12 +162,161 @@ exports.createProject = async (req, res) => {
                     });
                 }
             }
+
+            if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
+                 await NotificationService.sendNotification({
+                    recipientId: finalFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'SUCCESS',
+                    title: 'Funded Project Added',
+                    message: `R&D has directly added an approved Funded Project for you: ${project.title}`,
+                    link: `/faculty/research-metrics`
+                 });
+            }
         } catch (notifErr) {
             console.error("Failed to send funded project notification:", notifErr);
         }
         res.status(201).json({ success: true, data: project });
     } catch (err) {
         console.error("Create Funded Project Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update and resubmit an existing rejected funded project
+// @route   PUT /api/research/funded-project/:id
+// @access  Private (Faculty)
+exports.updateProject = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const project = await FundedProject.findById(id);
+        if (!project) {
+            return res.status(404).json({ success: false, message: "Funded Project not found." });
+        }
+
+        // Verify ownership
+        if (project.facultyId.toString() !== req.user.userId) {
+            return res.status(403).json({ success: false, message: "Not authorized to edit this funded project." });
+        }
+
+        if (!project.status.includes('Rejected')) {
+            return res.status(400).json({ success: false, message: "Only rejected funded projects can be edited and resubmitted." });
+        }
+
+        // Validate file size
+        if (req.file) {
+            if (req.file.size > 500 * 1024) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: `Sanction Order is too large. Maximum allowed size is 500KB.` 
+                });
+            }
+        }
+
+        // Validate Title for duplicates
+        if (data.title) {
+            const checkTitle = data.title.trim();
+            const existingRecord = await FundedProject.findOne({
+                _id: { $ne: id },
+                title: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+            });
+
+            if (existingRecord) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: "A funded project with this title already exists." 
+                });
+            }
+        }
+
+        // Numeric Validation
+        if (data.duration) {
+            const numDuration = Number(data.duration);
+            if (isNaN(numDuration) || numDuration <= 0) return res.status(400).json({ success: false, message: "Duration of Project in Years must be a positive numeric value." });
+        }
+        if (data.recurring) {
+            const numRecurring = Number(data.recurring);
+            if (isNaN(numRecurring) || numRecurring < 0) return res.status(400).json({ success: false, message: "Recurring amount must be a valid positive numeric value." });
+        }
+        if (data.nonRecurring) {
+            const numNonRecurring = Number(data.nonRecurring);
+            if (isNaN(numNonRecurring) || numNonRecurring < 0) return res.status(400).json({ success: false, message: "Non-Recurring amount must be a valid positive numeric value." });
+        }
+        if (data.sanctionedAmount) {
+            const numSanctioned = Number(data.sanctionedAmount);
+            if (isNaN(numSanctioned) || numSanctioned <= 0) return res.status(400).json({ success: false, message: "Sanctioned Amount must be a positive numeric value." });
+        }
+
+        // Date Validation
+        if (data.sanctionDate && isFutureDate(data.sanctionDate)) {
+            return res.status(400).json({ success: false, message: "Sanction Date cannot be in the future." });
+        }
+
+        // Parse co-investigators
+        let parsedCoInvestigators = project.coInvestigators;
+        if (data.coInvestigators) {
+            if (typeof data.coInvestigators === 'string') {
+                try {
+                    parsedCoInvestigators = JSON.parse(data.coInvestigators);
+                } catch (e) {
+                    parsedCoInvestigators = [];
+                }
+            } else if (Array.isArray(data.coInvestigators)) {
+                parsedCoInvestigators = data.coInvestigators;
+            }
+        }
+
+        const { resolveCoAuthorsAndClaims } = require('../../utils/claimantHelper');
+        const { resolvedAuthors } = await resolveCoAuthorsAndClaims(parsedCoInvestigators, req.user.userId);
+
+        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicantInstId = applicant ? applicant.institutionId : null;
+        const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
+        const appraisalClaimants = [...new Set(claimantsList)];
+
+        // Update fields
+        Object.keys(data).forEach(key => {
+            if (key !== 'coInvestigators' && key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+                project[key] = data[key];
+            }
+        });
+
+        project.title = data.title ? data.title.trim() : project.title;
+        project.coInvestigators = resolvedAuthors;
+        project.appraisalClaimants = appraisalClaimants;
+        project.applyIncentive = 'No';
+        project.incentiveClaimant = null;
+        project.status = 'Pending at R&D'; // Resubmit
+        project.hodComment = '';
+        project.rndComment = '';
+
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {}
+            }
+        };
+
+        if (req.file) {
+            deleteOldFile(project.sanctionOrder);
+            project.sanctionOrder = `/uploads/funded-projects/${req.file.filename}`;
+        }
+
+        await project.save();
+
+        res.json({ success: true, data: project });
+    } catch (err) {
+        console.error("Update Funded Project Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };
