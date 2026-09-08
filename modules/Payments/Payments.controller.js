@@ -46,7 +46,7 @@ exports.createOrder = async (req, res) => {
           category = event.category || event.groupCategory || '';
         }
       }
-      
+
       const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
         ...p,
         accommodation: p.accommodation || "No",
@@ -297,7 +297,7 @@ exports.addParticipants = async (req, res) => {
   try {
     const { id } = req.params;
     const { participants, eventName, category } = req.body;
-    
+
     const registration = await PaymentRegistration.findById(id);
     if (!registration) {
       return res.status(404).json({ error: 'Registration not found' });
@@ -454,7 +454,7 @@ exports.manualApprovePayment = async (req, res) => {
     registration.paymentStatus = 'PAID';
     registration.verified = true;
     registration.razorpayPaymentId = 'MANUAL_APPROVAL';
-    
+
     // Auto-generate barcodes for participants if missing
     if (Array.isArray(registration.participants)) {
       registration.participants.forEach(p => {
@@ -493,17 +493,17 @@ exports.verifyGatewayPayment = async (req, res) => {
     });
 
     const orderPayments = await instance.orders.fetchPayments(registration.razorpayOrderId);
-    
+
     if (orderPayments && orderPayments.items && orderPayments.items.length > 0) {
       // Find a captured or authorized payment
       const successfulPayment = orderPayments.items.find(p => p.status === 'captured' || p.status === 'authorized');
-      
+
       if (successfulPayment) {
         registration.paymentStatus = 'PAID';
         registration.verified = true;
         registration.razorpayPaymentId = successfulPayment.id;
         registration.rawPaymentData = { ...registration.rawPaymentData, razorpayCompleteResponse: successfulPayment };
-        
+
         if (Array.isArray(registration.participants)) {
           registration.participants.forEach(p => {
             if (!p.barcode) {
@@ -1007,6 +1007,7 @@ exports.getDashboardStats = async (req, res) => {
 
       return allSchools[0] || null;
     };
+
 
     // ─── Group / School-wise stats (strictly for existing DB groups) ────────
     const schoolMap = {};
@@ -1757,12 +1758,12 @@ exports.checkPhoto = async (req, res) => {
     const fs = require('fs');
     const path = require('path');
     const dir = path.join(__dirname, '../../uploads/othercollegephotos');
-    
+
     if (!fs.existsSync(dir)) return res.json({ exists: false });
-    
+
     const files = fs.readdirSync(dir);
     const photoFile = files.reverse().find(f => f.startsWith(`photo-${roll}-`));
-    
+
     if (photoFile) {
       return res.json({ exists: true, url: `/uploads/othercollegephotos/${photoFile}` });
     }
