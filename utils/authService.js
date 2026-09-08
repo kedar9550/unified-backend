@@ -34,7 +34,8 @@ const loginUser = async (institutionId, password, appName) => {
     // Fetch roles associated with the specific app
     const userAppRoles = await UserAppRole.find({ userId: user._id, app: appName })
         .populate('role')
-        .populate('departments', 'name code type');
+        .populate('departments', 'name code type')
+        .populate('schools', 'name code');
     
     // Map them out nicely
     const roles = userAppRoles.map(uar => ({
@@ -43,6 +44,7 @@ const loginUser = async (institutionId, password, appName) => {
         name: uar.role.name,
         app: uar.app,
         departments: uar.departments || [],
+        schools: uar.schools || [],
         permissions: [] 
     }));
 

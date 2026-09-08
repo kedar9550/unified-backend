@@ -479,6 +479,19 @@ const searchUser = async (req, res) => {
                                                 },
                                                 in: "$$uar.departments"
                                             }
+                                        },
+                                        schools: {
+                                            $let: {
+                                                vars: {
+                                                    uar: {
+                                                        $arrayElemAt: [
+                                                            { $filter: { input: "$userAppRoles", as: "u", cond: { $eq: ["$$u.role", "$$role._id"] } } },
+                                                            0
+                                                        ]
+                                                    }
+                                                },
+                                                in: "$$uar.schools"
+                                            }
                                         }
                                     }
                                 ]
@@ -1292,6 +1305,19 @@ const getAllEmployees = async (req, res) => {
                                                     }
                                                 },
                                                 in: "$$uar.departments"
+                                            }
+                                        },
+                                        schools: {
+                                            $let: {
+                                                vars: {
+                                                    uar: {
+                                                        $arrayElemAt: [
+                                                            { $filter: { input: "$userAppRoles", as: "u", cond: { $eq: ["$$u.role", "$$role._id"] } } },
+                                                            0
+                                                        ]
+                                                    }
+                                                },
+                                                in: "$$uar.schools"
                                             }
                                         }
                                     }
