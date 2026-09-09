@@ -1871,28 +1871,125 @@ exports.getAccommodationQuotaStats = async (req, res) => {
 
 exports.updateParticipantAccommodation = async (req, res) => {
   try {
-    const { registrationId, participantBarcode, roll, accommodation = 'YES' } = req.body;
+    const {
+      registrationId,
+      teamId,
+      roll,
+      rollnumber,
+      participantBarcode,
+      days,
+      dayscount,
+      daysCount,
+      amount,
+      payment,
+      accommodation = 'Yes',
+      email,
+      name,
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+      rawPaymentData,
+      paymentMethod = 'ONLINE'
+    } = req.body;
 
-    if (!registrationId) {
-      return res.status(400).json({ error: 'registrationId is required' });
+    const targetRoll = String(roll || rollnumber || '').trim();
+    const targetEmail = String(email || '').trim().toLowerCase();
+    let registration = null;
+
+    // First try finding by teamId and participant roll / rollnumber / email
+    if (teamId && (targetRoll || targetEmail)) {
+      const cleanTeam = String(teamId).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const orList = [];
+      if (targetRoll) {
+        orList.push(
+          { 'participants.roll': targetRoll },
+          { 'participants.rollnumber': targetRoll },
+          { 'participants.roll': new RegExp(`^${targetRoll}$`, 'i') },
+          { 'participants.rollnumber': new RegExp(`^${targetRoll}$`, 'i') }
+        );
+      }
+      if (targetEmail) {
+        orList.push(
+          { 'participants.email': targetEmail },
+          { 'participants.email': new RegExp(`^${targetEmail}$`, 'i') }
+        );
+      }
+
+      registration = await PaymentRegistration.findOne({
+        teamId: { $regex: new RegExp(`^${cleanTeam}$`, 'i') },
+        $or: orList
+      });
     }
 
-    const registration = await PaymentRegistration.findById(registrationId);
+    // Fallbacks
+    if (!registration && registrationId) {
+      registration = await PaymentRegistration.findById(registrationId);
+    }
+    if (!registration && targetRoll) {
+      registration = await PaymentRegistration.findOne({
+        $or: [
+          { 'participants.roll': targetRoll },
+          { 'participants.rollnumber': targetRoll },
+          { 'participants.roll': new RegExp(`^${targetRoll}$`, 'i') },
+          { 'participants.rollnumber': new RegExp(`^${targetRoll}$`, 'i') }
+        ]
+      });
+    }
+    if (!registration && targetEmail) {
+      registration = await PaymentRegistration.findOne({
+        'participants.email': new RegExp(`^${targetEmail}$`, 'i')
+      });
+    }
+    if (!registration && participantBarcode) {
+      registration = await PaymentRegistration.findOne({
+        'participants.barcode': participantBarcode
+      });
+    }
+
     if (!registration) {
-      return res.status(404).json({ error: 'Registration not found' });
+      return res.status(404).json({ error: 'Registration not found for the provided teamId and roll number' });
     }
 
     if (registration.paymentStatus !== 'PAID') {
       return res.status(400).json({ error: 'Accommodation can only be applied to PAID registrations.' });
     }
 
-    const participantIndex = registration.participants.findIndex(p =>
-      (participantBarcode && p.barcode === participantBarcode) ||
-      (roll && p.roll === roll)
-    );
+    let participantIndex = -1;
+
+    // 1. If explicit participantIndex provided, verify it against participant data
+    if (
+      typeof req.body.participantIndex === 'number' &&
+      req.body.participantIndex >= 0 &&
+      req.body.participantIndex < registration.participants.length
+    ) {
+      const cand = registration.participants[req.body.participantIndex];
+      const cRoll = String(cand.roll || cand.rollnumber || '').trim().toUpperCase();
+      const cBarcode = cand.barcode;
+      const cEmail = String(cand.email || '').trim().toLowerCase();
+
+      if (
+        (targetRoll && cRoll === targetRoll.toUpperCase()) ||
+        (participantBarcode && cBarcode === participantBarcode) ||
+        (targetEmail && cEmail === targetEmail) ||
+        (!targetRoll && !participantBarcode && !targetEmail)
+      ) {
+        participantIndex = req.body.participantIndex;
+      }
+    }
+
+    // 2. Otherwise find by matching roll, barcode, or email
+    if (participantIndex === -1) {
+      participantIndex = registration.participants.findIndex(p => {
+        const pRoll = String(p.roll || p.rollnumber || '').trim().toUpperCase();
+        const matchRoll = targetRoll && pRoll === targetRoll.toUpperCase();
+        const matchBarcode = participantBarcode && p.barcode === participantBarcode;
+        const matchEmail = targetEmail && String(p.email || '').trim().toLowerCase() === targetEmail;
+        return matchRoll || matchBarcode || matchEmail;
+      });
+    }
 
     if (participantIndex === -1) {
-      return res.status(404).json({ error: 'Participant not found in registration' });
+      return res.status(404).json({ error: 'Participant not found in this registration' });
     }
 
     const participant = registration.participants[participantIndex];
@@ -1903,10 +2000,11 @@ exports.updateParticipantAccommodation = async (req, res) => {
       return res.status(400).json({ error: 'Accommodation is only permitted for Other College students.' });
     }
 
-    const newStatus = String(accommodation).toUpperCase() === 'YES' ? 'YES' : 'No';
+    const isApplying = String(accommodation).toLowerCase() === 'yes';
+    const newStatus = isApplying ? 'Yes' : 'No';
 
-    // If changing to YES, enforce limits!
-    if (newStatus === 'YES' && (participant.accommodation || '').toUpperCase() !== 'YES') {
+    // If changing to Yes, enforce limits!
+    if (isApplying && (participant.accommodation || '').toLowerCase() !== 'yes') {
       const isFemale = /^female|girl/i.test(participant.gender || '');
       const genderKey = isFemale ? 'FEMALE' : 'MALE';
 
@@ -1954,13 +2052,86 @@ exports.updateParticipantAccommodation = async (req, res) => {
       }
     }
 
-    registration.participants[participantIndex].accommodation = newStatus;
+    const numDays = Number(days || dayscount || daysCount) || 1;
+    const calculatedAmount = Number(amount) || (numDays * 100);
+
+    const paymentInfo = payment || rawPaymentData || {
+      amount: calculatedAmount,
+      days: numDays,
+      dayscount: numDays,
+      paymentMethod,
+      paidAt: new Date(),
+      razorpayOrderId: razorpayOrderId || '',
+      razorpayPaymentId: razorpayPaymentId || `PAY_${Date.now()}`,
+      teamId: registration.teamId,
+      rollnumber: participant.roll || participant.rollnumber || targetRoll
+    };
+
+    participant.accommodation = newStatus;
+
+    if (isApplying) {
+      participant.days = numDays;
+      participant.dayscount = numDays;
+      participant.daysCount = numDays;
+      participant.payment = paymentInfo;
+
+      participant.accommodationPayment = {
+        paid: true,
+        amount: calculatedAmount,
+        days: numDays,
+        dayscount: numDays,
+        daysCount: numDays,
+        payment: paymentInfo,
+        razorpayOrderId: razorpayOrderId || (paymentInfo && paymentInfo.razorpay_order_id) || '',
+        razorpayPaymentId: razorpayPaymentId || (paymentInfo && paymentInfo.razorpay_payment_id) || `MANUAL_${Date.now()}`,
+        razorpaySignature: razorpaySignature || (paymentInfo && paymentInfo.razorpay_signature) || '',
+        paidAt: new Date(),
+        rawPaymentData: paymentInfo
+      };
+    } else {
+      delete participant.days;
+      delete participant.dayscount;
+      delete participant.daysCount;
+      delete participant.payment;
+      participant.accommodationPayment = { paid: false };
+    }
+
     registration.markModified('participants');
     await registration.save();
 
+    // Direct atomic MongoDB update so ONLY this exact participant index is affected, never other teammates
+    const setFields = {};
+    const unsetFields = {};
+
+    if (isApplying) {
+      setFields[`participants.${participantIndex}.accommodation`] = 'Yes';
+      setFields[`participants.${participantIndex}.days`] = numDays;
+      setFields[`participants.${participantIndex}.dayscount`] = numDays;
+      setFields[`participants.${participantIndex}.daysCount`] = numDays;
+      setFields[`participants.${participantIndex}.payment`] = paymentInfo;
+      setFields[`participants.${participantIndex}.accommodationPayment`] = participant.accommodationPayment;
+    } else {
+      setFields[`participants.${participantIndex}.accommodation`] = 'No';
+      setFields[`participants.${participantIndex}.accommodationPayment`] = { paid: false };
+      unsetFields[`participants.${participantIndex}.days`] = 1;
+      unsetFields[`participants.${participantIndex}.dayscount`] = 1;
+      unsetFields[`participants.${participantIndex}.daysCount`] = 1;
+      unsetFields[`participants.${participantIndex}.payment`] = 1;
+    }
+
+    const updateOps = { $set: setFields };
+    if (Object.keys(unsetFields).length > 0) {
+      updateOps.$unset = unsetFields;
+    }
+
+    await PaymentRegistration.updateOne(
+      { _id: registration._id },
+      updateOps
+    );
+
     return res.json({
       ok: true,
-      message: `Accommodation status updated to ${newStatus} for ${participant.name || 'participant'}`,
+      message: `Accommodation status updated to "${newStatus}" for ${participant.name || 'participant'}`,
       participant: registration.participants[participantIndex]
     });
   } catch (err) {

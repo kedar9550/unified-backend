@@ -188,39 +188,52 @@ const verifyAllPendingOrders = async (options = {}) => {
   }
 };
 
+let activeCronTask = null;
+
 /**
- * Initializes the node-cron scheduled task
+ * Stop all payment verification cron job operations
+ */
+const stopPaymentCron = () => {
+  if (activeCronTask) {
+    try {
+      activeCronTask.stop();
+      if (typeof activeCronTask.destroy === 'function') {
+        activeCronTask.destroy();
+      }
+    } catch (e) {
+      // ignore
+    }
+    activeCronTask = null;
+  }
+
+  // Stop any active tasks in node-cron registry
+  if (typeof cron.getTasks === 'function') {
+    const tasks = cron.getTasks();
+    for (const t of tasks.values()) {
+      try {
+        t.stop();
+      } catch (err) {
+        // ignore
+      }
+    }
+  }
+
+  console.log('[Payment Cron] Payment verification cron job operations are STOPPED.');
+};
+
+/**
+ * Initializes the node-cron scheduled task (Currently STOPPED)
  */
 const initPaymentCron = () => {
-  const isEnabled = process.env.PAYMENT_CRON_ENABLED !== 'false';
-  const cronSchedule = process.env.PAYMENT_CRON_SCHEDULE || '*/10 * * * *'; // default every 10 minutes
-
-  if (!isEnabled) {
-    console.log('[Payment Cron] Payment verification cron job is disabled (PAYMENT_CRON_ENABLED=false).');
-    return null;
-  }
-
-  if (!cron.validate(cronSchedule)) {
-    console.error(`[Payment Cron] Invalid cron schedule expression: "${cronSchedule}". Cron not started.`);
-    return null;
-  }
-
-  console.log(`[Payment Cron] Initializing payment verification cron job with schedule: "${cronSchedule}"`);
-
-  const task = cron.schedule(cronSchedule, async () => {
-    console.log(`[Payment Cron] Triggering scheduled payment verification [${new Date().toISOString()}]`);
-    try {
-      await verifyAllPendingOrders({ limit: 100, delayMs: 150 });
-    } catch (err) {
-      console.error('[Payment Cron] Scheduled task execution failed:', err);
-    }
-  });
-
-  return task;
+  console.log('[Payment Cron] Payment verification cron job is explicitly STOPPED.');
+  stopPaymentCron();
+  return null;
 };
 
 module.exports = {
   verifySinglePendingOrder,
   verifyAllPendingOrders,
   initPaymentCron,
+  stopPaymentCron,
 };
+

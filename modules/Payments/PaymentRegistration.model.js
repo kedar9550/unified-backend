@@ -12,20 +12,30 @@ const ParticipantSchema = new mongoose.Schema({
   email: { type: String, trim: true },
   year: { type: String, trim: true },
   accommodation: { type: String, trim: true, default: "No" },
+  days: { type: Number },
+  dayscount: { type: Number },
+  daysCount: { type: Number },
+  payment: { type: mongoose.Schema.Types.Mixed },
   department: { type: String, trim: true },
   location: { type: String, trim: true },
   accommodationPayment: {
     paid: { type: Boolean, default: false },
     amount: { type: Number },
+    days: { type: Number },
+    dayscount: { type: Number },
+    daysCount: { type: Number },
+    payment: { type: mongoose.Schema.Types.Mixed },
     razorpayOrderId: { type: String },
     razorpayPaymentId: { type: String },
-    paidAt: { type: Date }
+    razorpaySignature: { type: String },
+    paidAt: { type: Date },
+    rawPaymentData: { type: mongoose.Schema.Types.Mixed },
   },
   barcode: { type: String, trim: true, sparse: true, unique: true },
   attended: { type: Boolean, default: false },
   accommodationCheckedIn: { type: Boolean, default: false },
   scanCount: { type: Number, default: 0 }
-}, { _id: false });
+}, { _id: false, strict: false });
 
 const PaymentRegistrationSchema = new mongoose.Schema({
   eventId: { type: String, trim: true },
@@ -49,6 +59,6 @@ const PaymentRegistrationSchema = new mongoose.Schema({
   verified: { type: Boolean, default: true },
   paidAt: { type: Date, default: Date.now },
   rawPaymentData: { type: mongoose.Schema.Types.Mixed },
-}, { timestamps: true });
+}, { timestamps: true, strict: false });
 
 module.exports = mongoose.model('PaymentRegistration', PaymentRegistrationSchema);
