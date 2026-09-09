@@ -46,7 +46,7 @@ exports.createOrder = async (req, res) => {
           category = event.category || event.groupCategory || '';
         }
       }
-      
+
       const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
         ...p,
         accommodation: p.accommodation || "No",
@@ -235,24 +235,18 @@ exports.getRegistrations = async (req, res) => {
       andConditions.push({ teamId: { $regex: new RegExp(`^${cleanTeamId}$`, 'i') } });
     }
 
-    if (email && email.trim()) {
+    if (email && email.trim() && roll && roll.trim()) {
       const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      if (roll && roll.trim()) {
-        const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        andConditions.push({
-          $or: [
-            {
-              $and: [
-                { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } },
-                { 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } }
-              ]
-            },
-            { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } }
-          ]
-        });
-      } else {
-        andConditions.push({ 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } });
-      }
+      const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      andConditions.push({
+        $or: [
+          { 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } },
+          { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } }
+        ]
+      });
+    } else if (email && email.trim()) {
+      const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      andConditions.push({ 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } });
     } else if (roll && roll.trim()) {
       const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       andConditions.push({ 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } });
@@ -297,7 +291,7 @@ exports.addParticipants = async (req, res) => {
   try {
     const { id } = req.params;
     const { participants, eventName, category } = req.body;
-    
+
     const registration = await PaymentRegistration.findById(id);
     if (!registration) {
       return res.status(404).json({ error: 'Registration not found' });
@@ -454,7 +448,7 @@ exports.manualApprovePayment = async (req, res) => {
     registration.paymentStatus = 'PAID';
     registration.verified = true;
     registration.razorpayPaymentId = 'MANUAL_APPROVAL';
-    
+
     // Auto-generate barcodes for participants if missing
     if (Array.isArray(registration.participants)) {
       registration.participants.forEach(p => {
@@ -493,17 +487,17 @@ exports.verifyGatewayPayment = async (req, res) => {
     });
 
     const orderPayments = await instance.orders.fetchPayments(registration.razorpayOrderId);
-    
+
     if (orderPayments && orderPayments.items && orderPayments.items.length > 0) {
       // Find a captured or authorized payment
       const successfulPayment = orderPayments.items.find(p => p.status === 'captured' || p.status === 'authorized');
-      
+
       if (successfulPayment) {
         registration.paymentStatus = 'PAID';
         registration.verified = true;
         registration.razorpayPaymentId = successfulPayment.id;
         registration.rawPaymentData = { ...registration.rawPaymentData, razorpayCompleteResponse: successfulPayment };
-        
+
         if (Array.isArray(registration.participants)) {
           registration.participants.forEach(p => {
             if (!p.barcode) {
@@ -923,10 +917,35 @@ exports.getDashboardStats = async (req, res) => {
     const Events = require('../Events/Events.model');
     const EventDepartment = require('../EventDepartment/EventDepartment.model');
 
-    const [allSchools, allEvents, allEventDepts] = await Promise.all([
+    const participantDeptAggPromise = PaymentRegistration.aggregate([
+      {
+        $match: roleFilter && Object.keys(roleFilter).length > 0
+          ? { $and: [{ paymentStatus: 'PAID' }, roleFilter] }
+          : { paymentStatus: 'PAID' }
+      },
+      {
+        $unwind: '$participants'
+      },
+      {
+        $group: {
+          _id: '$participants.department',
+          participantCount: {
+            $sum: 1
+          }
+        }
+      },
+      {
+        $sort: {
+          participantCount: -1
+        }
+      }
+    ]);
+
+    const [allSchools, allEvents, allEventDepts, participantDeptAgg] = await Promise.all([
       EventSchools.find({}).lean(),
       Events.find({}).populate('eventSchool').populate('department').lean(),
       EventDepartment.find({}).sort({ name: 1 }).lean(),
+      participantDeptAggPromise,
     ]);
 
     const schoolById = new Map();
@@ -1007,6 +1026,7 @@ exports.getDashboardStats = async (req, res) => {
 
       return allSchools[0] || null;
     };
+
 
     // ─── Group / School-wise stats (strictly for existing DB groups) ────────
     const schoolMap = {};
@@ -1261,6 +1281,14 @@ exports.getDashboardStats = async (req, res) => {
         revenue: Math.round(revenue * 100) / 100,
       }));
 
+    const participantDeptStats = (participantDeptAgg || [])
+      .filter((d) => d._id)
+      .map((d) => ({
+        dept: d._id,
+        name: d._id,
+        participantCount: d.participantCount,
+      }));
+
     return res.json({
       totalTeams,
       totalStudents,
@@ -1270,6 +1298,7 @@ exports.getDashboardStats = async (req, res) => {
       campusWise: campusMap,
       departmentStats,
       schoolStats,
+      participantDeptStats,
       genderStats: genderMap,
       campusGenderStats: campusGenderMap,
       accommodation: {
@@ -1757,12 +1786,12 @@ exports.checkPhoto = async (req, res) => {
     const fs = require('fs');
     const path = require('path');
     const dir = path.join(__dirname, '../../uploads/othercollegephotos');
-    
+
     if (!fs.existsSync(dir)) return res.json({ exists: false });
-    
+
     const files = fs.readdirSync(dir);
     const photoFile = files.reverse().find(f => f.startsWith(`photo-${roll}-`));
-    
+
     if (photoFile) {
       return res.json({ exists: true, url: `/uploads/othercollegephotos/${photoFile}` });
     }
