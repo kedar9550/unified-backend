@@ -211,7 +211,7 @@ const getRoleFilterQuery = async (req) => {
 
 exports.getRegistrations = async (req, res) => {
   try {
-    const { email, roll, teamId, paymentStatus, payment } = req.query;
+    const { email, roll, teamId, paymentStatus, payment, search } = req.query;
     const andConditions = [];
 
     const statusFilter = paymentStatus || payment;
@@ -232,24 +232,40 @@ exports.getRegistrations = async (req, res) => {
 
     if (teamId && teamId.trim()) {
       const cleanTeamId = teamId.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      andConditions.push({ teamId: { $regex: new RegExp(`^${cleanTeamId}$`, 'i') } });
+      andConditions.push({ teamId: { $regex: new RegExp(`^\\s*${cleanTeamId}\\s*$`, 'i') } });
     }
 
-    if (email && email.trim() && roll && roll.trim()) {
-      const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (search && search.trim()) {
+      const cleanSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(cleanSearch, 'i');
       andConditions.push({
         $or: [
-          { 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } },
-          { 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } }
+          { 'participants.name': searchRegex },
+          { 'participants.roll': searchRegex },
+          { 'participants.email': searchRegex },
+          { 'participants.mobile': searchRegex },
+          { receipt: searchRegex },
+          { eventName: searchRegex },
+          { category: searchRegex }
         ]
       });
-    } else if (email && email.trim()) {
-      const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      andConditions.push({ 'participants.email': { $regex: new RegExp(`^${cleanEmail}$`, 'i') } });
-    } else if (roll && roll.trim()) {
-      const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      andConditions.push({ 'participants.roll': { $regex: new RegExp(`^${cleanRoll}$`, 'i') } });
+    } else {
+      if (email && email.trim() && roll && roll.trim()) {
+        const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        andConditions.push({
+          $or: [
+            { 'participants.roll': { $regex: new RegExp(`^\\s*${cleanRoll}\\s*$`, 'i') } },
+            { 'participants.email': { $regex: new RegExp(`^\\s*${cleanEmail}\\s*$`, 'i') } }
+          ]
+        });
+      } else if (email && email.trim()) {
+        const cleanEmail = email.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        andConditions.push({ 'participants.email': { $regex: new RegExp(`^\\s*${cleanEmail}\\s*$`, 'i') } });
+      } else if (roll && roll.trim()) {
+        const cleanRoll = roll.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        andConditions.push({ 'participants.roll': { $regex: new RegExp(`^\\s*${cleanRoll}\\s*$`, 'i') } });
+      }
     }
 
     const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
@@ -300,7 +316,7 @@ exports.addParticipants = async (req, res) => {
     const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
       ...p,
       accommodation: p.accommodation || "No",
-      barcode: require('crypto').randomBytes(4).toString('hex').toUpperCase()
+      barcode: p.barcode || require('crypto').randomBytes(4).toString('hex').toUpperCase()
     }));
 
     // Generate a teamId if it doesn't have one
@@ -313,6 +329,7 @@ exports.addParticipants = async (req, res) => {
     registration.teamId = newTeamId;
     registration.eventName = eventName || registration.eventName;
     registration.category = category || registration.category;
+    registration.teamSize = participantsData.length;
 
     await registration.save();
     return res.json({ ok: true, message: 'Participants added successfully', teamId: newTeamId });

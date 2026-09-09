@@ -2,12 +2,16 @@ const mongoose = require('mongoose');
 
 const payslipSchema = new mongoose.Schema(
   {
+    emp_id: {
+      type: mongoose.Schema.Types.Mixed,
+      index: true,
+    },
     empid: {
-      type: String,
+      type: mongoose.Schema.Types.Mixed,
       index: true,
     },
     empId: {
-      type: String,
+      type: mongoose.Schema.Types.Mixed,
       index: true,
     },
     emp_name: {
@@ -34,8 +38,7 @@ const payslipSchema = new mongoose.Schema(
       required: true,
     },
     year: {
-      type: String,
-      required: true,
+      type: mongoose.Schema.Types.Mixed,
     },
     basic_salary: {
       type: mongoose.Schema.Types.Mixed,
