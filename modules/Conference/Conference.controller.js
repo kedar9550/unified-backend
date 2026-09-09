@@ -46,12 +46,15 @@ const validateScopusConferencePaper = async (doi) => {
 
         const subtype = entry["subtype"] || "";
         const subtypeDesc = entry["subtypeDescription"] || subtype;
+        const aggregationType = entry["prism:aggregationType"] || "";
 
-        // Must be 'cp' = Conference Paper
-        if (subtype && subtype !== "cp") {
+        // Must be 'cp' = Conference Paper or 'Conference Proceeding'
+        const isConference = (subtype === "cp") || (aggregationType === "Conference Proceeding");
+
+        if (!isConference) {
             return {
                 valid: false,
-                message: `Only conference papers are allowed. This DOI is classified as "${subtypeDesc}" in Scopus. Journal publications are not accepted here.`
+                message: `Only conference papers are allowed. This DOI is classified as "${subtypeDesc || aggregationType}" in Scopus. Journal publications are not accepted here.`
             };
         }
 
@@ -76,17 +79,26 @@ exports.createConference = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
+        // 2. Duplicate Validation (Flexible whitespace regex for Title + DOI check)
         const trimmedTitle = data.title.trim();
+        const cleanDoi = data.doi ? data.doi.trim().replace(/^https?:\/\/doi\.org\//i, "") : null;
 
-        // 2. Duplicate Validation
+        const regexTitlePattern = `^${escapeRegex(trimmedTitle).replace(/\\\s+/g, '\\s+')}$`;
+        const duplicateConditions = [
+            { title: new RegExp(regexTitlePattern, 'i') }
+        ];
+        if (cleanDoi) {
+            duplicateConditions.push({ doi: cleanDoi });
+        }
+
         const existingRecord = await Conference.findOne({
-            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i')
+            $or: duplicateConditions
         });
 
         if (existingRecord) {
             return res.status(400).json({
                 success: false,
-                message: "A conference paper entry with this title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
+                message: "A conference paper entry with this Title or DOI already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
             });
         }
 
@@ -263,18 +275,29 @@ exports.updateConference = async (req, res) => {
             return res.status(400).json({ success: false, message: "Only rejected conferences can be edited and resubmitted." });
         }
 
-        // Validate Title for duplicates (excluding self)
-        if (data.title) {
-            const checkTitle = data.title.trim();
+        // Validate Title and DOI for duplicates (excluding self)
+        const checkTitle = data.title ? data.title.trim() : null;
+        const checkDoi = data.doi ? data.doi.trim().replace(/^https?:\/\/doi\.org\//i, "") : null;
+
+        const updateDuplicateConditions = [];
+        if (checkTitle) {
+            const regexTitlePattern = `^${escapeRegex(checkTitle).replace(/\\\s+/g, '\\s+')}$`;
+            updateDuplicateConditions.push({ title: new RegExp(regexTitlePattern, 'i') });
+        }
+        if (checkDoi) {
+            updateDuplicateConditions.push({ doi: checkDoi });
+        }
+
+        if (updateDuplicateConditions.length > 0) {
             const existingConference = await Conference.findOne({
                 _id: { $ne: id },
-                title: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+                $or: updateDuplicateConditions
             });
 
             if (existingConference) {
                 return res.status(400).json({
                     success: false,
-                    message: `Another conference paper entry with this title already exists.`
+                    message: `Another conference paper entry with this Title or DOI already exists.`
                 });
             }
         }
@@ -525,6 +548,15 @@ exports.validateDOI = async (req, res) => {
 
         const cleanDoi = doi.trim().replace(/^https?:\/\/doi\.org\//i, "");
 
+        // ── Step 0: Check if DOI already exists in DB ─────────────────────────
+        const existingByDoi = await Conference.findOne({ doi: cleanDoi });
+        if (existingByDoi) {
+            return res.status(400).json({
+                success: false,
+                message: `A conference paper entry with this DOI (${cleanDoi}) already exists in the system. If it was rejected, please use the Edit & Resubmit option.`
+            });
+        }
+
         // ── Step 1: Scopus Search API ──────────────────────────────────────────
         const searchRes = await fetch(
             `https://api.elsevier.com/content/search/scopus?query=DOI(${encodeURIComponent(cleanDoi)})`,
@@ -563,13 +595,31 @@ exports.validateDOI = async (req, res) => {
         // ── Step 3: Conference paper check ────────────────────────────────────
         const subtype = entry["subtype"] || "";
         const subtypeDesc = entry["subtypeDescription"] || subtype;
+        const aggregationType = entry["prism:aggregationType"] || "";
 
-        if (subtype && subtype !== "cp") {
+        const isConference = (subtype === "cp") || (aggregationType === "Conference Proceeding");
+
+        if (!isConference) {
             return res.status(422).json({
                 success: false,
-                message: `Only conference papers are allowed. This DOI is classified as "${subtypeDesc}" in Scopus. Journal publications are not accepted.`,
-                detectedType: subtypeDesc
+                message: `Only conference papers are allowed. This DOI is classified as "${subtypeDesc || aggregationType}" in Scopus. Journal publications are not accepted.`,
+                detectedType: subtypeDesc || aggregationType
             });
+        }
+
+        // ── Step 3.5: Check if fetched title already exists in DB ─────────────
+        const fetchedTitle = entry["dc:title"] || "";
+        if (fetchedTitle) {
+            const regexTitlePattern = `^${escapeRegex(fetchedTitle.trim()).replace(/\\\s+/g, '\\s+')}$`;
+            const existingByTitle = await Conference.findOne({
+                title: new RegExp(regexTitlePattern, 'i')
+            });
+            if (existingByTitle) {
+                return res.status(400).json({
+                    success: false,
+                    message: `A conference paper entry with the title "${fetchedTitle.trim()}" already exists in the system.`
+                });
+            }
         }
 
         // ── Step 4: Abstract Retrieval API for richer metadata ────────────────
