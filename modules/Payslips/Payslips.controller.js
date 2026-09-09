@@ -12,16 +12,18 @@ const monthsList = [
  */
 exports.getPayslipYears = async (req, res) => {
     try {
-        const targetEmpId = req.query.empId || req.user?.institutionId || req.user?.empid || req.user?.empId;
+        const targetEmpId = req.query.empId || req.user?.institutionId || req.user?.empid || req.user?.empId || req.user?.employeeId;
 
         let query = {};
         if (targetEmpId) {
             const empIdNum = !isNaN(Number(targetEmpId)) ? Number(targetEmpId) : null;
             const queryConditions = [
+                { emp_id: String(targetEmpId) },
                 { empid: String(targetEmpId) },
                 { empId: String(targetEmpId) },
             ];
             if (empIdNum !== null) {
+                queryConditions.push({ emp_id: empIdNum });
                 queryConditions.push({ empid: empIdNum });
                 queryConditions.push({ empId: empIdNum });
             }
@@ -62,7 +64,7 @@ exports.getPayslipYears = async (req, res) => {
  */
 exports.getPayslips = async (req, res) => {
     try {
-        const targetEmpId = req.query.empId || req.user?.institutionId || req.user?.empid || req.user?.empId;
+        const targetEmpId = req.query.empId || req.user?.institutionId || req.user?.empid || req.user?.empId || req.user?.employeeId;
         const year = req.query.year;
         const fromMonth = req.query.fromMonth;
         const toMonth = req.query.toMonth;
@@ -76,17 +78,32 @@ exports.getPayslips = async (req, res) => {
         }
 
         const empIdNum = !isNaN(Number(targetEmpId)) ? Number(targetEmpId) : null;
-        const queryConditions = [
+        const empConditions = [
+            { emp_id: String(targetEmpId) },
             { empid: String(targetEmpId) },
             { empId: String(targetEmpId) },
         ];
         if (empIdNum !== null) {
-            queryConditions.push({ empid: empIdNum });
-            queryConditions.push({ empId: empIdNum });
+            empConditions.push({ emp_id: empIdNum });
+            empConditions.push({ empid: empIdNum });
+            empConditions.push({ empId: empIdNum });
         }
 
-        let query = { $or: queryConditions };
-        if (year) query.year = String(year);
+        let query = { $or: empConditions };
+
+        if (year) {
+            const yearNum = !isNaN(Number(year)) ? Number(year) : null;
+            const yearConditions = [{ year: String(year) }];
+            if (yearNum !== null) {
+                yearConditions.push({ year: yearNum });
+            }
+            query = {
+                $and: [
+                    { $or: empConditions },
+                    { $or: yearConditions }
+                ]
+            };
+        }
 
         let rawPayslips = await Payslip.find(query).sort({ year: -1, createdAt: -1 }).lean();
 
@@ -103,13 +120,13 @@ exports.getPayslips = async (req, res) => {
 
             return {
                 ...p,
-                empId: p.empId || p.empid || String(targetEmpId),
+                empId: p.empId || p.empid || p.emp_id || String(targetEmpId),
                 name: p.name || p.emp_name || req.user?.name || '',
                 department: p.department || req.user?.department?.name || '',
                 college: p.college || req.user?.college || '',
                 email: p.email || req.user?.email || '',
                 month: p.month || '',
-                year: p.year || '',
+                year: p.year ? String(p.year) : '',
                 basicPay: bPay,
                 allowances: allow,
                 grossAmount: gross,
@@ -132,11 +149,12 @@ exports.getPayslips = async (req, res) => {
 
         // Filter by month range if specified
         if (fromMonth && toMonth) {
-            const fromIdx = monthsList.indexOf(fromMonth);
-            const toIdx = monthsList.indexOf(toMonth);
+            const fromIdx = monthsList.findIndex(m => m.toLowerCase() === String(fromMonth).trim().toLowerCase());
+            const toIdx = monthsList.findIndex(m => m.toLowerCase() === String(toMonth).trim().toLowerCase());
             if (fromIdx !== -1 && toIdx !== -1 && fromIdx <= toIdx) {
                 payslips = payslips.filter(p => {
-                    const mIdx = monthsList.indexOf(p.month);
+                    const pMonth = p.month ? String(p.month).trim() : '';
+                    const mIdx = monthsList.findIndex(m => m.toLowerCase() === pMonth.toLowerCase());
                     return mIdx >= fromIdx && mIdx <= toIdx;
                 });
             }
