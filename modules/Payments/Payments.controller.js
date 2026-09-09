@@ -518,6 +518,18 @@ exports.verifyGatewayPayment = async (req, res) => {
   }
 };
 
+exports.triggerVerifyAllPendingGateway = async (req, res) => {
+  try {
+    const { verifyAllPendingOrders } = require('./paymentVerification.cron');
+    const limit = Number(req.query.limit) || Number(req.body?.limit) || 100;
+    const summary = await verifyAllPendingOrders({ limit, delayMs: 150 });
+    return res.json({ ok: true, summary });
+  } catch (err) {
+    console.error('triggerVerifyAllPendingGateway error', err);
+    return res.status(500).json({ error: 'Failed to execute batch gateway verification', details: err.message });
+  }
+};
+
 exports.getStudentBranch = async (req, res) => {
   try {
     const { roll } = req.params;
@@ -1801,3 +1813,159 @@ exports.checkPhoto = async (req, res) => {
     return res.status(500).json({ error: 'Check failed' });
   }
 };
+
+exports.getAccommodationQuotaStats = async (req, res) => {
+  try {
+    const statsAgg = await PaymentRegistration.aggregate([
+      { $match: { paymentStatus: 'PAID' } },
+      { $unwind: '$participants' },
+      {
+        $match: {
+          'participants.accommodation': { $regex: /^yes$/i }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $cond: [
+              { $regexMatch: { input: '$participants.gender', regex: /^female|girl/i } },
+              'FEMALE',
+              'MALE'
+            ]
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    let male = 0;
+    let female = 0;
+    statsAgg.forEach(s => {
+      if (s._id === 'FEMALE') female = s.count;
+      else if (s._id === 'MALE') male = s.count;
+    });
+
+    const total = male + female;
+
+    return res.json({
+      ok: true,
+      male,
+      female,
+      total,
+      limits: {
+        male: 100,
+        female: 50,
+        total: 150
+      },
+      remaining: {
+        male: Math.max(0, 100 - male),
+        female: Math.max(0, 50 - female),
+        total: Math.max(0, 150 - total)
+      }
+    });
+  } catch (err) {
+    console.error('getAccommodationQuotaStats error:', err);
+    return res.status(500).json({ error: 'Failed to fetch accommodation stats', details: err.message });
+  }
+};
+
+exports.updateParticipantAccommodation = async (req, res) => {
+  try {
+    const { registrationId, participantBarcode, roll, accommodation = 'YES' } = req.body;
+
+    if (!registrationId) {
+      return res.status(400).json({ error: 'registrationId is required' });
+    }
+
+    const registration = await PaymentRegistration.findById(registrationId);
+    if (!registration) {
+      return res.status(404).json({ error: 'Registration not found' });
+    }
+
+    if (registration.paymentStatus !== 'PAID') {
+      return res.status(400).json({ error: 'Accommodation can only be applied to PAID registrations.' });
+    }
+
+    const participantIndex = registration.participants.findIndex(p =>
+      (participantBarcode && p.barcode === participantBarcode) ||
+      (roll && p.roll === roll)
+    );
+
+    if (participantIndex === -1) {
+      return res.status(404).json({ error: 'Participant not found in registration' });
+    }
+
+    const participant = registration.participants[participantIndex];
+    const isCollegeOther = participant.college === 'Other College' ||
+      (participant.college && !['aditya university', 'acet', 'acoe'].includes((participant.college || '').toLowerCase().trim()));
+
+    if (!isCollegeOther) {
+      return res.status(400).json({ error: 'Accommodation is only permitted for Other College students.' });
+    }
+
+    const newStatus = String(accommodation).toUpperCase() === 'YES' ? 'YES' : 'No';
+
+    // If changing to YES, enforce limits!
+    if (newStatus === 'YES' && (participant.accommodation || '').toUpperCase() !== 'YES') {
+      const isFemale = /^female|girl/i.test(participant.gender || '');
+      const genderKey = isFemale ? 'FEMALE' : 'MALE';
+
+      const statsAgg = await PaymentRegistration.aggregate([
+        { $match: { paymentStatus: 'PAID' } },
+        { $unwind: '$participants' },
+        {
+          $match: {
+            'participants.accommodation': { $regex: /^yes$/i }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              $cond: [
+                { $regexMatch: { input: '$participants.gender', regex: /^female|girl/i } },
+                'FEMALE',
+                'MALE'
+              ]
+            },
+            count: { $sum: 1 }
+          }
+        }
+      ]);
+
+      let currentMale = 0;
+      let currentFemale = 0;
+      statsAgg.forEach(s => {
+        if (s._id === 'FEMALE') currentFemale = s.count;
+        else if (s._id === 'MALE') currentMale = s.count;
+      });
+
+      const currentTotal = currentMale + currentFemale;
+
+      if (currentTotal >= 150) {
+        return res.status(400).json({ error: 'Overall accommodation limit of 150 has been reached.' });
+      }
+
+      if (genderKey === 'FEMALE' && currentFemale >= 50) {
+        return res.status(400).json({ error: 'Girl accommodation limit of 50 has been reached.' });
+      }
+
+      if (genderKey === 'MALE' && currentMale >= 100) {
+        return res.status(400).json({ error: 'Male accommodation limit of 100 has been reached.' });
+      }
+    }
+
+    registration.participants[participantIndex].accommodation = newStatus;
+    registration.markModified('participants');
+    await registration.save();
+
+    return res.json({
+      ok: true,
+      message: `Accommodation status updated to ${newStatus} for ${participant.name || 'participant'}`,
+      participant: registration.participants[participantIndex]
+    });
+  } catch (err) {
+    console.error('updateParticipantAccommodation error:', err);
+    return res.status(500).json({ error: 'Failed to update accommodation', details: err.message });
+  }
+};
+

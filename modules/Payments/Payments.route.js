@@ -39,6 +39,8 @@ router.post('/verify-payment', paymentsController.verifyPayment);
 // Manual Approve & Verify Gateway
 router.put('/registrations/manual-approve/:id', paymentsController.manualApprovePayment);
 router.get('/registrations/verify-gateway/:id', paymentsController.verifyGatewayPayment);
+router.post('/registrations/verify-all-gateway', paymentsController.triggerVerifyAllPendingGateway);
+router.get('/registrations/verify-all-gateway', paymentsController.triggerVerifyAllPendingGateway);
 router.get('/registrations/branch/:roll', paymentsController.getStudentBranch);
 router.get('/payment-details/:paymentId', paymentsController.getRazorpayPaymentDetails);
 router.post('/manual-registration', paymentsController.manualAddRegistration);
@@ -50,6 +52,8 @@ router.post('/scan-accommodation', paymentsController.scanAccommodationBarcode);
 // Accommodation Payments
 router.post('/accommodation/create-order', paymentsController.createAccommodationOrder);
 router.post('/accommodation/verify', paymentsController.verifyAccommodationPayment);
+router.get('/accommodation/stats', paymentsController.getAccommodationQuotaStats);
+router.put('/accommodation/apply', paymentsController.updateParticipantAccommodation);
 router.put('/update-attendance', paymentsController.updateAttendance);
 router.put('/registrations/:id/winner', paymentsController.updateWinnerStatus);
 
