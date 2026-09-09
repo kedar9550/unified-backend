@@ -39,7 +39,8 @@ app.use(cors(corsOptions));
 // 3. Rate Limiting: Prevent Brute Force / DDoS
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 10000, // Increased for enterprise usage with 10,000+ employees
+    // max: 10000, // Increased for enterprise usage with 10,000+ employees
+    max: 1000000, // Temporarily increased to prevent 429 during dev
     message: 'Too many requests from this IP, please try again after 15 minutes',
     standardHeaders: true,
     legacyHeaders: false,
