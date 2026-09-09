@@ -1969,3 +1969,153 @@ exports.updateParticipantAccommodation = async (req, res) => {
   }
 };
 
+// @desc    Bulk update PaymentRegistration documents by teamId from Excel/CSV upload
+// @route   POST /api/razorpay/registrations/bulk-update-excel
+// @access  Private (Event Admin)
+exports.bulkUpdateByExcel = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please upload an Excel or CSV file.' });
+    }
+
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    
+    if (req.file.buffer) {
+      await workbook.xlsx.load(req.file.buffer);
+    } else {
+      await workbook.xlsx.readFile(req.file.path);
+    }
+
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) {
+      return res.status(400).json({ error: 'Excel worksheet is empty or invalid.' });
+    }
+
+    // Identify headers from row 1
+    const headerRow = worksheet.getRow(1);
+    let teamIdColIndex = -1;
+    let orderIdColIndex = -1;
+    let paymentIdColIndex = -1;
+    let statusColIndex = -1;
+
+    headerRow.eachCell((cell, colNumber) => {
+      const val = String(cell.value || '').toLowerCase().trim().replace(/[\s_]/g, '');
+      if (val === 'teamid' || val === 'team') teamIdColIndex = colNumber;
+      else if (val === 'razorpayorderid' || val === 'orderid') orderIdColIndex = colNumber;
+      else if (val === 'razorpaypaymentid' || val === 'paymentid') paymentIdColIndex = colNumber;
+      else if (val === 'paymentstatus' || val === 'status') statusColIndex = colNumber;
+    });
+
+    if (teamIdColIndex === -1) {
+      return res.status(400).json({ error: 'Excel file must contain a "teamId" column in the first row.' });
+    }
+
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+
+    const getCellValue = (val) => {
+      if (!val) return '';
+      if (typeof val === 'object') {
+        if (val.text) return String(val.text).trim();
+        if (val.result) return String(val.result).trim();
+      }
+      return String(val).trim();
+    };
+
+    // Iterate through data rows starting from row 2
+    for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+      const row = worksheet.getRow(rowNumber);
+      
+      const teamIdRaw = row.getCell(teamIdColIndex).value;
+      const orderIdRaw = orderIdColIndex !== -1 ? row.getCell(orderIdColIndex).value : null;
+      const paymentIdRaw = paymentIdColIndex !== -1 ? row.getCell(paymentIdColIndex).value : null;
+      const statusRaw = statusColIndex !== -1 ? row.getCell(statusColIndex).value : null;
+
+      const teamId = getCellValue(teamIdRaw);
+      const razorpayOrderId = getCellValue(orderIdRaw);
+      const razorpayPaymentId = getCellValue(paymentIdRaw);
+      const rawStatus = getCellValue(statusRaw).toUpperCase();
+      const paymentStatus = rawStatus || 'PAID';
+
+      // Skip completely empty rows
+      if (!teamId && !razorpayOrderId && !razorpayPaymentId) {
+        continue;
+      }
+
+      if (!teamId) {
+        errorCount++;
+        results.push({
+          row: rowNumber,
+          teamId: '-',
+          razorpayOrderId: razorpayOrderId || '-',
+          razorpayPaymentId: razorpayPaymentId || '-',
+          paymentStatus: '-',
+          status: 'ERROR',
+          message: `Row ${rowNumber}: teamId cell is empty.`
+        });
+        continue;
+      }
+
+      // Find registration by teamId
+      const registration = await PaymentRegistration.findOne({ teamId: teamId });
+      if (!registration) {
+        errorCount++;
+        results.push({
+          row: rowNumber,
+          teamId: teamId,
+          razorpayOrderId: razorpayOrderId || '-',
+          razorpayPaymentId: razorpayPaymentId || '-',
+          paymentStatus: paymentStatus,
+          status: 'ERROR',
+          message: `Row ${rowNumber}: Team ID "${teamId}" not found in database.`
+        });
+        continue;
+      }
+
+      // Update fields
+      if (razorpayPaymentId) {
+        registration.razorpayPaymentId = razorpayPaymentId;
+      }
+      if (razorpayOrderId) {
+        registration.razorpayOrderId = razorpayOrderId;
+      }
+      registration.paymentStatus = ['PAID', 'PENDING', 'FAILED'].includes(paymentStatus) ? paymentStatus : 'PAID';
+      registration.verified = true;
+      if (!registration.paidAt) {
+        registration.paidAt = new Date();
+      }
+
+      await registration.save();
+      successCount++;
+
+      results.push({
+        row: rowNumber,
+        teamId: teamId,
+        razorpayOrderId: registration.razorpayOrderId || '-',
+        razorpayPaymentId: registration.razorpayPaymentId || '-',
+        paymentStatus: registration.paymentStatus,
+        status: 'SUCCESS',
+        message: `Row ${rowNumber}: Updated successfully for Team ${teamId}.`
+      });
+    }
+
+    return res.json({
+      ok: true,
+      message: `Bulk payment update finished. Processed ${results.length} rows.`,
+      summary: {
+        totalRows: results.length,
+        successCount: successCount,
+        errorCount: errorCount
+      },
+      results: results
+    });
+
+  } catch (err) {
+    console.error('bulkUpdateByExcel error:', err);
+    return res.status(500).json({ error: 'Failed to process bulk Excel payment update', details: err.message });
+  }
+};
+
+
