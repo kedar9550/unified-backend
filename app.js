@@ -178,6 +178,7 @@ app.use('/api/contact', require('./modules/Inquiry/Inquiry.route'));
 // payments
 app.use('/api/razorpay', require('./modules/Payments/Payments.route'));
 app.use('/api/payments', require('./modules/Payments/Payments.route'));
+app.use('/api/payslips', require('./modules/Payslips/Payslips.route'));
 
 // Proxy for Student Photos to fix CORS in PDF Generation
 app.get('/api/proxy/student-photo/:roll', async (req, res) => {
