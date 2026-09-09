@@ -3,7 +3,10 @@ const mongoose = require('mongoose');
 const CoAuthorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
-    employeeId: { type: String, default: null }  // stores institutionId string e.g. "5741"
+    employeeId: { type: String, default: null }, // stores institutionId string e.g. "5741"
+    authorPosition: { type: Number, default: null },
+    studentId: { type: String, default: null },
+    CoAuthorType: { type: String, default: 'faculty' },
 }, { _id: false });
 
 
@@ -38,6 +41,8 @@ const ConferenceSchema = new mongoose.Schema({
     totalAuthors: { type: Number },
     userAuthorPosition: { type: Number },
     coAuthors: [CoAuthorSchema],
+
+    isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
 
     applyIncentive: { type: String, enum: ['Yes', 'No'] },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
