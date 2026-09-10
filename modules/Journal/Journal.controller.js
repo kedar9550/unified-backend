@@ -112,7 +112,18 @@ exports.createJournal = async (req, res) => {
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
-            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+            const activeRole = (req.headers['active-role'] || req.user?.role || '').toUpperCase().trim();
+            const userRoles = (req.user?.roles || []).flatMap(r => {
+                const roleName = (r.role?.name || '').toUpperCase().trim();
+                const roleKey = (r.role?.key || '').toUpperCase().trim();
+                const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+                return [roleName, roleKey, roleDirect].filter(Boolean);
+            });
+            const isRndAdmin = activeRole === 'RESEARCH_DEAN' || activeRole === 'RESEARCH_COORDINATOR' ||
+                               userRoles.includes('RESEARCH_DEAN') || userRoles.includes('RESEARCH_COORDINATOR') ||
+                               userRoles.includes('RESEARCH DEAN') || userRoles.includes('ADMIN');
+
+            if (!isRndAdmin) {
                 return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
             }
 
@@ -688,7 +699,7 @@ exports.getClarivateJournalType = async (req, res) => {
 exports.updateJournalMetrics = async (req, res) => {
     try {
         const { id } = req.params;
-        const { hIndex, jcrImpactFactor, impactFactor, citations, journalQuartile, journalType } = req.body;
+        const { hIndex, jcrImpactFactor, impactFactor, citations, journalQuartile, journalType, issn, eissn } = req.body;
 
         const updates = {};
         if (hIndex !== undefined) updates.hIndex = hIndex;
@@ -697,6 +708,8 @@ exports.updateJournalMetrics = async (req, res) => {
         if (citations !== undefined) updates.citations = citations;
         if (journalQuartile !== undefined) updates.journalQuartile = journalQuartile;
         if (journalType !== undefined) updates.journalType = journalType;
+        if (issn !== undefined) updates.issn = issn;
+        if (eissn !== undefined) updates.eissn = eissn;
 
         const journal = await Journal.findByIdAndUpdate(id, updates, { new: true })
             .populate({
