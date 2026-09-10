@@ -77,7 +77,18 @@ exports.createBookChapter = async (req, res) => {
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
-            if (req.user.role !== 'RESEARCH_DEAN' && req.user.role !== 'RESEARCH_COORDINATOR') {
+            const activeRole = (req.headers['active-role'] || req.user?.role || '').toUpperCase().trim();
+            const userRoles = (req.user?.roles || []).flatMap(r => {
+                const roleName = (r.role?.name || '').toUpperCase().trim();
+                const roleKey = (r.role?.key || '').toUpperCase().trim();
+                const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+                return [roleName, roleKey, roleDirect].filter(Boolean);
+            });
+            const isRndAdmin = activeRole === 'RESEARCH_DEAN' || activeRole === 'RESEARCH_COORDINATOR' ||
+                               userRoles.includes('RESEARCH_DEAN') || userRoles.includes('RESEARCH_COORDINATOR') ||
+                               userRoles.includes('RESEARCH DEAN') || userRoles.includes('ADMIN');
+
+            if (!isRndAdmin) {
                 return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
             }
 
