@@ -209,6 +209,24 @@ const getRoleFilterQuery = async (req) => {
   return {};
 };
 
+// In-memory cache for dashboard stats (60-second TTL)
+const dashboardStatsCache = new Map();
+const STATS_CACHE_TTL = 60 * 1000;
+
+const getStatsCacheKey = (req) => {
+  const activeRole = (req.headers['active-role'] || '').toUpperCase().trim();
+  if (!activeRole || ['STUDENT_EVENT_ADMIN', 'STUDENT EVENT ADMIN', 'VEDA_ADMIN', 'VEDA ADMIN', 'ADMIN', 'SUPER_ADMIN', 'MANAGEMENT', 'DEVELOPER'].includes(activeRole)) {
+    return 'GLOBAL_STATS';
+  }
+  const token = (req.headers.authorization && req.headers.authorization.split(' ')[1]) || req.cookies?.token;
+  return `${activeRole}_${token || 'ANON'}`;
+};
+
+const clearDashboardStatsCache = () => {
+  dashboardStatsCache.clear();
+};
+exports.clearDashboardStatsCache = clearDashboardStatsCache;
+
 exports.getRegistrations = async (req, res) => {
   try {
     const { email, roll, teamId, paymentStatus, payment, search } = req.query;
@@ -269,7 +287,14 @@ exports.getRegistrations = async (req, res) => {
     }
 
     const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
-    let payments = await PaymentRegistration.find(finalQuery).sort({ createdAt: -1 }).lean();
+    let queryBuilder = PaymentRegistration.find(finalQuery).sort({ createdAt: -1 });
+
+    if (req.query.select && typeof req.query.select === 'string') {
+      const selectFields = req.query.select.split(',').map(f => f.trim()).filter(Boolean).join(' ');
+      queryBuilder = queryBuilder.select(selectFields);
+    }
+
+    const payments = await queryBuilder.lean();
 
     return res.json({ payments });
   } catch (err) {
@@ -296,6 +321,7 @@ exports.deleteRegistration = async (req, res) => {
     }
 
     await PaymentRegistration.findByIdAndDelete(id);
+    clearDashboardStatsCache();
     return res.json({ ok: true, message: 'Registration deleted successfully' });
   } catch (err) {
     console.error('deleteRegistration error', err);
@@ -332,6 +358,7 @@ exports.addParticipants = async (req, res) => {
     registration.teamSize = participantsData.length;
 
     await registration.save();
+    clearDashboardStatsCache();
     return res.json({ ok: true, message: 'Participants added successfully', teamId: newTeamId });
   } catch (err) {
     console.error('addParticipants error', err);
@@ -423,6 +450,7 @@ exports.verifyPayment = async (req, res) => {
       },
       { new: true, upsert: true }
     );
+    clearDashboardStatsCache();
 
     // Send invoice email asynchronously
     try {
@@ -476,6 +504,7 @@ exports.manualApprovePayment = async (req, res) => {
     }
 
     await registration.save();
+    clearDashboardStatsCache();
     return res.json({ ok: true, message: 'Payment manually approved', registration });
   } catch (err) {
     console.error('manualApprovePayment error', err);
@@ -884,6 +913,12 @@ const classifyCampus = (college = '') => {
 // ─── Dashboard Statistics ─────────────────────────────────────────────────────
 exports.getDashboardStats = async (req, res) => {
   try {
+    const cacheKey = getStatsCacheKey(req);
+    const cachedEntry = dashboardStatsCache.get(cacheKey);
+    if (cachedEntry && (Date.now() - cachedEntry.timestamp < STATS_CACHE_TTL)) {
+      return res.json(cachedEntry.data);
+    }
+
     const andConditions = [
       {
         $or: [
@@ -900,7 +935,20 @@ exports.getDashboardStats = async (req, res) => {
     }
 
     const finalQuery = andConditions.length > 0 ? { $and: andConditions } : {};
-    const allPayments = await PaymentRegistration.find(finalQuery).lean();
+
+    const EventSchools = require('../EventSchools/EventSchools.model');
+    const Events = require('../Events/Events.model');
+    const EventDepartment = require('../EventDepartment/EventDepartment.model');
+
+    // Run queries in parallel, projecting ONLY fields required for calculations
+    const [allPayments, allSchools, allEvents, allEventDepts] = await Promise.all([
+      PaymentRegistration.find(finalQuery)
+        .select('eventName category schoolId eventId amount amountRupees paidAt createdAt participants.year participants.college participants.otherCollege participants.gender participants.attended participants.accommodationCheckedIn participants.accommodation participants.department')
+        .lean(),
+      EventSchools.find({}).select('name shortName').lean(),
+      Events.find({}).select('eventName eventSchool department').populate('eventSchool', 'name shortName').populate('department', 'name').lean(),
+      EventDepartment.find({}).select('name').sort({ name: 1 }).lean(),
+    ]);
 
     // Flatten all participants with their parent payment context
     const participants = [];
@@ -942,41 +990,6 @@ exports.getDashboardStats = async (req, res) => {
       campusMap[campus].total++;
     });
 
-    const EventSchools = require('../EventSchools/EventSchools.model');
-    const Events = require('../Events/Events.model');
-    const EventDepartment = require('../EventDepartment/EventDepartment.model');
-
-    const participantDeptAggPromise = PaymentRegistration.aggregate([
-      {
-        $match: roleFilter && Object.keys(roleFilter).length > 0
-          ? { $and: [{ paymentStatus: 'PAID' }, roleFilter] }
-          : { paymentStatus: 'PAID' }
-      },
-      {
-        $unwind: '$participants'
-      },
-      {
-        $group: {
-          _id: '$participants.department',
-          participantCount: {
-            $sum: 1
-          }
-        }
-      },
-      {
-        $sort: {
-          participantCount: -1
-        }
-      }
-    ]);
-
-    const [allSchools, allEvents, allEventDepts, participantDeptAgg] = await Promise.all([
-      EventSchools.find({}).lean(),
-      Events.find({}).populate('eventSchool').populate('department').lean(),
-      EventDepartment.find({}).sort({ name: 1 }).lean(),
-      participantDeptAggPromise,
-    ]);
-
     const schoolById = new Map();
     const schoolByShortName = new Map();
     const schoolByName = new Map();
@@ -988,76 +1001,96 @@ exports.getDashboardStats = async (req, res) => {
     });
 
     const eventSchoolMap = new Map();
+    const eventByNameMap = new Map();
+    const eventByIdMap = new Map();
+
     allEvents.forEach((e) => {
-      if (e._id) eventSchoolMap.set(e._id.toString(), e.eventSchool);
-      if (e.eventName) eventSchoolMap.set(e.eventName.toLowerCase().trim(), e.eventSchool);
+      if (e._id) {
+        const idStr = e._id.toString().toLowerCase().trim();
+        eventByIdMap.set(idStr, e);
+        if (e.eventSchool) eventSchoolMap.set(idStr, e.eventSchool);
+      }
+      if (e.eventName) {
+        const lowerName = e.eventName.toLowerCase().trim();
+        eventByNameMap.set(lowerName, e);
+        if (e.eventSchool) eventSchoolMap.set(lowerName, e.eventSchool);
+      }
     });
 
+    // Memoized school resolution
+    const schoolResolveCache = new Map();
     const resolveSchoolForPayment = (p) => {
+      const cacheKey = `${p.eventId || ''}|${p.eventName || ''}|${p.schoolId || ''}|${p.category || ''}`;
+      if (schoolResolveCache.has(cacheKey)) {
+        return schoolResolveCache.get(cacheKey);
+      }
+
+      let result = null;
       // 1. Match by eventId
       if (p.eventId) {
         const eId = p.eventId.toString().toLowerCase().trim();
-        if (eventSchoolMap.has(eId)) return eventSchoolMap.get(eId);
-        if (schoolById.has(eId)) return schoolById.get(eId);
+        if (eventSchoolMap.has(eId)) result = eventSchoolMap.get(eId);
+        else if (schoolById.has(eId)) result = schoolById.get(eId);
       }
 
       // 2. Match by exact or partial eventName
-      if (p.eventName) {
+      if (!result && p.eventName) {
         const eName = p.eventName.toLowerCase().trim();
-        if (eventSchoolMap.has(eName)) return eventSchoolMap.get(eName);
-        for (const e of allEvents) {
-          if (e.eventName) {
-            const target = e.eventName.toLowerCase().trim();
-            if (target.includes(eName) || eName.includes(target)) {
-              if (e.eventSchool) return e.eventSchool;
+        if (eventSchoolMap.has(eName)) {
+          result = eventSchoolMap.get(eName);
+        } else {
+          for (let i = 0; i < allEvents.length; i++) {
+            const e = allEvents[i];
+            if (e.eventName) {
+              const target = e.eventName.toLowerCase().trim();
+              if (target.includes(eName) || eName.includes(target)) {
+                if (e.eventSchool) {
+                  result = e.eventSchool;
+                  break;
+                }
+              }
             }
           }
         }
       }
 
       // 3. Match by schoolId / event group alias
-      if (p.schoolId) {
+      if (!result && p.schoolId) {
         const sId = p.schoolId.toLowerCase().trim();
-        if (schoolById.has(sId)) return schoolById.get(sId);
-        if (schoolByShortName.has(sId)) return schoolByShortName.get(sId);
-        if (schoolByName.has(sId)) return schoolByName.get(sId);
-
-        if (sId.includes('digi') || sId.includes('comp') || sId.includes('soc')) {
-          return schoolByShortName.get('soc') || schoolByName.get('school of computing');
-        }
-        if (sId.includes('krishi') || sId.includes('agri') || sId.includes('science') || sId.includes('sos')) {
-          return schoolByShortName.get('sos') || schoolByName.get('school of science');
-        }
-        if (sId.includes('kriya') || sId.includes('eng') || sId.includes('soe') || sId.includes('tech')) {
-          return schoolByShortName.get('soe') || schoolByName.get('school of engineering');
-        }
-        if (sId.includes('bus') || sId.includes('sob') || sId.includes('mgmt')) {
-          return schoolByShortName.get('sob') || schoolByName.get('school of business');
+        if (schoolById.has(sId)) result = schoolById.get(sId);
+        else if (schoolByShortName.has(sId)) result = schoolByShortName.get(sId);
+        else if (schoolByName.has(sId)) result = schoolByName.get(sId);
+        else if (sId.includes('digi') || sId.includes('comp') || sId.includes('soc')) {
+          result = schoolByShortName.get('soc') || schoolByName.get('school of computing');
+        } else if (sId.includes('krishi') || sId.includes('agri') || sId.includes('science') || sId.includes('sos')) {
+          result = schoolByShortName.get('sos') || schoolByName.get('school of science');
+        } else if (sId.includes('kriya') || sId.includes('eng') || sId.includes('soe') || sId.includes('tech')) {
+          result = schoolByShortName.get('soe') || schoolByName.get('school of engineering');
+        } else if (sId.includes('bus') || sId.includes('sob') || sId.includes('mgmt')) {
+          result = schoolByShortName.get('sob') || schoolByName.get('school of business');
         }
       }
 
       // 4. Match by category / department
-      if (p.category) {
+      if (!result && p.category) {
         const cat = p.category.toLowerCase().trim();
         if (cat.includes('cse') || cat.includes('it') || cat.includes('ds') || cat.includes('iot') || cat.includes('aiml') || cat.includes('mca')) {
-          return schoolByShortName.get('soc') || schoolByName.get('school of computing');
-        }
-        if (cat.includes('agri') || cat.includes('science') || cat.includes('forensic')) {
-          return schoolByShortName.get('sos') || schoolByName.get('school of science');
-        }
-        if (cat.includes('mech') || cat.includes('civil') || cat.includes('eee') || cat.includes('ece') || cat.includes('petro') || cat.includes('mining')) {
-          return schoolByShortName.get('soe') || schoolByName.get('school of engineering');
-        }
-        if (cat.includes('bus') || cat.includes('mgmt') || cat.includes('comm')) {
-          return schoolByShortName.get('sob') || schoolByName.get('school of business');
+          result = schoolByShortName.get('soc') || schoolByName.get('school of computing');
+        } else if (cat.includes('agri') || cat.includes('science') || cat.includes('forensic')) {
+          result = schoolByShortName.get('sos') || schoolByName.get('school of science');
+        } else if (cat.includes('mech') || cat.includes('civil') || cat.includes('eee') || cat.includes('ece') || cat.includes('petro') || cat.includes('mining')) {
+          result = schoolByShortName.get('soe') || schoolByName.get('school of engineering');
+        } else if (cat.includes('bus') || cat.includes('mgmt') || cat.includes('comm')) {
+          result = schoolByShortName.get('sob') || schoolByName.get('school of business');
         }
       }
 
-      return allSchools[0] || null;
+      if (!result) result = allSchools[0] || null;
+      schoolResolveCache.set(cacheKey, result);
+      return result;
     };
 
-
-    // ─── Group / School-wise stats (strictly for existing DB groups) ────────
+    // ─── Group / School-wise stats ────────
     const schoolMap = {};
     allSchools.forEach((g) => {
       const gKey = g.shortName || g.name;
@@ -1076,7 +1109,7 @@ exports.getDashboardStats = async (req, res) => {
       };
     });
 
-    // ─── Department-wise stats (from EventDepartment collection) ────────
+    // ─── Department-wise stats ────────
     const deptMap = {};
     allEventDepts.forEach((d) => {
       const dKey = d.name;
@@ -1105,6 +1138,66 @@ exports.getDashboardStats = async (req, res) => {
       });
     });
 
+    // Pre-compile department regexes once outside the payment loop
+    const preparedDepts = allEventDepts.map((d) => {
+      const dName = (d.name || '').toUpperCase().trim();
+      const escaped = dName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return {
+        name: d.name,
+        dName,
+        regex: new RegExp(`\\b${escaped}\\b`, 'i'),
+      };
+    });
+
+    // Memoized department resolution
+    const deptResolveCache = new Map();
+    const resolveDepartmentsForPayment = (p) => {
+      const pCat = (p.category || '').toUpperCase().trim();
+      const pSchoolId = (p.schoolId || '').toUpperCase().trim();
+      const pEventId = (p.eventId || '').toLowerCase().trim();
+      const pEventName = (p.eventName || '').toLowerCase().trim();
+      const cacheKey = `${pCat}|${pSchoolId}|${pEventId}|${pEventName}`;
+
+      if (deptResolveCache.has(cacheKey)) {
+        return deptResolveCache.get(cacheKey);
+      }
+
+      const targetDeptNames = new Set();
+      for (let i = 0; i < preparedDepts.length; i++) {
+        const pd = preparedDepts[i];
+        if (pCat === pd.dName || pSchoolId === pd.dName) {
+          targetDeptNames.add(pd.name);
+        } else if (pCat.includes(pd.dName) && pd.regex.test(pCat)) {
+          targetDeptNames.add(pd.name);
+        }
+      }
+
+      if (targetDeptNames.size === 0) {
+        const matchedEvent = (pEventId && eventByIdMap.get(pEventId)) || (pEventName && eventByNameMap.get(pEventName));
+        if (matchedEvent && Array.isArray(matchedEvent.department)) {
+          matchedEvent.department.forEach((d) => {
+            const dName = d.name || (allEventDepts.find(ad => ad._id.toString() === (d._id || d).toString())?.name);
+            if (dName && deptMap[dName]) {
+              targetDeptNames.add(dName);
+            }
+          });
+        }
+      }
+
+      if (targetDeptNames.size === 0) {
+        if (pCat.includes('BUSINESS') || pSchoolId.includes('BUSINESS')) {
+          if (deptMap['BUSINESS SCHOOL']) targetDeptNames.add('BUSINESS SCHOOL');
+        } else if (pCat.includes('AGRICULTURE') || pSchoolId.includes('AGRICULTURE')) {
+          if (deptMap['AGRICULTURE']) targetDeptNames.add('AGRICULTURE');
+        } else if (pCat.includes('CSE') || pSchoolId.includes('CSE')) {
+          if (deptMap['CSE']) targetDeptNames.add('CSE');
+        }
+      }
+
+      deptResolveCache.set(cacheKey, targetDeptNames);
+      return targetDeptNames;
+    };
+
     allPayments.forEach((p) => {
       // 1. Group Resolution
       const group = resolveSchoolForPayment(p);
@@ -1118,51 +1211,7 @@ exports.getDashboardStats = async (req, res) => {
       }
 
       // 2. Department Resolution
-      const targetDeptNames = new Set();
-      const cat = (p.category || '').toUpperCase().trim();
-      const sId = (p.schoolId || '').toUpperCase().trim();
-
-      allEventDepts.forEach((d) => {
-        const dName = d.name.toUpperCase().trim();
-        if (cat === dName || sId === dName) {
-          targetDeptNames.add(d.name);
-        } else if (cat.includes(dName)) {
-          const regex = new RegExp(`\\b${dName.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i');
-          if (regex.test(cat)) {
-            targetDeptNames.add(d.name);
-          }
-        }
-      });
-
-      if (targetDeptNames.size === 0) {
-        const pName = (p.eventName || '').toLowerCase().trim();
-        const pEventId = (p.eventId || '').toLowerCase().trim();
-
-        const matchedEvent = allEvents.find((e) =>
-          (e._id && e._id.toString().toLowerCase() === pEventId) ||
-          (e.eventName && e.eventName.toLowerCase().trim() === pName)
-        );
-
-        if (matchedEvent && Array.isArray(matchedEvent.department)) {
-          matchedEvent.department.forEach((d) => {
-            const dName = d.name || (allEventDepts.find(ad => ad._id.toString() === (d._id || d).toString())?.name);
-            if (dName && deptMap[dName]) {
-              targetDeptNames.add(dName);
-            }
-          });
-        }
-      }
-
-      if (targetDeptNames.size === 0) {
-        if (cat.includes('BUSINESS') || sId.includes('BUSINESS')) {
-          if (deptMap['BUSINESS SCHOOL']) targetDeptNames.add('BUSINESS SCHOOL');
-        } else if (cat.includes('AGRICULTURE') || sId.includes('AGRICULTURE')) {
-          if (deptMap['AGRICULTURE']) targetDeptNames.add('AGRICULTURE');
-        } else if (cat.includes('CSE') || sId.includes('CSE')) {
-          if (deptMap['CSE']) targetDeptNames.add('CSE');
-        }
-      }
-
+      const targetDeptNames = resolveDepartmentsForPayment(p);
       const amount = Number(p.amountRupees || p.amount || 0);
       const studentCount = (p.participants || []).length;
 
@@ -1209,7 +1258,6 @@ exports.getDashboardStats = async (req, res) => {
       participatedStudents: d.participatedStudents,
       revenue: Math.round(d.revenue * 100) / 100,
     }));
-
 
     const schoolStats = Object.values(schoolMap).map((g) => ({
       group: g.group,
@@ -1310,15 +1358,23 @@ exports.getDashboardStats = async (req, res) => {
         revenue: Math.round(revenue * 100) / 100,
       }));
 
-    const participantDeptStats = (participantDeptAgg || [])
-      .filter((d) => d._id)
-      .map((d) => ({
-        dept: d._id,
-        name: d._id,
-        participantCount: d.participantCount,
-      }));
+    // In-memory participant department counts (avoids slow Mongo $unwind)
+    const deptParticipantCountMap = {};
+    participants.forEach((p) => {
+      const dept = (p.department || '').trim();
+      if (dept) {
+        deptParticipantCountMap[dept] = (deptParticipantCountMap[dept] || 0) + 1;
+      }
+    });
+    const participantDeptStats = Object.entries(deptParticipantCountMap)
+      .map(([dept, count]) => ({
+        dept,
+        name: dept,
+        participantCount: count,
+      }))
+      .sort((a, b) => b.participantCount - a.participantCount);
 
-    return res.json({
+    const responseData = {
       totalTeams,
       totalStudents,
       totalAttended,
@@ -1341,7 +1397,10 @@ exports.getDashboardStats = async (req, res) => {
         byEvent: revenueByEvent,
         byDate: revenueByDate,
       },
-    });
+    };
+
+    dashboardStatsCache.set(cacheKey, { timestamp: Date.now(), data: responseData });
+    return res.json(responseData);
   } catch (err) {
     console.error('Payments.getDashboardStats error', err);
     return res.status(500).json({ error: 'Unable to fetch dashboard stats', details: err.message });
@@ -2288,6 +2347,8 @@ exports.bulkUpdateByExcel = async (req, res) => {
         message: `Row ${rowNumber}: Updated successfully for Team ${teamId}.`
       });
     }
+
+    clearDashboardStatsCache();
 
     return res.json({
       ok: true,

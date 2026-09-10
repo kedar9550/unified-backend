@@ -61,4 +61,14 @@ const PaymentRegistrationSchema = new mongoose.Schema({
   rawPaymentData: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true, strict: false });
 
+PaymentRegistrationSchema.index({ paymentStatus: 1, createdAt: -1 });
+PaymentRegistrationSchema.index({ paymentStatus: 1, verified: 1 });
+PaymentRegistrationSchema.index({ paymentStatus: 1, eventId: 1 });
+PaymentRegistrationSchema.index({ teamId: 1 });
+PaymentRegistrationSchema.index({ razorpayOrderId: 1 });
+PaymentRegistrationSchema.index({ razorpayPaymentId: 1 });
+PaymentRegistrationSchema.index({ "participants.roll": 1 });
+PaymentRegistrationSchema.index({ "participants.email": 1 });
+PaymentRegistrationSchema.index({ "participants.department": 1 });
+
 module.exports = mongoose.model('PaymentRegistration', PaymentRegistrationSchema);
