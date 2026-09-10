@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 
 const ParticipantSchema = new mongoose.Schema({
@@ -60,6 +61,17 @@ const PaymentRegistrationSchema = new mongoose.Schema({
   paidAt: { type: Date, default: Date.now },
   rawPaymentData: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true, strict: false });
+
+
+PaymentRegistrationSchema.pre('save', function () {
+  if (this.paymentStatus === 'PAID' && Array.isArray(this.participants)) {
+    this.participants.forEach((p) => {
+      if (!p.barcode || typeof p.barcode !== 'string' || p.barcode.trim() === '') {
+        p.barcode = crypto.randomBytes(4).toString('hex').toUpperCase();
+      }
+    });
+  }
+});
 
 PaymentRegistrationSchema.index({ paymentStatus: 1, createdAt: -1 });
 PaymentRegistrationSchema.index({ paymentStatus: 1, verified: 1 });

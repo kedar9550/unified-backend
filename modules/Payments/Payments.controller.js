@@ -318,6 +318,29 @@ exports.getRegistrations = async (req, res) => {
 
     const payments = await queryBuilder.lean();
 
+    // Auto-generate barcodes on-the-fly for any PAID registrations with missing participant barcodes
+    const crypto = require('crypto');
+    payments.forEach(reg => {
+      const regStatus = (reg.paymentStatus || reg.payment || '').toString().trim().toUpperCase();
+      if (regStatus === 'PAID' && Array.isArray(reg.participants) && reg.participants.length > 0) {
+        let hasMissingBarcode = false;
+        reg.participants.forEach(p => {
+          if (!p.barcode || typeof p.barcode !== 'string' || p.barcode.trim() === '') {
+            p.barcode = crypto.randomBytes(4).toString('hex').toUpperCase();
+            hasMissingBarcode = true;
+          }
+        });
+        if (hasMissingBarcode && reg._id) {
+          PaymentRegistration.updateOne(
+            { _id: reg._id },
+            { $set: { participants: reg.participants } }
+          ).catch(err => {
+            console.error(`Error auto-generating barcodes for registration ${reg._id}:`, err.message);
+          });
+        }
+      }
+    });
+
     return res.json({ payments });
   } catch (err) {
     console.error('Payments.getRegistrations error', err);
@@ -361,11 +384,20 @@ exports.addParticipants = async (req, res) => {
       return res.status(404).json({ error: 'Registration not found' });
     }
 
-    const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
-      ...p,
-      accommodation: p.accommodation || "No",
-      barcode: p.barcode || require('crypto').randomBytes(4).toString('hex').toUpperCase()
-    }));
+    const isPaid = (registration.paymentStatus || '').toString().trim().toUpperCase() === 'PAID';
+    const cryptoAdd = require('crypto');
+    const participantsData = (Array.isArray(participants) ? participants : []).map(p => {
+      const item = {
+        ...p,
+        accommodation: p.accommodation || "No",
+      };
+      if (isPaid) {
+        item.barcode = p.barcode || cryptoAdd.randomBytes(4).toString('hex').toUpperCase();
+      } else if (p.barcode) {
+        item.barcode = p.barcode;
+      }
+      return item;
+    });
 
     // Generate a teamId if it doesn't have one
     let newTeamId = registration.teamId;
@@ -438,11 +470,26 @@ exports.verifyPayment = async (req, res) => {
       return res.status(400).json({ error: 'Invalid amount value' });
     }
 
-    const participantsData = (Array.isArray(participants) ? participants : []).map(p => ({
-      ...p,
-      accommodation: p.accommodation || "No",
-      barcode: require('crypto').randomBytes(4).toString('hex').toUpperCase()
-    }));
+    const cryptoVerify = require('crypto');
+    let participantsData = [];
+    if (Array.isArray(participants) && participants.length > 0) {
+      participantsData = participants.map(p => ({
+        ...p,
+        accommodation: p.accommodation || "No",
+        barcode: p.barcode || cryptoVerify.randomBytes(4).toString('hex').toUpperCase()
+      }));
+    } else {
+      const existingReg = await PaymentRegistration.findOne({ razorpayOrderId: order_id });
+      if (existingReg && Array.isArray(existingReg.participants)) {
+        participantsData = existingReg.participants.map(p => {
+          const pObj = p.toObject ? p.toObject() : { ...p };
+          if (!pObj.barcode) {
+            pObj.barcode = cryptoVerify.randomBytes(4).toString('hex').toUpperCase();
+          }
+          return pObj;
+        });
+      }
+    }
 
     const rawPaymentUpdate = fetchedPayment
       ? { ...(rawPaymentData || req.body), razorpayCompleteResponse: fetchedPayment }
@@ -2301,6 +2348,17 @@ exports.bulkUpdateByExcel = async (req, res) => {
       registration.verified = true;
       if (!registration.paidAt) {
         registration.paidAt = new Date();
+      }
+
+      // Ensure barcode exists for all participants if PAID
+      if (registration.paymentStatus === 'PAID' && Array.isArray(registration.participants)) {
+        const cryptoBulk = require('crypto');
+        registration.participants.forEach(p => {
+          if (!p.barcode || typeof p.barcode !== 'string' || p.barcode.trim() === '') {
+            p.barcode = cryptoBulk.randomBytes(4).toString('hex').toUpperCase();
+          }
+        });
+        registration.markModified('participants');
       }
 
       await registration.save();
