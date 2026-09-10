@@ -507,7 +507,7 @@ exports.verifyGatewayPayment = async (req, res) => {
 
     if (orderPayments && orderPayments.items && orderPayments.items.length > 0) {
       // Find a captured or authorized payment
-      const successfulPayment = orderPayments.items.find(p => p.status === 'captured' || p.status === 'authorized');
+      const successfulPayment = orderPayments.items.find(p => p.status === 'captured');
 
       if (successfulPayment) {
         registration.paymentStatus = 'PAID';
@@ -2168,7 +2168,7 @@ exports.bulkUpdateByExcel = async (req, res) => {
 
     const ExcelJS = require('exceljs');
     const workbook = new ExcelJS.Workbook();
-    
+
     if (req.file.buffer) {
       await workbook.xlsx.load(req.file.buffer);
     } else {
@@ -2215,7 +2215,7 @@ exports.bulkUpdateByExcel = async (req, res) => {
     // Iterate through data rows starting from row 2
     for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
       const row = worksheet.getRow(rowNumber);
-      
+
       const teamIdRaw = row.getCell(teamIdColIndex).value;
       const orderIdRaw = orderIdColIndex !== -1 ? row.getCell(orderIdColIndex).value : null;
       const paymentIdRaw = paymentIdColIndex !== -1 ? row.getCell(paymentIdColIndex).value : null;
