@@ -256,6 +256,22 @@ exports.getRegistrations = async (req, res) => {
       });
     }
 
+    if (String(req.query.attended).toLowerCase() === 'true') {
+      andConditions.push({
+        'participants.attended': true
+      });
+    }
+
+    if (String(req.query.winnersOnly).toLowerCase() === 'true') {
+      andConditions.push({
+        $or: [
+          { isFirstWinner: true },
+          { isSecondWinner: true },
+          { isThirdWinner: true }
+        ]
+      });
+    }
+
     const roleFilter = await getRoleFilterQuery(req);
     if (Object.keys(roleFilter).length > 0) {
       andConditions.push(roleFilter);
