@@ -43,6 +43,21 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
+        // 20 days validation
+        if (data.eventEndDate) {
+            const end = new Date(data.eventEndDate);
+            end.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const diffTime = today - end;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 20) {
+                return res.status(400).json({ success: false, message: "You cannot add activities that ended more than 20 days ago." });
+            }
+        }
+
         const role = (data.activityType || '').toLowerCase();
         const isResourcePerson = role.includes("resource person") || role.includes("resourceperson");
         const isParticipant = role.includes("participant") || role.includes("participated");
@@ -638,7 +653,7 @@ exports.submitAcademicYear = async (req, res) => {
 
         const result = await ResourceUtilization.updateMany(
             query,
-            { status: 'Pending at HOD' }
+            { status: 'Pending' }
         );
 
         res.json({
@@ -655,24 +670,18 @@ exports.submitAcademicYear = async (req, res) => {
 // @access  Private (HOD)
 exports.getPendingAtHOD = async (req, res) => {
     try {
-        const deptIds = await getHODDepartments(req.user);
-        
-        const facultyIds = await Employee.find({
-            $or: [
-                { coreDepartment: { $in: deptIds } },
-                { department: { $in: deptIds } }
-            ]
-        }).distinct('_id');
+        const { getFacultyIdsForApprover } = require('../hierarchy/reportingBoss.helper');
+        const facultyIds = await getFacultyIdsForApprover(req.user);
 
-        // Only show Pending at HOD, Approved, or Rejected records to HOD (exclude Drafts!)
+        // Only show Pending, Approved, or Rejected records to HOD (exclude Drafts!)
         const query = {
             facultyId: { $in: facultyIds },
-            status: { $in: ['Pending at HOD', 'Approved', 'Rejected'] }
+            status: { $in: ['Pending', 'Approved', 'Rejected'] }
         };
 
         if (req.query.status && req.query.status !== 'All') {
-            query.status = req.query.status;
-        }
+                query.status = req.query.status;
+            }
 
         if (req.query.academicYear) {
             query.academicYear = req.query.academicYear;
@@ -707,7 +716,7 @@ exports.hodAction = async (req, res) => {
         }
 
         if (action === 'Approve') {
-            record.status = isFinalApproval ? 'Approved' : 'Approved by HOD';
+            record.status = 'Approved';
         } else {
             record.status = 'Rejected';
         }
@@ -742,7 +751,7 @@ exports.bulkHODAction = async (req, res) => {
 
         let status;
         if (action === 'Approve') {
-            status = isFinalApproval ? 'Approved' : 'Approved by HOD';
+            status = 'Approved';
         } else {
             status = 'Rejected';
         }

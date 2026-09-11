@@ -66,11 +66,11 @@ const ResourceUtilizationSchema = new mongoose.Schema({
         type: String
     },
     nirfRank: {
-        type: Number
+        type: Number 
     },
     status: {
         type: String,
-        enum: ['Draft', 'Pending at HOD', 'Approved by HOD', 'Approved', 'Rejected'],
+        enum: ['Draft', 'Pending', 'Approved by HOD', 'Approved', 'Rejected'],
         default: 'Draft'
     },
     removedFromAppraisal: {

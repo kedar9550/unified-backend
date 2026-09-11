@@ -113,6 +113,16 @@ exports.createBookChapter = async (req, res) => {
             finalStatus = 'Approved';
             finalEntryType = 'Admin';
             computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
+
+            if (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') {
+                if (!data.approvedAmount || Number(data.approvedAmount) <= 0) {
+                    return res.status(400).json({ success: false, message: "Approved Incentive Amount is required when Apply Incentive is Yes." });
+                }
+            }
+
+            if (!data.appraisalEligible) {
+                return res.status(400).json({ success: false, message: "Appraisal Eligible status is required for direct entry." });
+            }
         }
 
         const bookChapter = new BookChapter({
@@ -123,6 +133,8 @@ exports.createBookChapter = async (req, res) => {
             appraisalClaimant,
             status: finalStatus,
             incentiveClaimant: computedIncentiveClaimant,
+            approvedAmount: (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
+            appraisalEligible: data.appraisalEligible || (data.isDirectEntry === 'true' ? 'Yes' : null),
             entryType: finalEntryType
         });
 
@@ -463,10 +475,24 @@ exports.rndAction = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Book Chapter not found' });
         }
 
+        if (action === 'Approve') {
+            if (!req.body.appraisalEligible) {
+                return res.status(400).json({ success: false, message: 'Appraisal Eligible status is required for approval.' });
+            }
+            if (chapter.applyIncentive === 'Yes' || chapter.applyIncentive === 'yes') {
+                if (approvedAmount === undefined || approvedAmount === null || approvedAmount === '' || Number(approvedAmount) <= 0) {
+                    return res.status(400).json({ success: false, message: 'Approved Incentive Amount is required when Apply Incentive is Yes.' });
+                }
+            }
+        }
+
         chapter.status = status;
         chapter.rndComment = comment;
         if (approvedAmount !== undefined) {
             chapter.approvedAmount = approvedAmount;
+        }
+        if (req.body.appraisalEligible !== undefined) {
+            chapter.appraisalEligible = req.body.appraisalEligible;
         }
 
         if (status === 'Approved' && (chapter.applyIncentive === 'Yes' || chapter.applyIncentive === 'yes') && chapter.appraisalClaimant) {

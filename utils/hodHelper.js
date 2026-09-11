@@ -10,11 +10,14 @@ const Department = require('../modules/academics/department.model');
  * @param {Object} user - The req.user object
  * @returns {Promise<Array>} - Array of department ObjectIds
  */
-const getHODDepartments = async (user) => {
+const getHODDepartments = async (user, options = {}) => {
     // 1. Try from req.user (already populated by middleware from token)
-    let deptIds = (user.hodDepartments || []).map(d => 
-        (typeof d === 'object' && d._id) ? d._id.toString() : d.toString()
-    );
+    let deptIds = [];
+    if (!options.excludeHODSchoolsForDean && user.hodDepartments) {
+        deptIds = user.hodDepartments.map(d => 
+            (typeof d === 'object' && d._id) ? d._id.toString() : d.toString()
+        );
+    }
 
     // 2. Fallback to Database Lookup if token doesn't have them or is empty
     if (deptIds.length === 0) {
@@ -35,8 +38,16 @@ const getHODDepartments = async (user) => {
                 if (hodRoleDoc && m.role.toString() === hodRoleDoc._id.toString() && m.departments) {
                     deptIds = [...deptIds, ...m.departments.map(d => d.toString())];
                 } else if (deanRoleDoc && m.role.toString() === deanRoleDoc._id.toString() && m.schools && m.schools.length > 0) {
+                    let schoolIdsQuery = { $in: m.schools };
+                    
+                    if (options.excludeHODSchoolsForDean) {
+                        const School = require('../modules/academics/school.model');
+                        const schoolsWithoutHOD = await School.find({ _id: { $in: m.schools }, hod: { $ne: true } });
+                        schoolIdsQuery = { $in: schoolsWithoutHOD.map(s => s._id) };
+                    }
+
                     // Fetch all departments that belong to these schools
-                    const depts = await Department.find({ schoolIds: { $in: m.schools } });
+                    const depts = await Department.find({ schoolIds: schoolIdsQuery });
                     deptIds = [...deptIds, ...depts.map(d => d._id.toString())];
                 }
             }
@@ -53,7 +64,7 @@ const getHODByDepartment = async (departmentId) => {
     if (!department) return null;
 
     const isHODRouted = department.schoolIds && department.schoolIds.some(school => 
-        school.code === 'SOE' || school.code === 'SOC'
+        school.hod === true
     );
 
     if (isHODRouted || !department.schoolIds || department.schoolIds.length === 0) {
