@@ -13,6 +13,10 @@ exports.createOrder = async (req, res) => {
         return res.status(404).json({ error: 'Event not found' });
       }
 
+      if (event.registrationStop === 'Yes') {
+        return res.status(400).json({ error: 'Registrations for this event have been closed.' });
+      }
+
       const baseAmount = Number(event.price) || 0;
       const extraPerHead = Number(event.extraAmountPerHead) || 0;
       const tSize = Number(teamSize) || 1;
@@ -1365,9 +1369,9 @@ exports.getDashboardStats = async (req, res) => {
     let accommodationCheckedInCount = 0;
 
     participants.forEach((p) => {
-      const g = (p.gender || '').toLowerCase();
-      if (g === 'male') genderMap.male++;
-      else if (g === 'female') genderMap.female++;
+      const g = (p.gender || '').trim().toLowerCase();
+      if (g === 'male' || g === 'm' || /^male|boy/i.test(g)) genderMap.male++;
+      else if (g === 'female' || g === 'f' || /^female|girl/i.test(g)) genderMap.female++;
       else genderMap.others++;
 
       if (p.attended) totalAttended++;
@@ -1379,9 +1383,9 @@ exports.getDashboardStats = async (req, res) => {
     participants.forEach((p) => {
       const campus = classifyCampus(p.college || p.otherCollege || '');
       if (!campusGenderMap[campus]) campusGenderMap[campus] = { male: 0, female: 0, others: 0 };
-      const g = (p.gender || '').toLowerCase();
-      if (g === 'male') campusGenderMap[campus].male++;
-      else if (g === 'female') campusGenderMap[campus].female++;
+      const g = (p.gender || '').trim().toLowerCase();
+      if (g === 'male' || g === 'm' || /^male|boy/i.test(g)) campusGenderMap[campus].male++;
+      else if (g === 'female' || g === 'f' || /^female|girl/i.test(g)) campusGenderMap[campus].female++;
       else campusGenderMap[campus].others++;
     });
 
@@ -1900,10 +1904,45 @@ exports.updateWinnerStatus = async (req, res) => {
     }
 
     if (status === true) {
+      // Check that at least one participant attended the event
+      const participants = Array.isArray(registration.participants) ? registration.participants : [];
+      const hasAttended = participants.some((p) => {
+        if (!p) return false;
+        if (p.attended === true || p.attended === 1) return true;
+        if (typeof p.attended === 'string') {
+          const s = p.attended.trim().toLowerCase();
+          return s === 'true' || s === 'yes' || s === '1' || s === 'present';
+        }
+        return false;
+      });
+
+      if (!hasAttended) {
+        return res.status(400).json({
+          error: 'Cannot assign prize: All participants are absent. At least one participant from the team must have attended the event.'
+        });
+      }
+
       // Mutual exclusivity: if setting one to true, others become false
       registration.isFirstWinner = prizeType === 'first';
       registration.isSecondWinner = prizeType === 'second';
       registration.isThirdWinner = prizeType === 'third';
+
+      // Immediately stop registration for this event
+      try {
+        const Events = require('../Events/Events.model');
+        if (registration.eventId) {
+          await Events.findByIdAndUpdate(registration.eventId, { registrationStop: 'Yes' });
+        }
+        if (registration.eventName) {
+          const escapedName = registration.eventName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          await Events.updateMany(
+            { eventName: new RegExp(`^${escapedName}$`, 'i') },
+            { registrationStop: 'Yes' }
+          );
+        }
+      } catch (eventErr) {
+        console.error('Error stopping event registrations on winner award:', eventErr);
+      }
     } else {
       // Just toggle the specific one off
       if (prizeType === 'first') registration.isFirstWinner = false;
@@ -1914,7 +1953,9 @@ exports.updateWinnerStatus = async (req, res) => {
     await registration.save();
 
     return res.json({
-      message: 'Winner status updated successfully.',
+      message: status === true 
+        ? 'Winner status updated successfully. Registrations for this event have been stopped.' 
+        : 'Winner status updated successfully.',
       isFirstWinner: registration.isFirstWinner,
       isSecondWinner: registration.isSecondWinner,
       isThirdWinner: registration.isThirdWinner,
