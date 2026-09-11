@@ -43,6 +43,21 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
+        // 20 days validation
+        if (data.eventEndDate) {
+            const end = new Date(data.eventEndDate);
+            end.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const diffTime = today - end;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays > 20) {
+                return res.status(400).json({ success: false, message: "You cannot add activities that ended more than 20 days ago." });
+            }
+        }
+
         const role = (data.activityType || '').toLowerCase();
         const isResourcePerson = role.includes("resource person") || role.includes("resourceperson");
         const isParticipant = role.includes("participant") || role.includes("participated");
