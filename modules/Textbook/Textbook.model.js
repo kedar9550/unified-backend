@@ -21,6 +21,14 @@ const AuthorSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    studentId: {
+        type: String,
+        default: null
+    },
+    CoAuthorType: {
+        type: String,
+        default: 'faculty'
+    },
     isIncentiveApplicant: {
         type: Boolean,
         default: false
@@ -50,7 +58,9 @@ const TextbookSchema = new mongoose.Schema({
     title: {
         type: String,
         required: true,
-        index: true,
+        trim: true,
+        unique: true,
+        sparse: true,
         maxlength: 200 // Increased maxlength to accommodate real textbook titles
     },
     publisher: {
@@ -92,6 +102,11 @@ const TextbookSchema = new mongoose.Schema({
         default: ""
     },
     authors: [AuthorSchema], // Embedded authors array
+    isStudentsInvolved: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'No'
+    },
     month: {
         type: String,
         required: true
@@ -138,6 +153,11 @@ const TextbookSchema = new mongoose.Schema({
     },
     incentiveClaimant: {
         type: String,
+        default: null
+    },
+    appraisalEligible: {
+        type: String,
+        enum: ['Yes', 'No'],
         default: null
     },
     

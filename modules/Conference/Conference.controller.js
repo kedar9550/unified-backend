@@ -96,9 +96,12 @@ exports.createConference = async (req, res) => {
         });
 
         if (existingRecord) {
+            const isDoiMatch = cleanDoi && existingRecord.doi && existingRecord.doi.toLowerCase() === cleanDoi.toLowerCase();
             return res.status(400).json({
                 success: false,
-                message: "A conference paper entry with this Title or DOI already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
+                message: isDoiMatch
+                    ? `A conference paper entry with this DOI (${cleanDoi}) already exists in the system. If it was rejected, please use the Edit & Resubmit option instead of creating a new one.`
+                    : `A conference paper entry with this Title ("${trimmedTitle}") already exists in the system. If it was rejected, please use the Edit & Resubmit option instead of creating a new one.`
             });
         }
 
@@ -190,6 +193,16 @@ exports.createConference = async (req, res) => {
                 return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
             }
 
+            if (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') {
+                if (!data.approvedAmount || Number(data.approvedAmount) <= 0) {
+                    return res.status(400).json({ success: false, message: "Approved Incentive Amount is required when Apply Incentive is Yes." });
+                }
+            }
+
+            if (!data.appraisalEligible) {
+                return res.status(400).json({ success: false, message: "Appraisal Eligible status is required for direct entry." });
+            }
+
             finalFacultyId = targetFaculty._id;
             finalStatus = 'Approved';
             finalEntryType = 'Admin';
@@ -210,6 +223,8 @@ exports.createConference = async (req, res) => {
             appraisalClaimant,
             status: finalStatus,
             incentiveClaimant: computedIncentiveClaimant,
+            approvedAmount: (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
+            appraisalEligible: data.appraisalEligible || (data.isDirectEntry === 'true' ? 'Yes' : null),
             entryType: finalEntryType
         });
 
@@ -506,13 +521,20 @@ exports.rndAction = async (req, res) => {
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
 
-        if (action === 'Approve' && !req.body.appraisalEligible) {
-            return res.status(400).json({ success: false, message: 'Appraisal Eligible is required for approval.' });
-        }
-
         const conference = await Conference.findById(id);
         if (!conference) {
             return res.status(404).json({ success: false, message: 'Conference not found' });
+        }
+
+        if (action === 'Approve') {
+            if (!req.body.appraisalEligible) {
+                return res.status(400).json({ success: false, message: 'Appraisal Eligible status is required for approval.' });
+            }
+            if (conference.applyIncentive === 'Yes' || conference.applyIncentive === 'yes') {
+                if (approvedAmount === undefined || approvedAmount === null || approvedAmount === '' || Number(approvedAmount) <= 0) {
+                    return res.status(400).json({ success: false, message: 'Approved Incentive Amount is required when Apply Incentive is Yes.' });
+                }
+            }
         }
 
         conference.status = status;

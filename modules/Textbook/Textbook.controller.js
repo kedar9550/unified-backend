@@ -38,14 +38,22 @@ exports.createTextbook = async (req, res) => {
             return res.status(400).json({ success: false, message: "Cover Page, Author Affiliation, and Index documents are mandatory." });
         }
 
+        const trimmedTitle = data.title ? data.title.trim() : '';
+
         const existingRecord = await Textbook.findOne({
-            isbn: data.isbn
+            $or: [
+                { isbn: data.isbn },
+                ...(trimmedTitle ? [{ title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i') }] : [])
+            ]
         });
 
         if (existingRecord) {
+            const isIsbnMatch = existingRecord.isbn && existingRecord.isbn.toLowerCase() === data.isbn.toLowerCase();
             return res.status(400).json({ 
                 success: false, 
-                message: "A textbook with this ISBN already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one." 
+                message: isIsbnMatch
+                    ? "A textbook with this ISBN already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
+                    : `A textbook with this Title ("${trimmedTitle}") already exists in the system.`
             });
         }
 
@@ -84,6 +92,8 @@ exports.createTextbook = async (req, res) => {
                 affiliationType: isUser ? 'Aditya University' : (author.affiliationType || 'Others'),
                 employeeId: isAUS && empId ? String(empId).trim() : null,  // store institutionId string directly
                 affiliationName: isUser ? 'Aditya University' : (author.affiliationName || ''),
+                studentId: author.studentId || null,
+                CoAuthorType: author.CoAuthorType || (author.studentId ? 'student' : 'faculty'),
                 isIncentiveApplicant: isUser ? (data.applyIncentive === 'Yes') : false,
                 contributorOnly: isUser ? (data.applyIncentive === 'No') : true
             });
@@ -135,6 +145,16 @@ exports.createTextbook = async (req, res) => {
                 return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
             }
 
+            if (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') {
+                if (!data.approvedAmount || Number(data.approvedAmount) <= 0) {
+                    return res.status(400).json({ success: false, message: "Approved Incentive Amount is required when Apply Incentive is Yes." });
+                }
+            }
+
+            if (!data.appraisalEligible) {
+                return res.status(400).json({ success: false, message: "Appraisal Eligible status is required for direct entry." });
+            }
+
             finalFacultyId = targetFaculty._id;
             finalStatus = 'Approved';
             finalEntryType = 'Admin';
@@ -143,6 +163,7 @@ exports.createTextbook = async (req, res) => {
 
         const textbook = new Textbook({
             ...data,
+            title: trimmedTitle,
             isbn: data.isbn, // use normalized isbn
             college: data.college || 'Not Set',
             facultyId: finalFacultyId,
@@ -150,6 +171,8 @@ exports.createTextbook = async (req, res) => {
             appraisalClaimant,
             status: finalStatus,
             incentiveClaimant: computedIncentiveClaimant,
+            approvedAmount: (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
+            appraisalEligible: data.appraisalEligible || (data.isDirectEntry === 'true' ? 'Yes' : null),
             entryType: finalEntryType
         });
 
@@ -586,10 +609,24 @@ exports.rndAction = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Textbook not found' });
         }
 
+        if (action === 'Approve') {
+            if (!req.body.appraisalEligible) {
+                return res.status(400).json({ success: false, message: 'Appraisal Eligible status is required for approval.' });
+            }
+            if (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes') {
+                if (approvedAmount === undefined || approvedAmount === null || approvedAmount === '' || Number(approvedAmount) <= 0) {
+                    return res.status(400).json({ success: false, message: 'Approved Incentive Amount is required when Apply Incentive is Yes.' });
+                }
+            }
+        }
+
         textbook.status = status;
         textbook.rndComment = comment;
         if (approvedAmount !== undefined) {
             textbook.approvedAmount = approvedAmount;
+        }
+        if (req.body.appraisalEligible !== undefined) {
+            textbook.appraisalEligible = req.body.appraisalEligible;
         }
 
         if (status === 'Approved' && (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes') && textbook.appraisalClaimant) {

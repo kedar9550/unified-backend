@@ -26,7 +26,7 @@ const ConferenceSchema = new mongoose.Schema({
     scopusSubtype: { type: String, default: "cp" }, // 'cp' = confirmed conference paper
     // ────────────────────────────────────────────────────────────────────────────
 
-    title: { type: String, required: true },
+    title: { type: String, required: true, trim: true, unique: true, sparse: true },
     conferenceName: { type: String, required: true },
     scope: { type: String, enum: ['National', 'International'], required: true },
     month: { type: String },
