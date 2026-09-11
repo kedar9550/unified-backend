@@ -22,6 +22,10 @@ const schoolSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
         index: true
+    },
+    hod: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

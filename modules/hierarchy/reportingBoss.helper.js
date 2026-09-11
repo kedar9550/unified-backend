@@ -75,7 +75,7 @@ const getFacultyIdsForApprover = async (user) => {
 
         // 4. Regular department-based routing
         const { getHODDepartments } = require('../../utils/hodHelper'); // Ensure we get the latest if there are circular dependencies
-        const deptIds = await getHODDepartments(user);
+        const deptIds = await getHODDepartments(user, { excludeHODSchoolsForDean: true });
         
         let regularFacultyIds = [];
         if (deptIds && deptIds.length > 0) {
