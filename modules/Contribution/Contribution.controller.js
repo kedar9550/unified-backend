@@ -654,8 +654,8 @@ exports.getPendingAtHOD = async (req, res) => {
         };
 
         if (req.query.status && req.query.status !== 'All') {
-            query.status = req.query.status;
-        }
+                query.status = req.query.status;
+            }
 
         if (req.query.academicYear) {
             query.academicYear = req.query.academicYear;
@@ -695,7 +695,7 @@ exports.hodAction = async (req, res) => {
         }
 
         if (action === 'Approve') {
-            record.status = isFinalApproval ? 'Approved' : 'Approved by HOD';
+            record.status = 'Approved';
         } else {
             record.status = 'Rejected';
         }
@@ -730,7 +730,7 @@ exports.bulkHODAction = async (req, res) => {
 
         let status;
         if (action === 'Approve') {
-            status = isFinalApproval ? 'Approved' : 'Approved by HOD';
+            status = 'Approved';
         } else {
             status = 'Rejected';
         }
