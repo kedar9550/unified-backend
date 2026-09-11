@@ -628,7 +628,7 @@ exports.submitAcademicYear = async (req, res) => {
 
         const result = await Contribution.updateMany(
             query,
-            { status: 'Pending at HOD' }
+            { status: 'Pending' }
         );
 
         res.json({
@@ -645,18 +645,12 @@ exports.submitAcademicYear = async (req, res) => {
 // @access  Private (HOD)
 exports.getPendingAtHOD = async (req, res) => {
     try {
-        const deptIds = await getHODDepartments(req.user);
-        
-        const facultyIds = await Employee.find({
-            $or: [
-                { coreDepartment: { $in: deptIds } },
-                { department: { $in: deptIds } }
-            ]
-        }).distinct('_id');
+        const { getFacultyIdsForApprover } = require('../hierarchy/reportingBoss.helper');
+        const facultyIds = await getFacultyIdsForApprover(req.user);
 
         const query = {
             facultyId: { $in: facultyIds },
-            status: { $in: ['Pending at HOD', 'Approved', 'Rejected'] }
+            status: { $in: ['Pending', 'Approved', 'Rejected'] }
         };
 
         if (req.query.status && req.query.status !== 'All') {
