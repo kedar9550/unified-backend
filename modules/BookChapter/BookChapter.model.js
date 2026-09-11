@@ -4,7 +4,9 @@ const CoAuthorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
     employeeId: { type: String, default: null },  // stores institutionId string e.g. "5741"
-    authorPosition: { type: String }
+    authorPosition: { type: String },
+    studentId: { type: String, default: null },
+    CoAuthorType: { type: String, default: 'faculty' }
 }, { _id: false });
 
 
@@ -34,6 +36,7 @@ const BookChapterSchema = new mongoose.Schema({
     publicationScope: { type: String, enum: ['National', 'International'], default: 'National' },
     publisher: { type: String, required: true },
     coAuthors: [CoAuthorSchema],
+    isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
     month: { type: String, required: true },
     year: { type: String, required: true },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
@@ -60,6 +63,11 @@ const BookChapterSchema = new mongoose.Schema({
     },
     incentiveClaimant: {
         type: String,
+        default: null
+    },
+    appraisalEligible: {
+        type: String,
+        enum: ['Yes', 'No'],
         default: null
     },
 

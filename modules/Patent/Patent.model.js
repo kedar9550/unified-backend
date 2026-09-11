@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const CoInventorSchema = new mongoose.Schema({
     name: { type: String, required: true },
     affiliation: { type: String, required: true },
-    employeeId: { type: String, default: null }
+    employeeId: { type: String, default: null },
+    studentId: { type: String, default: null },
+    CoInventorType: { type: String, default: 'faculty' }
 }, { _id: false });
 
 const PatentSchema = new mongoose.Schema({
@@ -29,6 +31,7 @@ const PatentSchema = new mongoose.Schema({
     patentFiledCountry: { type: String, required: true, default: 'India' },
     patentStatus: { type: String, required: true }, // 'Filed', 'Published', etc.
     coInventors: [CoInventorSchema],
+    isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
     month: { type: String },
     year: { type: String },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
@@ -53,6 +56,11 @@ const PatentSchema = new mongoose.Schema({
     },
     incentiveClaimant: {
         type: String,
+        default: null
+    },
+    appraisalEligible: {
+        type: String,
+        enum: ['Yes', 'No'],
         default: null
     },
     
