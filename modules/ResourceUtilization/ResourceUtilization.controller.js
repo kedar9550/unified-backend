@@ -656,6 +656,38 @@ exports.submitAcademicYear = async (req, res) => {
             { status: 'Pending' }
         );
 
+        if (result.modifiedCount > 0) {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const emp = await Employee.findById(req.user.userId);
+            
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: bossUserId,
+                        senderId: req.user.userId,
+                        module: 'Value Addition',
+                        type: 'INFO',
+                        title: 'Resource Utilization Submission',
+                        message: `${emp.name || 'A faculty member'} has submitted ${result.modifiedCount} Resource Utilization activity(ies) for approval.`,
+                        link: '/hod/value-addition/resource-utilization'
+                    });
+                }
+
+                // Send confirmation to the faculty who submitted
+                await NotificationService.sendNotification({
+                    recipientId: req.user.userId,
+                    senderId: req.user.userId,
+                    module: 'Value Addition',
+                    type: 'INFO',
+                    title: 'Resource Utilization Submitted',
+                    message: `Your Resource Utilization drafts have been successfully submitted and are currently Pending.`,
+                    link: '/value-addition/resource-utilization'
+                });
+            }
+        }
+
         res.json({
             success: true,
             message: `Successfully submitted ${result.modifiedCount} activities for approval.`
@@ -729,6 +761,20 @@ exports.hodAction = async (req, res) => {
             await syncAppraisalOnResourceUtilizationRejection([id]);
         }
 
+        const NotificationService = require('../notification/notification.service');
+        const actionType = action === 'Approve' ? 'SUCCESS' : 'REJECTED';
+        const actionText = action === 'Approve' ? 'approved' : 'rejected';
+        
+        await NotificationService.sendNotification({
+            recipientId: record.facultyId,
+            senderId: req.user.userId,
+            module: 'Value Addition',
+            type: actionType,
+            title: `Resource Utilization ${action}`,
+            message: `Your Resource Utilization activity "${record.activityCategory} - ${record.activityType}" has been ${actionText}.${comment ? ' Comment: ' + comment : ''}`,
+            link: '/value-addition/resource-utilization'
+        });
+
         res.json({ success: true, data: record });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -766,6 +812,30 @@ exports.bulkHODAction = async (req, res) => {
         // Sync appraisal status if rejection
         if (action === 'Reject') {
             await syncAppraisalOnResourceUtilizationRejection(ids);
+        }
+
+        const NotificationService = require('../notification/notification.service');
+        const records = await ResourceUtilization.find({ _id: { $in: ids } }).select('facultyId');
+        
+        const facultyCountMap = {};
+        records.forEach(r => {
+            const fId = r.facultyId.toString();
+            facultyCountMap[fId] = (facultyCountMap[fId] || 0) + 1;
+        });
+
+        const actionType = action === 'Approve' ? 'SUCCESS' : 'REJECTED';
+        const actionText = action === 'Approve' ? 'approved' : 'rejected';
+
+        for (const [facultyId, count] of Object.entries(facultyCountMap)) {
+            await NotificationService.sendNotification({
+                recipientId: facultyId,
+                senderId: req.user.userId,
+                module: 'Value Addition',
+                type: actionType,
+                title: `Resource Utilization ${action} (Bulk)`,
+                message: `${count} of your Resource Utilization activities have been ${actionText}.${comment ? ' Comment: ' + comment : ''}`,
+                link: '/value-addition/resource-utilization'
+            });
         }
 
         res.json({
