@@ -631,6 +631,38 @@ exports.submitAcademicYear = async (req, res) => {
             { status: 'Pending' }
         );
 
+        if (result.modifiedCount > 0) {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const emp = await Employee.findById(req.user.userId);
+            
+            if (emp) {
+                const bossUserId = await getReportingBossId(req.user.userId);
+                if (bossUserId) {
+                    await NotificationService.sendNotification({
+                        recipientId: bossUserId,
+                        senderId: req.user.userId,
+                        module: 'Value Addition',
+                        type: 'INFO',
+                        title: 'Value Addition Submission',
+                        message: `${emp.name || 'A faculty member'} has submitted ${result.modifiedCount} Value Addition contribution(s) for approval.`,
+                        link: '/hod/value-addition/contribution'
+                    });
+                }
+
+                // Send confirmation to the faculty who submitted
+                await NotificationService.sendNotification({
+                    recipientId: req.user.userId,
+                    senderId: req.user.userId,
+                    module: 'Value Addition',
+                    type: 'INFO',
+                    title: 'Value Addition Submitted',
+                    message: `Your Value Addition drafts have been successfully submitted and are currently Pending.`,
+                    link: '/faculty/contribution'
+                });
+            }
+        }
+
         res.json({
             success: true,
             message: `Successfully submitted ${result.modifiedCount} contributions for approval.`
@@ -689,7 +721,7 @@ exports.hodAction = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please specify a valid action (Approve or Reject)." });
         }
 
-        const record = await Contribution.findById(id);
+        const record = await Contribution.findById(id).populate('category');
         if (!record) {
             return res.status(404).json({ success: false, message: "Record not found." });
         }
@@ -707,6 +739,20 @@ exports.hodAction = async (req, res) => {
         if (action === 'Reject') {
             await syncAppraisalOnContributionRejection([id]);
         }
+
+        const NotificationService = require('../notification/notification.service');
+        const actionType = action === 'Approve' ? 'SUCCESS' : 'REJECTED';
+        const actionText = action === 'Approve' ? 'approved' : 'rejected';
+        
+        await NotificationService.sendNotification({
+            recipientId: record.facultyId,
+            senderId: req.user.userId,
+            module: 'Value Addition',
+            type: actionType,
+            title: `Value Addition ${action}`,
+            message: `Your Value Addition contribution in category "${record.category?.name || 'Unknown'}" has been ${actionText}.${comment ? ' Comment: ' + comment : ''}`,
+            link: '/faculty/value-addition'
+        });
 
         res.json({ success: true, data: record });
     } catch (err) {
@@ -745,6 +791,30 @@ exports.bulkHODAction = async (req, res) => {
         // Sync appraisal status if rejection
         if (action === 'Reject') {
             await syncAppraisalOnContributionRejection(ids);
+        }
+
+        const NotificationService = require('../notification/notification.service');
+        const records = await Contribution.find({ _id: { $in: ids } }).select('facultyId');
+        
+        const facultyCountMap = {};
+        records.forEach(r => {
+            const fId = r.facultyId.toString();
+            facultyCountMap[fId] = (facultyCountMap[fId] || 0) + 1;
+        });
+
+        const actionType = action === 'Approve' ? 'SUCCESS' : 'REJECTED';
+        const actionText = action === 'Approve' ? 'approved' : 'rejected';
+
+        for (const [facultyId, count] of Object.entries(facultyCountMap)) {
+            await NotificationService.sendNotification({
+                recipientId: facultyId,
+                senderId: req.user.userId,
+                module: 'Value Addition',
+                type: actionType,
+                title: `Value Addition ${action} (Bulk)`,
+                message: `${count} of your Value Addition contributions have been ${actionText}.${comment ? ' Comment: ' + comment : ''}`,
+                link: '/faculty/value-addition'
+            });
         }
 
         res.json({

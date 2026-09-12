@@ -69,8 +69,18 @@ class NotificationService {
                         const researchModules = ['Research', 'Journal', 'Conference', 'BookChapter', 'Textbook', 'Patent', 'FundedProject', 'Consultancy', 'NovelProduct'];
                         if (researchModules.includes(module) || link.includes('/research') || link.includes('/hod') || link.includes('/research-dean') || link.includes('/research-coordinator')) {
                             if (link.includes('/hod/')) {
-                                if (roles.includes('HOD')) {
-                                    data.metadata.targetRole = 'HOD';
+                                const evaluatorRoles = [
+                                    'HOD', 'DEPARTMENT_HOD', 'DEPARTMENT HOD', 'SCHOOL_DEAN', 'SCHOOL DEAN',
+                                    'REGISTRAR', 'VICE CHANCELLOR', 'VICE_CHANCELLOR', 'DY. PRO CHANCELLOR', 'DY_PRO_CHANCELLOR',
+                                    'PRO VICE-CHANCELLOR (E & S)', 'PRO_VICE_CHANCELLOR_E_S',
+                                    'PRO VICE-CHANCELLOR (A)', 'PRO_VICE_CHANCELLOR_A',
+                                    'PRO VICE-CHANCELLOR (S & P)', 'PRO_VICE_CHANCELLOR_S_P',
+                                    'DEAN - (IQAC)', 'DEAN_IQAC', 'DEAN - (ADMISSIONS)', 'DEAN_ADMISSIONS',
+                                    'CONTROLLER OF EXAMINATIONS', 'CONTROLLER_OF_EXAMINATIONS'
+                                ];
+                                const matchedEvaluator = evaluatorRoles.find(r => roles.includes(r));
+                                if (matchedEvaluator) {
+                                    data.metadata.targetRole = matchedEvaluator;
                                 }
                             } else if (link.includes('/research-dean/')) {
                                 if (roles.includes('RESEARCH_DEAN')) {
