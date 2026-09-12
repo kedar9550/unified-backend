@@ -323,6 +323,11 @@ exports.updateProject = async (req, res) => {
             project.sanctionOrder = `/uploads/funded-projects/${req.file.filename}`;
         }
 
+        if ((data.deleteSanctionOrder === 'true' || data.deleteSanctionLetter === 'true') && !req.file) {
+            deleteOldFile(project.sanctionOrder);
+            project.sanctionOrder = null;
+        }
+
         await project.save();
 
         res.json({ success: true, data: project });

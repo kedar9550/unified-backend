@@ -387,6 +387,19 @@ exports.updateTextbook = async (req, res) => {
             }
         }
 
+        if (data.deleteCoverPage === 'true' && (!req.files || !req.files.coverPage)) {
+            deleteOldFile(textbook.coverPage);
+            textbook.coverPage = null;
+        }
+        if (data.deleteAuthorAffiliation === 'true' && (!req.files || !req.files.authorAffiliation)) {
+            deleteOldFile(textbook.authorAffiliation);
+            textbook.authorAffiliation = null;
+        }
+        if (data.deleteIndex === 'true' && (!req.files || !req.files.index)) {
+            deleteOldFile(textbook.index);
+            textbook.index = null;
+        }
+
         await textbook.save();
 
         if (data.edition) {

@@ -264,6 +264,40 @@ exports.updateConsultancy = async (req, res) => {
         consultancy.hodComment = '';
         consultancy.rndComment = '';
 
+        const fs = require('fs');
+        const path = require('path');
+        const deleteOldFile = (oldPath) => {
+            if (oldPath) {
+                try {
+                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+                    const fullPath = path.join(__dirname, '../..', cleanPath);
+                    if (fs.existsSync(fullPath)) {
+                        fs.unlinkSync(fullPath);
+                    }
+                } catch (e) {}
+            }
+        };
+
+        if (req.files) {
+            if (req.files.sanctionLetter) {
+                deleteOldFile(consultancy.sanctionLetter);
+                consultancy.sanctionLetter = `/uploads/consultancies/${req.files.sanctionLetter[0].filename}`;
+            }
+            if (req.files.mou) {
+                deleteOldFile(consultancy.mou);
+                consultancy.mou = `/uploads/consultancies/${req.files.mou[0].filename}`;
+            }
+        }
+
+        if (data.deleteSanctionLetter === 'true' && (!req.files || !req.files.sanctionLetter)) {
+            deleteOldFile(consultancy.sanctionLetter);
+            consultancy.sanctionLetter = null;
+        }
+        if (data.deleteMou === 'true' && (!req.files || !req.files.mou)) {
+            deleteOldFile(consultancy.mou);
+            consultancy.mou = null;
+        }
+
         await consultancy.save();
 
         res.json({ success: true, data: consultancy });
