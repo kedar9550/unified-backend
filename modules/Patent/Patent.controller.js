@@ -319,6 +319,15 @@ exports.updatePatent = async (req, res) => {
             }
         }
 
+        if (data.deleteEFilingReceipt === 'true' && (!req.files || !req.files.eFilingReceipt)) {
+            deleteOldFile(patent.eFilingReceipt);
+            patent.eFilingReceipt = null;
+        }
+        if (data.deleteForm1 === 'true' && (!req.files || !req.files.form1)) {
+            deleteOldFile(patent.form1);
+            patent.form1 = null;
+        }
+
         await patent.save();
 
         res.json({ success: true, data: patent });

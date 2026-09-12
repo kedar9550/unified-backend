@@ -329,6 +329,23 @@ exports.updateBookChapter = async (req, res) => {
             }
         }
 
+        if (data.deleteCoverPage === 'true' && (!req.files || !req.files.coverPage)) {
+            deleteOldFile(bookChapter.coverPage);
+            bookChapter.coverPage = null;
+        }
+        if (data.deleteAuthorAffiliation === 'true' && (!req.files || !req.files.authorAffiliation)) {
+            deleteOldFile(bookChapter.authorAffiliation);
+            bookChapter.authorAffiliation = null;
+        }
+        if (data.deleteIndex === 'true' && (!req.files || !req.files.index)) {
+            deleteOldFile(bookChapter.index);
+            bookChapter.index = null;
+        }
+        if (data.deleteSoftCopy === 'true' && (!req.files || !req.files.softCopy)) {
+            deleteOldFile(bookChapter.softCopy);
+            bookChapter.softCopy = null;
+        }
+
         await bookChapter.save();
 
         res.json({ success: true, data: bookChapter });

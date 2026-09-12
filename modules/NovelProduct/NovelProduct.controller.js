@@ -291,6 +291,20 @@ exports.updateNovelProduct = async (req, res) => {
         if (req.file) {
             deleteOldFile(product.document);
             product.document = `/uploads/novelProducts/${req.file.filename}`;
+        } else if (req.files) {
+            if (req.files.document) {
+                deleteOldFile(product.document);
+                product.document = `/uploads/novelProducts/${req.files.document[0].filename}`;
+            }
+            if (req.files.proofDocument) {
+                deleteOldFile(product.document);
+                product.document = `/uploads/novelProducts/${req.files.proofDocument[0].filename}`;
+            }
+        }
+
+        if ((data.deleteDocument === 'true' || data.deleteProofDocument === 'true') && !req.file && (!req.files || (!req.files.document && !req.files.proofDocument))) {
+            deleteOldFile(product.document);
+            product.document = null;
         }
 
         await product.save();
