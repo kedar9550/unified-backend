@@ -243,6 +243,23 @@ exports.syncEmployeeRoles = async (req, res, next) => {
             });
         }
 
+        const uniqueRoleKeys = [
+            'VICE CHANCELLOR',
+            'DY. PRO CHANCELLOR',
+            'REGISTRAR',
+            'CONTROLLER OF EXAMINATIONS',
+            'DEAN - (IQAC)',
+            'DEAN - (ADMISSIONS)',
+            'PRO VICE-CHANCELLOR (E & S)',
+            'PRO VICE-CHANCELLOR (A)',
+            'PRO VICE-CHANCELLOR (S & P)',
+            'COE', 'DEAN', 'REGISTRAR', 'VC', 'DEPUTY' // Adding common keys just in case
+        ].map(k => k.toUpperCase());
+        const uniqueRolesAssigned = selectedRoles.filter(r => 
+            uniqueRoleKeys.includes((r.name || "").toUpperCase()) || 
+            uniqueRoleKeys.includes((r.key || "").toUpperCase())
+        );
+
         // 4. Update mappings
         await EmployeeAppRole.deleteMany({ userId, app });
 
@@ -290,6 +307,15 @@ exports.syncEmployeeRoles = async (req, res, next) => {
                 role: deanRole._id,
                 userId: { $ne: userId },
                 schools: { $size: 0 }
+            });
+        }
+
+        // Ensure no other user has unique roles (VC, Registrar, etc.)
+        if (uniqueRolesAssigned.length > 0) {
+            const uniqueRoleIds = uniqueRolesAssigned.map(r => r._id);
+            await EmployeeAppRole.deleteMany({
+                role: { $in: uniqueRoleIds },
+                userId: { $ne: userId }
             });
         }
 
