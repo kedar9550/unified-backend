@@ -479,10 +479,10 @@ exports.rndAction = async (req, res) => {
 
         patent.status = status;
         patent.rndComment = comment;
-        if (approvedAmount !== undefined) {
+        if (action === 'Approve' && approvedAmount !== undefined) {
             patent.approvedAmount = approvedAmount;
         }
-        if (req.body.appraisalEligible !== undefined) {
+        if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             patent.appraisalEligible = req.body.appraisalEligible;
         }
 

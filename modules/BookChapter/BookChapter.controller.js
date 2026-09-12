@@ -488,10 +488,10 @@ exports.rndAction = async (req, res) => {
 
         chapter.status = status;
         chapter.rndComment = comment;
-        if (approvedAmount !== undefined) {
+        if (action === 'Approve' && approvedAmount !== undefined) {
             chapter.approvedAmount = approvedAmount;
         }
-        if (req.body.appraisalEligible !== undefined) {
+        if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             chapter.appraisalEligible = req.body.appraisalEligible;
         }
 

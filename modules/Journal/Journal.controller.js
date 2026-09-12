@@ -567,13 +567,15 @@ exports.rndAction = async (req, res) => {
 
         journal.status = status;
         journal.rndComment = comment;
-        if (approvedAmount !== undefined) journal.approvedAmount = approvedAmount;
+        if (action === 'Approve' && approvedAmount !== undefined) journal.approvedAmount = approvedAmount;
         if (req.body.hIndex !== undefined) journal.hIndex = req.body.hIndex;
         if (finalJcrImpactFactor !== undefined) journal.jcrImpactFactor = finalJcrImpactFactor;
         if (req.body.citations !== undefined) journal.citations = req.body.citations;
         if (req.body.journalQuartile !== undefined) journal.journalQuartile = req.body.journalQuartile;
         if (req.body.journalType !== undefined) journal.journalType = req.body.journalType;
-        if (req.body.appraisalEligible !== undefined) journal.appraisalEligible = req.body.appraisalEligible;
+        if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
+            journal.appraisalEligible = req.body.appraisalEligible;
+        }
 
         // Auto-assign logic for Appraisal Claimant
         if (status === 'Approved' && req.body.appraisalEligible === 'Yes') {
