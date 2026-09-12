@@ -550,6 +550,17 @@ exports.saveAppraisalConfig = async (req, res) => {
         }
 
         let config = await AppraisalConfig.findOne({ academicYearId });
+
+        // If we're about to activate this config, first deactivate all others
+        // This MUST happen before saving the new active config to avoid
+        // E11000 duplicate key error on the unique isActive:true index
+        if (isActive === true || isActive === 'true') {
+            await AppraisalConfig.updateMany(
+                { academicYearId: { $ne: academicYearId } },
+                { $set: { isActive: false } }
+            );
+        }
+
         if (config) {
             config.teaching = teaching || config.teaching;
             config.research = research || config.research;
@@ -577,13 +588,6 @@ exports.saveAppraisalConfig = async (req, res) => {
                 lastUpdatedBy: req.user.userId
             });
             await config.save();
-        }
-
-        if (config.isActive) {
-            await AppraisalConfig.updateMany(
-                { _id: { $ne: config._id } },
-                { $set: { isActive: false } }
-            );
         }
 
         res.json({ success: true, data: config });
