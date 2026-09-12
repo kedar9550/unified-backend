@@ -415,6 +415,16 @@ exports.updateConference = async (req, res) => {
             }
         }
 
+        // Handle explicit removal of files without replacement
+        if (data.deleteCertificate === 'true' && !req.files?.certificate) {
+            deleteOldFile(conference.certificate);
+            conference.certificate = null;
+        }
+        if (data.deleteProceedings === 'true' && !req.files?.proceedings) {
+            deleteOldFile(conference.proceedings);
+            conference.proceedings = null;
+        }
+
         await conference.save();
 
         res.json({ success: true, data: conference });
@@ -539,10 +549,10 @@ exports.rndAction = async (req, res) => {
 
         conference.status = status;
         conference.rndComment = comment;
-        if (approvedAmount !== undefined) {
+        if (action === 'Approve' && approvedAmount !== undefined) {
             conference.approvedAmount = approvedAmount;
         }
-        if (req.body.appraisalEligible !== undefined) {
+        if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             conference.appraisalEligible = req.body.appraisalEligible;
         }
 
