@@ -87,6 +87,11 @@ const NovelProductSchema = new mongoose.Schema({
     },
     rndComment: {
         type: String
+    },
+    entryType: {
+        type: String,
+        enum: ['Self', 'Admin'],
+        default: 'Self'
     }
 }, { 
     timestamps: true 

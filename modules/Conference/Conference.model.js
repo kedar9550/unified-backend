@@ -74,6 +74,11 @@ const ConferenceSchema = new mongoose.Schema({
         enum: ['Yes', 'No'],
         default: null
     },
+    entryType: {
+        type: String,
+        enum: ['Self', 'Admin'],
+        default: 'Self'
+    },
 
     createdAt: {
         type: Date,

@@ -21,12 +21,14 @@ const BookChapterSchema = new mongoose.Schema({
         ref: 'AcademicYear',
         required: true
     },
+    entryType: { type: String, enum: ['Self', 'Admin'], default: 'Self' },
     college: { type: String },
     panNumber: { type: String },
 
     textBookName: { type: String, required: true },
     chapterTitle: { type: String, required: true, unique: true },
     doi: { type: String, unique: true, sparse: true },
+    scopusIndexed: { type: String, enum: ['Yes', 'No', 'Not Available'], default: 'Not Available' },
     isbnNumber: { type: String },
     yearOfPublication: { type: String, required: true },
 

@@ -69,6 +69,11 @@ const FundedProjectSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    entryType: {
+        type: String,
+        enum: ['Self', 'Admin'],
+        default: 'Self'
+    },
     
     createdAt: {
         type: Date,
