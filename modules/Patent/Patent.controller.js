@@ -9,7 +9,7 @@ const { isFutureDate } = require('../../utils/validationHelper');
 exports.createPatent = async (req, res) => {
     try {
         const data = req.body;
-        
+
         // 1. Mandatory Fields Validation
         if (!data.title || !data.patentName || !data.applyingSeedGrant || !data.dateOfFiling || !data.filingNo || !data.patentFiledCountry) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
@@ -25,9 +25,9 @@ exports.createPatent = async (req, res) => {
         for (const field of filesToCheck) {
             if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                return res.status(400).json({ 
-                    success: false, 
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.` 
+                return res.status(400).json({
+                    success: false,
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
             }
         }
@@ -40,9 +40,9 @@ exports.createPatent = async (req, res) => {
         });
 
         if (existingRecord) {
-            return res.status(400).json({ 
-                success: false, 
-                message: "A patent entry with this title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one." 
+            return res.status(400).json({
+                success: false,
+                message: "A patent entry with this title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
             });
         }
 
@@ -67,7 +67,7 @@ exports.createPatent = async (req, res) => {
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInventors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
 
-        
+
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
@@ -85,8 +85,8 @@ exports.createPatent = async (req, res) => {
                 return [roleName, roleKey, roleDirect].filter(Boolean);
             });
             const isRndAdmin = activeRole === 'RESEARCH_DEAN' || activeRole === 'RESEARCH_COORDINATOR' ||
-                               userRoles.includes('RESEARCH_DEAN') || userRoles.includes('RESEARCH_COORDINATOR') ||
-                               userRoles.includes('RESEARCH DEAN') || userRoles.includes('ADMIN');
+                userRoles.includes('RESEARCH_DEAN') || userRoles.includes('RESEARCH_COORDINATOR') ||
+                userRoles.includes('RESEARCH DEAN') || userRoles.includes('ADMIN');
 
             if (!isRndAdmin) {
                 return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
@@ -97,8 +97,8 @@ exports.createPatent = async (req, res) => {
                 return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
             }
 
-            const targetFaculty = await Employee.findOne({ 
-                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            const targetFaculty = await Employee.findOne({
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i')
             });
 
             if (!targetFaculty) {
@@ -130,6 +130,7 @@ exports.createPatent = async (req, res) => {
             title: trimmedTitle,
             facultyId: finalFacultyId,
             coInventors: resolvedAuthors,
+            patentFiledInInstitution: data.patentFiledInInstitution || 'Yes',
             patentStatus: data.status, // Map 'status' from frontend to 'patentStatus' in model
             appraisalClaimant,
             status: finalStatus,
@@ -163,14 +164,14 @@ exports.createPatent = async (req, res) => {
                         type: 'INFO',
                         title: 'New Research Submission',
                         message: `${emp.name || 'A faculty member'} has submitted a new Patent: ${patent.title}`,
-                        link: `/research/approvals`, 
+                        link: `/research/approvals`,
                         metadata: { targetRole: "ReportingBoss" }
                     });
                 }
             }
 
             if (data.isDirectEntry === 'true' && finalFacultyId.toString() !== req.user.userId) {
-                 await NotificationService.sendNotification({
+                await NotificationService.sendNotification({
                     recipientId: finalFacultyId,
                     senderId: req.user.userId,
                     module: 'Research',
@@ -178,7 +179,7 @@ exports.createPatent = async (req, res) => {
                     title: 'Patent Added',
                     message: `R&D has directly added an approved Patent for you: ${patent.title}`,
                     link: `/faculty/research-metrics`
-                 });
+                });
             }
         } catch (notifErr) {
             console.error("Failed to send patent notification:", notifErr);
@@ -223,9 +224,9 @@ exports.updatePatent = async (req, res) => {
             for (const field of filesToCheck) {
                 if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                     const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    return res.status(400).json({ 
-                        success: false, 
-                        message: `${label} is too large. Maximum allowed size is 500KB.` 
+                    return res.status(400).json({
+                        success: false,
+                        message: `${label} is too large. Maximum allowed size is 500KB.`
                     });
                 }
             }
@@ -240,9 +241,9 @@ exports.updatePatent = async (req, res) => {
             });
 
             if (existingRecord) {
-                return res.status(400).json({ 
-                    success: false, 
-                    message: "A patent entry with this title already exists." 
+                return res.status(400).json({
+                    success: false,
+                    message: "A patent entry with this title already exists."
                 });
             }
         }
@@ -304,7 +305,7 @@ exports.updatePatent = async (req, res) => {
                     if (fs.existsSync(fullPath)) {
                         fs.unlinkSync(fullPath);
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
         };
 
@@ -343,7 +344,7 @@ exports.updatePatent = async (req, res) => {
 exports.getMyPatents = async (req, res) => {
     try {
         const user = await Employee.findById(req.user.userId);
-        
+
         const query = {
             $or: [
                 { facultyId: req.user.userId },
@@ -389,7 +390,7 @@ exports.getPatentById = async (req, res) => {
             })
             .populate('academicYear', 'year')
             .populate('coInventors.employeeId', 'name institutionId');
-            
+
         if (!patent) {
             return res.status(404).json({ success: false, message: 'Patent not found' });
         }
@@ -408,19 +409,19 @@ exports.getPendingAtHOD = async (req, res) => {
     try {
         const Employee = require('../employee/employee.model');
         const deptIds = await getHODDepartments(req.user);
-        
+
         const facultyIds = await Employee.find({
             $or: [
                 { coreDepartment: { $in: deptIds } },
                 { department: { $in: deptIds } }
             ]
         }).distinct('_id');
-        
-        const patents = await Patent.find({ 
+
+        const patents = await Patent.find({
             facultyId: { $in: facultyIds },
             status: 'Pending at HOD'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
-        
+
         res.json({ success: true, data: patents });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -436,9 +437,9 @@ exports.hodAction = async (req, res) => {
         const { action, comment } = req.body;
 
         const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
-        const patent = await Patent.findByIdAndUpdate(id, { 
-            status, 
-            hodComment: comment 
+        const patent = await Patent.findByIdAndUpdate(id, {
+            status,
+            hodComment: comment
         }, { new: true });
 
         res.json({ success: true, data: patent });

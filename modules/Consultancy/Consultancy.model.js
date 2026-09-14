@@ -69,7 +69,11 @@ const ConsultancySchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
-
+    entryType: {
+        type: String,
+        enum: ['Self', 'Admin'],
+        default: 'Self'
+    }
 });
 
 ConsultancySchema.pre('save', function () {
