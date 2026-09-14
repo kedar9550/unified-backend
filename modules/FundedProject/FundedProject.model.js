@@ -69,6 +69,11 @@ const FundedProjectSchema = new mongoose.Schema({
         type: String,
         default: null
     },
+    appraisalEligible: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: null
+    },
     entryType: {
         type: String,
         enum: ['Self', 'Admin'],

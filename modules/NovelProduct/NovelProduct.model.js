@@ -88,6 +88,11 @@ const NovelProductSchema = new mongoose.Schema({
     rndComment: {
         type: String
     },
+    appraisalEligible: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: null
+    },
     entryType: {
         type: String,
         enum: ['Self', 'Admin'],

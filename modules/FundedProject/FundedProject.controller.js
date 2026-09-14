@@ -467,7 +467,7 @@ exports.getPendingAtRND = async (req, res) => {
 exports.rndAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment, approvedAmount } = req.body;
+        const { action, comment, approvedAmount, appraisalEligible } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
         const project = await FundedProject.findById(id);
@@ -477,6 +477,8 @@ exports.rndAction = async (req, res) => {
 
         project.status = status;
         project.rndComment = comment;
+        if (appraisalEligible) project.appraisalEligible = appraisalEligible;
+        if (approvedAmount !== undefined) project.approvedAmount = approvedAmount;
 
         await project.save();
         res.json({ success: true, data: project });

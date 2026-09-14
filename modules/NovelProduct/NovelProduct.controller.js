@@ -118,6 +118,7 @@ exports.createNovelProduct = async (req, res) => {
             principalInvestigator: data.principalInvestigator || 'Yes',
             coDevelopers: resolvedAuthors,
             applyIncentive: 'No',
+            appraisalEligible: data.appraisalEligible || null,
             appraisalClaimants,
             incentiveClaimant: null,
             status: finalStatus,
@@ -439,7 +440,7 @@ exports.getPendingAtRND = async (req, res) => {
 exports.rndAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment } = req.body;
+        const { action, comment, appraisalEligible } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
         const product = await NovelProduct.findById(id);
@@ -449,6 +450,7 @@ exports.rndAction = async (req, res) => {
 
         product.status = status;
         product.rndComment = comment;
+        if (appraisalEligible) product.appraisalEligible = appraisalEligible;
 
         await product.save();
         res.json({ success: true, data: product });

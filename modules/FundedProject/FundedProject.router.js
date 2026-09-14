@@ -35,17 +35,19 @@ const upload = multer({
 router.post('/', protect, upload.single('sanctionOrder'), projectController.createProject);
 
 router.get('/', protect, projectController.getMyProjects);
+
+// HOD: View pending and Action  (must be before /:id)
+router.get('/pending-hod', protect, authorize('HOD'), projectController.getPendingAtHOD);
+router.put('/hod-action/:id', protect, authorize('HOD'), projectController.hodAction);
+
+// R&D: View pending and Action  (must be before /:id)
+router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), projectController.getPendingAtRND);
+router.put('/rnd-action/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), projectController.rndAction);
+
+// Generic ID routes (must be AFTER specific named routes)
 router.get('/:id', protect, projectController.getProjectById);
 
 // Faculty: Update/Resubmit rejected project
 router.put('/:id', protect, upload.single('sanctionOrder'), projectController.updateProject);
-
-// HOD: View pending and Action
-router.get('/pending-hod', protect, authorize('HOD'), projectController.getPendingAtHOD);
-router.put('/hod-action/:id', protect, authorize('HOD'), projectController.hodAction);
-
-// R&D: View pending and Action
-router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), projectController.getPendingAtRND);
-router.put('/rnd-action/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), projectController.rndAction);
 
 module.exports = router;

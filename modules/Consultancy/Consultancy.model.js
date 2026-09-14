@@ -69,6 +69,11 @@ const ConsultancySchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
+    appraisalEligible: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: null
+    },
     entryType: {
         type: String,
         enum: ['Self', 'Admin'],

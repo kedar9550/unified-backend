@@ -392,7 +392,7 @@ exports.hodAction = async (req, res) => {
 exports.rndAction = async (req, res) => {
     try {
         const { id } = req.params;
-        const { action, comment, approvedAmount } = req.body;
+        const { action, comment, approvedAmount, appraisalEligible } = req.body;
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
         const consultancy = await Consultancy.findById(id);
@@ -402,6 +402,8 @@ exports.rndAction = async (req, res) => {
 
         consultancy.status = status;
         consultancy.rndComment = comment;
+        if (appraisalEligible) consultancy.appraisalEligible = appraisalEligible;
+        if (approvedAmount !== undefined) consultancy.approvedAmount = approvedAmount;
 
         await consultancy.save();
         res.json({ success: true, data: consultancy });

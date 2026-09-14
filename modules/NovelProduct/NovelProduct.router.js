@@ -36,17 +36,19 @@ const upload = multer({
 // Faculty: Submit and View own history
 router.post('/', protect, upload.single('document'), novelProductController.createNovelProduct);
 router.get('/', protect, novelProductController.getMyNovelProducts);
+
+// HOD: View pending and Action (must be before /:id)
+router.get('/pending-hod', protect, authorize('HOD'), novelProductController.getPendingAtHOD);
+router.put('/hod-action/:id', protect, authorize('HOD'), novelProductController.hodAction);
+
+// R&D: View pending and Action (must be before /:id)
+router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), novelProductController.getPendingAtRND);
+router.put('/rnd-action/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), novelProductController.rndAction);
+
+// Generic ID routes (must be AFTER specific named routes)
 router.get('/:id', protect, novelProductController.getNovelProductById);
 
 // Faculty: Update/Resubmit rejected product
 router.put('/:id', protect, upload.single('document'), novelProductController.updateNovelProduct);
-
-// HOD: View pending and Action
-router.get('/pending-hod', protect, authorize('HOD'), novelProductController.getPendingAtHOD);
-router.put('/hod-action/:id', protect, authorize('HOD'), novelProductController.hodAction);
-
-// R&D: View pending and Action
-router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), novelProductController.getPendingAtRND);
-router.put('/rnd-action/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), novelProductController.rndAction);
 
 module.exports = router;
