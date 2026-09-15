@@ -97,34 +97,31 @@ exports.createPhdApplication = async (req, res) => {
             });
         }
 
-        // 4. Duplicate checks
-        // a) Same faculty cannot apply twice for the same scholar
-        const existingEmp = await PhdApplication.findOne({
+        // 4. Duplicate check based on same student (rollNumber) + same type (guide/co-guide) + same scholarStatus
+        const supervisionType = (data.type || '').toLowerCase() === 'co-guide' ? 'co-guide' : 'guide';
+        const roleLabel = supervisionType === 'co-guide' ? 'Co-Guide' : 'Guide';
+
+        const existingApp = await PhdApplication.findOne({
             rollNumber: rollNo,
-            facultyId: req.user.userId,
+            type: supervisionType,
             scholarStatus: data.scholarStatus
-        });
+            // No status filter — block duplicates regardless of any status (including rejected).
+            // Rejected records can be re-edited and resubmitted, so a new duplicate is never needed.
+        }).populate('facultyId', 'name institutionId');
 
-        if (existingEmp) {
+        if (existingApp) {
+            const facultyName = existingApp.facultyId ? existingApp.facultyId.name : "a faculty member";
+            const isSameUser = existingApp.facultyId && existingApp.facultyId._id.toString() === req.user.userId;
+            const isRejected = existingApp.status && existingApp.status.toLowerCase().includes('rejected');
             return res.status(400).json({
                 success: false,
-                message: `You have already submitted an application for this scholar with status "${data.scholarStatus}". If it was rejected, please use the Edit & Resubmit option instead.`
-            });
-        }
-
-        // b) Only one 'guide' can exist per scholar
-        const existingGuide = await PhdApplication.findOne({
-            rollNumber: rollNo,
-            type: 'guide',
-            scholarStatus: data.scholarStatus,
-            status: { $in: ['Pending at HOD', 'Pending at R&D', 'Approved'] }
-        });
-
-        if (existingGuide) {
-            const guide = await Employee.findById(existingGuide.facultyId).select('name');
-            return res.status(400).json({
-                success: false,
-                message: `This scholar roll number is already registered under guide ${guide ? guide.name : "another faculty"} with status "${data.scholarStatus}".`
+                message: isSameUser
+                    ? isRejected
+                        ? `You already have a rejected application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}". Please edit and resubmit the existing one instead of creating a new entry.`
+                        : `You have already submitted an application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}".`
+                    : isRejected
+                        ? `A rejected application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}" exists under ${facultyName}. It must be resubmitted rather than duplicated.`
+                        : `An application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}" has already been registered under ${facultyName}.`
             });
         }
 
@@ -183,7 +180,8 @@ exports.createPhdApplication = async (req, res) => {
             admissionOrAwardDate: data.admissionOrAwardDate,
             document: `/uploads/phdScholars/${req.file.filename}`,
             status: finalStatus,
-            entryType: finalEntryType
+            entryType: finalEntryType,
+            type: supervisionType
         });
 
         await application.save();
@@ -289,30 +287,42 @@ exports.updatePhdApplication = async (req, res) => {
             }
         }
 
-        // Duplicate checks
+        // Duplicate checks based on student + type + scholarStatus
         const checkScholarStatus = data.scholarStatus || application.scholarStatus;
-        const existingEmp = await PhdApplication.findOne({
+        const checkType = (data.type || application.type || 'guide').toLowerCase() === 'co-guide' ? 'co-guide' : 'guide';
+        const roleLabel = checkType === 'co-guide' ? 'Co-Guide' : 'Guide';
+
+        const existingApp = await PhdApplication.findOne({
             _id: { $ne: id },
             rollNumber: rollNo,
-            facultyId: req.user.userId,
+            type: checkType,
             scholarStatus: checkScholarStatus
-        });
+            // No status filter — block duplicates regardless of any status (including rejected).
+        }).populate('facultyId', 'name institutionId');
 
-        if (existingEmp) {
+        if (existingApp) {
+            const facultyName = existingApp.facultyId ? existingApp.facultyId.name : "a faculty member";
+            const isSameUser = existingApp.facultyId && existingApp.facultyId._id.toString() === req.user.userId;
             return res.status(400).json({
                 success: false,
-                message: `You already have an application for this scholar with status "${checkScholarStatus}".`
+                message: isSameUser
+                    ? `You already have an existing application for this scholar (${rollNo}) as ${roleLabel} with status "${checkScholarStatus}".`
+                    : `An application for this scholar (${rollNo}) as ${roleLabel} with status "${checkScholarStatus}" already exists under ${facultyName}.`
             });
         }
 
+        const oldDocument = application.document;
+
         // Update fields
         Object.keys(data).forEach(key => {
-            if (key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+            if (key !== 'status' && key !== 'facultyId' && key !== 'document' && data[key] !== undefined) {
                 application[key] = data[key];
             }
         });
 
         application.rollNumber = rollNo;
+        application.type = checkType;
+        application.scholarStatus = checkScholarStatus;
         application.status = 'Pending at R&D'; // Resubmit
         application.hodComment = '';
         application.rndComment = '';
@@ -327,12 +337,14 @@ exports.updatePhdApplication = async (req, res) => {
                     if (fs.existsSync(fullPath)) {
                         fs.unlinkSync(fullPath);
                     }
-                } catch (e) {}
+                } catch (e) {
+                    console.error("Failed to delete old file:", oldPath, e);
+                }
             }
         };
 
         if (req.file) {
-            deleteOldFile(application.document);
+            deleteOldFile(oldDocument);
             application.document = `/uploads/phdScholars/${req.file.filename}`;
         }
 
