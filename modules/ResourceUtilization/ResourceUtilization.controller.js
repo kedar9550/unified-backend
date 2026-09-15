@@ -38,13 +38,56 @@ exports.createResourceUtilization = async (req, res) => {
             data.organizationName = data.courseFdpName;
         }
 
+        const isDirectEntry = data.isDirectEntry === 'true' || data.isDirectEntry === true;
+        let targetUserId = req.user.userId;
+        let finalStatus = 'Draft';
+
+        if (isDirectEntry) {
+            const activeRole = (req.headers['active-role'] || req.user?.role || '').toUpperCase().trim();
+            const userRoles = (req.user?.roles || []).flatMap(r => {
+                const roleName = (r.role?.name || '').toUpperCase().trim();
+                const roleKey = (r.role?.key || '').toUpperCase().trim();
+                const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+                return [roleName, roleKey, roleDirect].filter(Boolean);
+            });
+            const isUniprime = activeRole === 'UNIPRIME' || userRoles.includes('UNIPRIME') || userRoles.includes('ADMIN');
+
+            if (!isUniprime) {
+                return res.status(403).json({ success: false, message: "Only UNIPRIME can use direct entry." });
+            }
+
+            const targetEmpId = data.targetFacultyEmpId;
+            if (!targetEmpId) {
+                return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
+            }
+
+            const escapeRegex = (string) => {
+                return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            };
+
+            const targetFaculty = await Employee.findOne({ 
+                institutionId: new RegExp(`^${escapeRegex(targetEmpId.trim())}$`, 'i') 
+            });
+
+            if (!targetFaculty) {
+                return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
+            }
+
+            if (!targetFaculty.isActive) {
+                return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} is inactive.` });
+            }
+
+            targetUserId = targetFaculty._id;
+            finalStatus = 'Approved';
+        }
+
         // Validate mandatory text fields
         if (!data.academicYear || !data.activityCategory || !data.activityType || !data.organizationName || !data.eventStartDate || !data.eventEndDate) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
-        // 20 days validation
-        if (data.eventEndDate) {
+        // 21 days validation
+        if (data.eventEndDate && !isDirectEntry) {
             const end = new Date(data.eventEndDate);
             end.setHours(0, 0, 0, 0);
             const today = new Date();
@@ -53,8 +96,8 @@ exports.createResourceUtilization = async (req, res) => {
             const diffTime = today - end;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
-            if (diffDays > 20) {
-                return res.status(400).json({ success: false, message: "You cannot add activities that ended more than 20 days ago." });
+            if (diffDays > 21) {
+                return res.status(400).json({ success: false, message: "You cannot add activities that ended more than 3 weeks ago." });
             }
         }
 
@@ -240,7 +283,7 @@ exports.createResourceUtilization = async (req, res) => {
         fs.writeFileSync(filepath, req.file.buffer);
 
         const resourceUtilization = new ResourceUtilization({
-            facultyId: req.user.userId,
+            facultyId: targetUserId,
             academicYear: data.academicYear,
             activityCategory: data.activityCategory,
             activityType: data.activityType,
@@ -252,7 +295,7 @@ exports.createResourceUtilization = async (req, res) => {
             numberOfDaysParticipated: isParticipant && data.numberOfDaysParticipated ? parseInt(data.numberOfDaysParticipated) : undefined,
             numberOfDaysOrganized: isOrganized && data.numberOfDaysOrganized ? parseInt(data.numberOfDaysOrganized) : undefined,
             proof: `/uploads/resource-utilization/${filename}`,
-            status: 'Draft', // Always save as Draft first
+            status: finalStatus, // Direct entry saves as Approved, otherwise Draft
             certificateNumber: data.certificateNumber || undefined,
 
             // new FDP fields
@@ -671,7 +714,7 @@ exports.submitAcademicYear = async (req, res) => {
                         type: 'INFO',
                         title: 'Resource Utilization Submission',
                         message: `${emp.name || 'A faculty member'} has submitted ${result.modifiedCount} Resource Utilization activity(ies) for approval.`,
-                        link: '/hod/value-addition/resource-utilization'
+                        link: '/value-addition/resource-utilization'
                     });
                 }
 
