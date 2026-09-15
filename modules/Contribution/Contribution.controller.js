@@ -658,7 +658,7 @@ exports.submitAcademicYear = async (req, res) => {
                     type: 'INFO',
                     title: 'Value Addition Submitted',
                     message: `Your Value Addition drafts have been successfully submitted and are currently Pending.`,
-                    link: '/faculty/contribution'
+                    link: '/value-addition/contribution'
                 });
             }
         }
