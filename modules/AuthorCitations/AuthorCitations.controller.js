@@ -98,7 +98,7 @@ exports.getList = async (req, res, next) => {
                 latestYear: year,
                 latestValue: value
             };
-        });
+        }).filter(item => item.latestYear !== null);
 
         res.status(200).json({
             success: true,

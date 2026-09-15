@@ -334,6 +334,8 @@ exports.getRegistrations = async (req, res) => {
     if (req.query.select && typeof req.query.select === 'string') {
       const selectFields = req.query.select.split(',').map(f => f.trim()).filter(Boolean).join(' ');
       queryBuilder = queryBuilder.select(selectFields);
+    } else {
+      queryBuilder = queryBuilder.select('-rawPaymentData -participants.payment -participants.accommodationPayment.rawPaymentData -accommodationPayment.rawPaymentData');
     }
 
     const payments = await queryBuilder.lean();
@@ -674,6 +676,41 @@ exports.getStudentBranch = async (req, res) => {
   } catch (err) {
     console.error('Error fetching student branch:', err.message);
     return res.status(500).json({ error: 'Failed to fetch from Aditya API', details: err.message });
+  }
+};
+
+exports.getStudentBranchesBatch = async (req, res) => {
+  try {
+    const { rolls } = req.body;
+    if (!Array.isArray(rolls) || rolls.length === 0) {
+      return res.status(400).json({ error: 'A non-empty rolls array is required' });
+    }
+    if (rolls.length > 2000) {
+      return res.status(400).json({ error: 'Exceeded maximum batch size of 2000 rolls' });
+    }
+
+    const Student = require('../StudentData/Studentdata.model');
+    const students = await Student.find(
+      { rollNo: { $in: rolls } },
+      { rollNo: 1, 'academicInfo.branch': 1, _id: 0 }
+    ).lean();
+
+    const branches = {};
+    const foundRolls = new Set();
+    
+    students.forEach(student => {
+      foundRolls.add(student.rollNo);
+      if (student.academicInfo && student.academicInfo.branch) {
+        branches[student.rollNo] = student.academicInfo.branch;
+      }
+    });
+
+    const notFound = rolls.filter(roll => !foundRolls.has(roll));
+
+    return res.json({ branches, notFound });
+  } catch (err) {
+    console.error('Error fetching student branches batch:', err.message);
+    return res.status(500).json({ error: 'Failed to fetch from local DB', details: err.message });
   }
 };
 

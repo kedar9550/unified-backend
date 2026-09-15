@@ -82,5 +82,6 @@ PaymentRegistrationSchema.index({ razorpayPaymentId: 1 });
 PaymentRegistrationSchema.index({ "participants.roll": 1 });
 PaymentRegistrationSchema.index({ "participants.email": 1 });
 PaymentRegistrationSchema.index({ "participants.department": 1 });
+PaymentRegistrationSchema.index({ "participants.attended": 1 });
 
 module.exports = mongoose.model('PaymentRegistration', PaymentRegistrationSchema);

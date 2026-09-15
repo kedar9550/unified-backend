@@ -12,7 +12,7 @@ const corsOptions = {
         return callback(new Error('Not allowed by CORS'));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'active-role'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'active-role', 'skipgloballoader'],
     credentials: true,
 };
 

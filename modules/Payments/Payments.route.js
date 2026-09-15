@@ -42,6 +42,7 @@ router.get('/registrations/verify-gateway/:id', paymentsController.verifyGateway
 router.post('/registrations/verify-all-gateway', paymentsController.triggerVerifyAllPendingGateway);
 router.get('/registrations/verify-all-gateway', paymentsController.triggerVerifyAllPendingGateway);
 router.get('/registrations/branch/:roll', paymentsController.getStudentBranch);
+router.post('/registrations/branches', paymentsController.getStudentBranchesBatch);
 router.get('/payment-details/:paymentId', paymentsController.getRazorpayPaymentDetails);
 router.post('/manual-registration', paymentsController.manualAddRegistration);
 
