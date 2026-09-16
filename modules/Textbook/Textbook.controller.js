@@ -101,7 +101,7 @@ exports.createTextbook = async (req, res) => {
 
 
         const { getDefaultClaimant } = require('../../utils/claimantHelper');
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
         
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
@@ -339,7 +339,7 @@ exports.updateTextbook = async (req, res) => {
         }
 
         const { getDefaultClaimant } = require('../../utils/claimantHelper');
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : textbook.applyIncentive;
@@ -640,6 +640,11 @@ exports.rndAction = async (req, res) => {
         }
         if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             textbook.appraisalEligible = req.body.appraisalEligible;
+        }
+
+        // Scenario 2: If appraisalEligible = 'No', clear any previously auto-assigned claimant
+        if (status === 'Approved' && req.body.appraisalEligible === 'No') {
+            textbook.appraisalClaimant = null;
         }
 
         if (status === 'Approved' && (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes') && textbook.appraisalClaimant) {
