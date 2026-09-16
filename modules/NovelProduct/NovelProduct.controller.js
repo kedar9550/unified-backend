@@ -60,7 +60,10 @@ exports.createNovelProduct = async (req, res) => {
         const applicantInstId = applicant ? applicant.institutionId : null;
 
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
-        const appraisalClaimants = [...new Set(claimantsList)];
+        // If appraisalEligible = 'No', do not assign any claimants (Scenario 1 guard)
+        const appraisalClaimants = (data.appraisalEligible === 'No' || data.appraisalEligible === 'no')
+            ? []
+            : [...new Set(claimantsList)];
 
         let finalFacultyId = req.user.userId;
         let finalStatus = 'Pending at R&D';
@@ -253,7 +256,10 @@ exports.updateNovelProduct = async (req, res) => {
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantInstId = applicant ? applicant.institutionId : null;
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
-        const appraisalClaimants = [...new Set(claimantsList)];
+        // If appraisalEligible = 'No', do not assign any claimants (Scenario 1 guard)
+        const appraisalClaimants = (data.appraisalEligible === 'No' || data.appraisalEligible === 'no')
+            ? []
+            : [...new Set(claimantsList)];
 
         // Update fields
         Object.keys(data).forEach(key => {
@@ -450,7 +456,13 @@ exports.rndAction = async (req, res) => {
 
         product.status = status;
         product.rndComment = comment;
-        if (appraisalEligible) product.appraisalEligible = appraisalEligible;
+        if (appraisalEligible) {
+            product.appraisalEligible = appraisalEligible;
+            // Scenario 2: If appraisalEligible = 'No', clear any previously assigned claimants
+            if (appraisalEligible === 'No' || appraisalEligible === 'no') {
+                product.appraisalClaimants = [];
+            }
+        }
 
         await product.save();
         res.json({ success: true, data: product });

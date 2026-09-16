@@ -65,7 +65,7 @@ exports.createPatent = async (req, res) => {
 
         const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInventors, req.user.userId);
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
 
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
@@ -269,7 +269,7 @@ exports.updatePatent = async (req, res) => {
 
         const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoInventors, req.user.userId);
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : patent.applyIncentive;
@@ -494,6 +494,11 @@ exports.rndAction = async (req, res) => {
         }
         if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             patent.appraisalEligible = req.body.appraisalEligible;
+        }
+
+        // Scenario 2: If appraisalEligible = 'No', clear any previously auto-assigned claimant
+        if (status === 'Approved' && req.body.appraisalEligible === 'No') {
+            patent.appraisalClaimant = null;
         }
 
         if (status === 'Approved' && (patent.applyIncentive === 'Yes' || patent.applyIncentive === 'yes') && patent.appraisalClaimant) {

@@ -92,7 +92,10 @@ exports.createProject = async (req, res) => {
         const applicantInstId = applicant ? applicant.institutionId : null;
 
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
-        const appraisalClaimants = [...new Set(claimantsList)];
+        // If appraisalEligible = 'No', do not assign any claimants (Scenario 1 guard)
+        const appraisalClaimants = (data.appraisalEligible === 'No' || data.appraisalEligible === 'no')
+            ? []
+            : [...new Set(claimantsList)];
 
         let finalFacultyId = req.user.userId;
         let finalStatus = 'Pending at R&D';
@@ -286,7 +289,10 @@ exports.updateProject = async (req, res) => {
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantInstId = applicant ? applicant.institutionId : null;
         const claimantsList = [applicantInstId, ...resolvedAuthors.map(a => a.employeeId)].filter(Boolean);
-        const appraisalClaimants = [...new Set(claimantsList)];
+        // If appraisalEligible = 'No', do not assign any claimants (Scenario 1 guard)
+        const appraisalClaimants = (data.appraisalEligible === 'No' || data.appraisalEligible === 'no')
+            ? []
+            : [...new Set(claimantsList)];
 
         // Update fields
         Object.keys(data).forEach(key => {
@@ -477,7 +483,13 @@ exports.rndAction = async (req, res) => {
 
         project.status = status;
         project.rndComment = comment;
-        if (appraisalEligible) project.appraisalEligible = appraisalEligible;
+        if (appraisalEligible) {
+            project.appraisalEligible = appraisalEligible;
+            // Scenario 2: If appraisalEligible = 'No', clear any previously assigned claimants
+            if (appraisalEligible === 'No' || appraisalEligible === 'no') {
+                project.appraisalClaimants = [];
+            }
+        }
         if (approvedAmount !== undefined) project.approvedAmount = approvedAmount;
 
         await project.save();

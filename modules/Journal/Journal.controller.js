@@ -82,7 +82,7 @@ exports.createJournal = async (req, res) => {
 
         const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
         let numberOfReferencesBelongingToAGEC = 0;
         if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
@@ -316,7 +316,7 @@ exports.updateJournal = async (req, res) => {
 
         const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
         let numberOfReferencesBelongingToAGEC = journal.numberOfReferencesBelongingToAGEC;
         if (data.agecReferencingNumbers !== undefined) {
@@ -575,6 +575,11 @@ exports.rndAction = async (req, res) => {
         if (req.body.journalType !== undefined) journal.journalType = req.body.journalType;
         if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             journal.appraisalEligible = req.body.appraisalEligible;
+        }
+
+        // Scenario 2: If appraisalEligible = 'No', clear any previously auto-assigned claimant
+        if (status === 'Approved' && req.body.appraisalEligible === 'No') {
+            journal.appraisalClaimant = null;
         }
 
         // Auto-assign logic for Appraisal Claimant

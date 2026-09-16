@@ -46,12 +46,18 @@ async function resolveCoAuthorsAndClaims(authorsList, applicantId) {
 
 /**
  * Computes the default claimant based on other AUS authors presence.
+ * If appraisalEligible is explicitly 'No', always returns null — no claimant should be assigned.
  * 
  * @param {boolean} hasOtherAusAuthors 
  * @param {string} applicantId 
- * @returns {string|null} Claimant ID or null if requires selection
+ * @param {string|null} appraisalEligible - 'Yes', 'No', or null (unknown at submit time for self-entry)
+ * @returns {string|null} Claimant ID or null
  */
-async function getDefaultClaimant(hasOtherAusAuthors, applicantId) {
+async function getDefaultClaimant(hasOtherAusAuthors, applicantId, appraisalEligible = null) {
+    // If appraisal is explicitly marked not eligible, never assign a claimant
+    if (appraisalEligible === 'No' || appraisalEligible === 'no') {
+        return null;
+    }
     if (!hasOtherAusAuthors) {
         const employee = await Employee.findById(applicantId);
         return employee ? employee.institutionId : null;

@@ -30,6 +30,7 @@ const PatentSchema = new mongoose.Schema({
     dateOfFiling: { type: Date, required: true },
     patentFiledCountry: { type: String, required: true, default: 'India' },
     patentFiledInInstitution: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
+    isInstitutionRecord: { type: String, enum: ['Yes', 'No'], default: 'No' },
     patentStatus: { type: String, required: true }, // 'Filed', 'Published', etc.
     coInventors: [CoInventorSchema],
     isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
