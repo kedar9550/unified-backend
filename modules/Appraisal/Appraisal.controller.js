@@ -3232,16 +3232,20 @@ exports.getAllAppraisals = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('valueAddition.resourceUtilization.items.eventId')
+            .populate({
+                path: 'valueAddition.resourceUtilization.items.eventId',
+                select: 'status activityCategory activityType organizingInstitutionCategory numberOfDaysParticipated daysParticipated duration nirfRank'
+            })
             .populate({
                 path: 'valueAddition.expertiseContribution.items.contributionId',
-                populate: { path: 'category' }
+                select: 'status category courseHours',
+                populate: { path: 'category', select: 'code name' }
             })
-            .sort({ updatedAt: -1 });
+            .sort({ updatedAt: -1 })
+            .lean();
 
-        const config = await AppraisalConfig.findOne({ academicYearId });
-        const appraisalsObj = appraisals.map(app => {
-            const appObj = app.toObject();
+        const config = await AppraisalConfig.findOne({ academicYearId }).lean();
+        const appraisalsObj = appraisals.map(appObj => {
             if (appObj.facultyId && appObj.personalInfoSnapshot) {
                 let liveDoj = appObj.facultyId.dateOfJoining;
                 if (typeof liveDoj === 'string' && liveDoj.trim() === '') liveDoj = null;
