@@ -296,5 +296,6 @@ const AppraisalSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 AppraisalSchema.index({ facultyId: 1, academicYearId: 1 }, { unique: true });
+AppraisalSchema.index({ academicYearId: 1 });
 
 module.exports = mongoose.model("Appraisal", AppraisalSchema);
