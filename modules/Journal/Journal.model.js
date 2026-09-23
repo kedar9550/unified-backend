@@ -6,8 +6,8 @@ const CoAuthorSchema = new mongoose.Schema({
     employeeId: { type: String, default: null },
     authorPosition: { type: Number, default: null },
     studentId: { type: String, default: null },
+    studentQualification: { type: String, default: null },
     CoAuthorType: { type: String, default: 'faculty' },
-
 }, { _id: false });
 
 const JournalSchema = new mongoose.Schema({
@@ -29,12 +29,11 @@ const JournalSchema = new mongoose.Schema({
     issn: { type: String },
     eissn: { type: String },
     isScopus: { type: String, enum: ['Yes', 'No'], required: true },
-
-    publicationScope: { type: String, required: true },
     totalAuthors: { type: Number, required: true },
     userAuthorPosition: { type: Number, required: true },
     journalQuartile: { type: String, required: true },
     journalType: { type: String },
+    journalCategory: { type: String },
     paperTitle: { type: String, required: true, unique: true },
     coAuthors: [CoAuthorSchema],
     journalName: { type: String, required: true },
