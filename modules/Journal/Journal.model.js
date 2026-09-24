@@ -52,6 +52,7 @@ const JournalSchema = new mongoose.Schema({
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
 
     isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
+    correspondingAuthor: { type: String, enum: ['Yes', 'No'], default: 'No' },
 
     // Files
     publishedPaper: { type: String, required: true },

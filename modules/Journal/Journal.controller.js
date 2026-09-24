@@ -179,7 +179,8 @@ exports.createJournal = async (req, res) => {
             status: finalStatus,
             appraisalEligible: finalAppraisalEligible,
             incentiveClaimant: computedIncentiveClaimant,
-            entryType: finalEntryType
+            entryType: finalEntryType,
+            correspondingAuthor: data.correspondingAuthor || 'No'
         });
 
         if (req.files) {
@@ -393,6 +394,9 @@ exports.updateJournal = async (req, res) => {
         journal.appraisalClaimant = appraisalClaimant;
         journal.jcrImpactFactor = jcrImpactFactor;
         journal.incentiveClaimant = computedIncentiveClaimant;
+        if (data.correspondingAuthor !== undefined) {
+            journal.correspondingAuthor = data.correspondingAuthor;
+        }
         journal.status = 'Pending at R&D'; // Resubmit
         
         // Reset comments since it is a new submission effectively
@@ -736,10 +740,13 @@ exports.getClarivateJournalType = async (req, res) => {
             }
         });
 
+        const WOS_PRIORITY = ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'];
+        const resolvedType = WOS_PRIORITY.find(t => types.has(t)) || ([...types][0] || null);
+
         return res.json({
             success: true,
             inWoS: types.size > 0,
-            journalType: types.size > 0 ? [...types].join(' / ') : null,
+            journalType: resolvedType,
             totalRecords: response.data?.totalRecords || 0
         });
 
@@ -1092,7 +1099,8 @@ exports.fetchDoiDetails = async (req, res) => {
                     });
 
                     if (types.size > 0) {
-                        metadata.journalType = [...types].join(' / ');
+                        const WOS_PRIORITY = ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'];
+                        metadata.journalType = WOS_PRIORITY.find(t => types.has(t)) || [...types][0];
                         return true;
                     }
                     return false;
