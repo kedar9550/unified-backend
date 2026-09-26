@@ -352,7 +352,7 @@ const updateProfile = async (req, res) => {
 
             return res.json({ user: normalizedUser });
         } else {
-            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "panNumber", "college", "qualifications"];
+            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "linkedInId", "publonsId", "vidwanId", "panNumber", "college", "qualifications", "coursesTaught"];
             const updates = {};
             allowedFields.forEach((field) => {
                 // Allow setting empty values except email and phone which are required

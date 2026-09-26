@@ -1,0 +1,432 @@
+Collection: officestaff (Docs: 36)
+  Index: _id_ - {"_id":1}
+  Index: branch_1 - {"branch":1}
+
+Collection: publishers (Docs: 93)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: feedbacks (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: ticket_1 - {"ticket":1}
+
+Collection: employeeapproles (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: facultyschemas (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: schools (Docs: 8)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+  Index: code_1 - {"code":1}
+  Index: status_1 - {"status":1}
+
+Collection: fitness (Docs: 480)
+  Index: _id_ - {"_id":1}
+  Index: branch_1 - {"branch":1}
+
+Collection: fuelfill (Docs: 469)
+  Index: _id_ - {"_id":1}
+  Index: tankerno_1 - {"tankerno":1}
+
+Collection: resourceutilizations (Docs: 1781)
+  Index: _id_ - {"_id":1}
+
+Collection: eventassignments (Docs: 2)
+  Index: _id_ - {"_id":1}
+
+Collection: departments (Docs: 26)
+  Index: _id_ - {"_id":1}
+  Index: programId_1 - {"programId":1}
+  Index: status_1 - {"status":1}
+  Index: programIds_1 - {"programIds":1}
+  Index: name_1 - {"name":1}
+  Index: code_1 - {"code":1}
+  Index: programId_1_code_1 - {"programId":1,"code":1}
+  Index: programId_1_name_1 - {"programId":1,"name":1}
+
+Collection: leadershiproles (Docs: 2)
+  Index: _id_ - {"_id":1}
+  Index: roleName_1 - {"roleName":1}
+  Index: employeeId_1_role_1 - {"employeeId":1,"role":1}
+
+Collection: grounds (Docs: 4)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: fundedprojects (Docs: 5)
+  Index: _id_ - {"_id":1}
+  Index: title_1 - {"title":1}
+
+Collection: sdgs (Docs: 17)
+  Index: _id_ - {"_id":1}
+
+Collection: eventschools (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: society (Docs: 9)
+  Index: _id_ - {"_id":1}
+
+Collection: facultyadministrations (Docs: 648)
+  Index: _id_ - {"_id":1}
+  Index: facultyId_1_academicYear_1 - {"facultyId":1,"academicYear":1}
+
+Collection: editions (Docs: 3)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: fuel (Docs: 2)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: journals (Docs: 1032)
+  Index: _id_ - {"_id":1}
+  Index: doi_1 - {"doi":1}
+  Index: paperTitle_1 - {"paperTitle":1}
+
+Collection: fielddefinitions (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: fieldKey_1 - {"fieldKey":1}
+
+Collection: servicemembers (Docs: 6)
+  Index: _id_ - {"_id":1}
+  Index: service_1_employee_1_roleType_1 - {"service":1,"employee":1,"roleType":1}
+
+Collection: appraisals (Docs: 760)
+  Index: _id_ - {"_id":1}
+  Index: facultyId_1_academicYearId_1 - {"facultyId":1,"academicYearId":1}
+  Index: academicYearId_1 - {"academicYearId":1}
+
+Collection: userapproles (Docs: 968)
+  Index: _id_ - {"_id":1}
+  Index: userId_1_app_1_role_1 - {"userId":1,"app":1,"role":1}
+
+Collection: eventstudents (Docs: 7417)
+  Index: _id_ - {"_id":1}
+
+Collection: activities (Docs: 189)
+  Index: _id_ - {"_id":1}
+  Index: ticket_1_createdAt_1 - {"ticket":1,"createdAt":1}
+
+Collection: notifications (Docs: 7929)
+  Index: _id_ - {"_id":1}
+  Index: createdAt_1 - {"createdAt":1}
+  Index: recipientId_1 - {"recipientId":1}
+
+Collection: eventdepartments (Docs: 18)
+  Index: _id_ - {"_id":1}
+
+Collection: appraisalresearchclaims (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: researchId_1 - {"researchId":1}
+
+Collection: fuelbunk (Docs: 1)
+  Index: _id_ - {"_id":1}
+
+Collection: comments (Docs: 8)
+  Index: _id_ - {"_id":1}
+  Index: ticket_1_createdAt_1 - {"ticket":1,"createdAt":1}
+
+Collection: appraisalconfigs (Docs: 2)
+  Index: _id_ - {"_id":1}
+  Index: isActive_1 - {"isActive":1}
+  Index: academicYearId_1 - {"academicYearId":1}
+
+Collection: textbooks (Docs: 113)
+  Index: _id_ - {"_id":1}
+  Index: isbn_1 - {"isbn":1}
+  Index: title_1 - {"title":1}
+
+Collection: contributions (Docs: 1016)
+  Index: _id_ - {"_id":1}
+
+Collection: branches (Docs: 39)
+  Index: _id_ - {"_id":1}
+  Index: programId_1_departmentId_1_schoolId_1_name_1 - {"programId":1,"departmentId":1,"schoolId":1,"name":1}
+  Index: programId_1 - {"programId":1}
+  Index: status_1 - {"status":1}
+  Index: programId_1_departmentId_1_name_1 - {"programId":1,"departmentId":1,"name":1}
+  Index: departmentId_1 - {"departmentId":1}
+  Index: programIds_1 - {"programIds":1}
+  Index: programIds_1_departmentId_1_schoolId_1_code_1 - {"programIds":1,"departmentId":1,"schoolId":1,"code":1}
+  Index: programIds_1_departmentId_1_schoolId_1_name_1 - {"programIds":1,"departmentId":1,"schoolId":1,"name":1}
+  Index: programId_1_departmentId_1_code_1 - {"programId":1,"departmentId":1,"code":1}
+  Index: schoolId_1 - {"schoolId":1}
+  Index: programId_1_departmentId_1_schoolId_1_code_1 - {"programId":1,"departmentId":1,"schoolId":1,"code":1}
+
+Collection: students (Docs: 1)
+  Index: _id_ - {"_id":1}
+  Index: rollNo_1 - {"rollNo":1}
+
+Collection: consultancies (Docs: 20)
+  Index: _id_ - {"_id":1}
+  Index: title_1 - {"title":1}
+
+Collection: replacedvehicle (Docs: 191)
+  Index: _id_ - {"_id":1}
+
+Collection: facultyfeedresults (Docs: 6353)
+  Index: _id_ - {"_id":1}
+
+Collection: facultyproctoringentries (Docs: 1145)
+  Index: _id_ - {"_id":1}
+  Index: facultyId_1_academicYear_1 - {"facultyId":1,"academicYear":1}
+
+Collection: studentsschemas (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: subcategories (Docs: 45)
+  Index: _id_ - {"_id":1}
+
+Collection: rta (Docs: 626)
+  Index: _id_ - {"_id":1}
+
+Collection: authorcitations (Docs: 582)
+  Index: _id_ - {"_id":1}
+  Index: empid_1 - {"empid":1}
+
+Collection: majorevents (Docs: 5)
+  Index: _id_ - {"_id":1}
+
+Collection: proctermapings (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: studentId_1 - {"studentId":1}
+
+Collection: programs (Docs: 12)
+  Index: _id_ - {"_id":1}
+  Index: code_1 - {"code":1}
+  Index: name_1 - {"name":1}
+  Index: departmentId_1_name_1 - {"departmentId":1,"name":1}
+  Index: status_1 - {"status":1}
+
+Collection: services (Docs: 2)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: events (Docs: 38)
+  Index: _id_ - {"_id":1}
+
+Collection: patents (Docs: 187)
+  Index: _id_ - {"_id":1}
+  Index: title_1 - {"title":1}
+  Index: filingNo_1 - {"filingNo":1}
+
+Collection: semestertypes (Docs: 4)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: organisationcommittees (Docs: 9)
+  Index: _id_ - {"_id":1}
+
+Collection: guidingphds (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: facultyId_1 - {"facultyId":1}
+  Index: academicYear_1 - {"academicYear":1}
+  Index: rollNumber_1 - {"rollNumber":1}
+
+Collection: studentdatabases (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: proctorsummaries (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: proctorId_1_academicYearId_1_semesterTypeId_1_periodLabel_1 - {"proctorId":1,"academicYearId":1,"semesterTypeId":1,"periodLabel":1}
+  Index: academicYearId_1_semesterTypeId_1_proctorId_1 - {"academicYearId":1,"semesterTypeId":1,"proctorId":1}
+
+Collection: tickets (Docs: 165)
+  Index: _id_ - {"_id":1}
+  Index: assignedTo.employee_1 - {"assignedTo.employee":1}
+  Index: ticketNumber_1 - {"ticketNumber":1}
+  Index: service_1_status_1 - {"service":1,"status":1}
+  Index: createdBy_1 - {"createdBy":1}
+
+Collection: buildings (Docs: 13)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: registrations (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: login (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: username_1_branch_1 - {"username":1,"branch":1}
+
+Collection: route (Docs: 435)
+  Index: _id_ - {"_id":1}
+
+Collection: users (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: phdapplications (Docs: 261)
+  Index: _id_ - {"_id":1}
+  Index: rollNumber_1 - {"rollNumber":1}
+  Index: facultyId_1 - {"facultyId":1}
+  Index: academicYear_1 - {"academicYear":1}
+
+Collection: studentresults (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: eventgroups (Docs: 4)
+  Index: _id_ - {"_id":1}
+
+Collection: contributioncategories (Docs: 13)
+  Index: _id_ - {"_id":1}
+  Index: code_1 - {"code":1}
+
+Collection: bookchapters (Docs: 64)
+  Index: _id_ - {"_id":1}
+  Index: chapterTitle_1 - {"chapterTitle":1}
+  Index: doi_1 - {"doi":1}
+
+Collection: journalmasters (Docs: 4616)
+  Index: _id_ - {"_id":1}
+  Index: journalTitle_1 - {"journalTitle":1}
+
+Collection: floors (Docs: 8)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: journalimpactfactors (Docs: 20450)
+  Index: _id_ - {"_id":1}
+  Index: journalName_1 - {"journalName":1}
+  Index: rank_1 - {"rank":1}
+  Index: abbreviatedJournal_1 - {"abbreviatedJournal":1}
+
+Collection: insurance (Docs: 424)
+  Index: _id_ - {"_id":1}
+  Index: branch_1 - {"branch":1}
+
+Collection: payslip (Docs: 86882)
+  Index: _id_ - {"_id":1}
+  Index: empid_1 - {"empid":1}
+  Index: empId_1 - {"empId":1}
+  Index: emp_id_1 - {"emp_id":1}
+
+Collection: employees (Docs: 803)
+  Index: _id_ - {"_id":1}
+  Index: institutionId_1 - {"institutionId":1}
+  Index: email_1 - {"email":1}
+
+Collection: hierarchymappings (Docs: 1)
+  Index: _id_ - {"_id":1}
+  Index: empId_1 - {"empId":1}
+
+Collection: inquiries (Docs: 88)
+  Index: _id_ - {"_id":1}
+
+Collection: facultysubjectresults (Docs: 2679)
+  Index: _id_ - {"_id":1}
+
+Collection: payslipsaspernorms (Docs: 99296)
+  Index: _id_ - {"_id":1}
+
+Collection: loginschemas (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: pollution (Docs: 321)
+  Index: _id_ - {"_id":1}
+
+Collection: signupotps (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: otpExpiry_1 - {"otpExpiry":1}
+
+Collection: eventfieldmappings (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: registerableType_1_registerableId_1_field_1 - {"registerableType":1,"registerableId":1,"field":1}
+
+Collection: festactivities (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: utilities (Docs: 81)
+  Index: _id_ - {"_id":1}
+  Index: shortCode_1 - {"shortCode":1}
+
+Collection: discrepancies (Docs: 542)
+  Index: _id_ - {"_id":1}
+
+Collection: registrationresponses (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: event_schools (Docs: 5)
+  Index: _id_ - {"_id":1}
+
+Collection: roles (Docs: 30)
+  Index: _id_ - {"_id":1}
+  Index: key_1 - {"key":1}
+
+Collection: routedetails (Docs: 476)
+  Index: _id_ - {"_id":1}
+
+Collection: roadpermit (Docs: 546)
+  Index: _id_ - {"_id":1}
+
+Collection: indents (Docs: 2)
+  Index: _id_ - {"_id":1}
+  Index: date_1 - {"date":1}
+
+Collection: facultydatabases (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: clubs (Docs: 20)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: referencejournals (Docs: 50)
+  Index: _id_ - {"_id":1}
+  Index: title_1_type_1 - {"title":1,"type":1}
+
+Collection: categories (Docs: 21)
+  Index: _id_ - {"_id":1}
+  Index: name_1 - {"name":1}
+
+Collection: repairbills (Docs: 3562)
+  Index: _id_ - {"_id":1}
+  Index: branch_1 - {"branch":1}
+
+Collection: phdscholars (Docs: 1)
+  Index: _id_ - {"_id":1}
+  Index: rollNumber_1 - {"rollNumber":1}
+
+Collection: roadtax (Docs: 422)
+  Index: _id_ - {"_id":1}
+
+Collection: novelproducts (Docs: 0)
+  Index: _id_ - {"_id":1}
+  Index: facultyId_1 - {"facultyId":1}
+  Index: academicYear_1 - {"academicYear":1}
+  Index: productName_1 - {"productName":1}
+
+Collection: staffmeeting (Docs: 15)
+  Index: _id_ - {"_id":1}
+
+Collection: conferences (Docs: 192)
+  Index: _id_ - {"_id":1}
+  Index: doi_1 - {"doi":1}
+  Index: title_1 - {"title":1}
+
+Collection: academicyears (Docs: 3)
+  Index: _id_ - {"_id":1}
+  Index: year_1 - {"year":1}
+  Index: year_1_programId_1 - {"year":1,"programId":1}
+
+Collection: errorschemas (Docs: 0)
+  Index: _id_ - {"_id":1}
+
+Collection: insuranceclaim (Docs: 3)
+  Index: _id_ - {"_id":1}
+  Index: branch_1 - {"branch":1}
+
+Collection: paymentregistrations (Docs: 6402)
+  Index: _id_ - {"_id":1}
+  Index: participants.barcode_1 - {"participants.barcode":1}
+  Index: teamId_1 - {"teamId":1}
+  Index: paymentStatus_1_createdAt_-1 - {"paymentStatus":1,"createdAt":-1}
+  Index: paymentStatus_1_verified_1 - {"paymentStatus":1,"verified":1}
+  Index: paymentStatus_1_eventId_1 - {"paymentStatus":1,"eventId":1}
+  Index: razorpayOrderId_1 - {"razorpayOrderId":1}
+  Index: razorpayPaymentId_1 - {"razorpayPaymentId":1}
+  Index: participants.roll_1 - {"participants.roll":1}
+  Index: participants.email_1 - {"participants.email":1}
+  Index: participants.department_1 - {"participants.department":1}
+  Index: participants.attended_1 - {"participants.attended":1}
+
