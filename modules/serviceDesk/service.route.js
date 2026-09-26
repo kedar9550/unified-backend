@@ -9,6 +9,7 @@ const {
   deactivateService,
   assignServiceAdmin,
   getServiceAdmins,
+  updateServiceAdminBlocks,
   removeServiceAdmin,
   assignServiceEmp,
   getServiceEmps,
@@ -34,6 +35,7 @@ router.delete("/:id", authorize("UNIPRIME"), deactivateService);
 // Service Admin assignment — PRIME only
 router.post("/:serviceId/admins", authorize("UNIPRIME"), assignServiceAdmin);
 router.get("/:serviceId/admins", authorize("UNIPRIME"), getServiceAdmins);
+router.put("/:serviceId/admins/:employeeId/blocks", authorize("UNIPRIME"), updateServiceAdminBlocks);
 router.delete("/:serviceId/admins/:employeeId", authorize("UNIPRIME"), removeServiceAdmin);
 
 // Service Emp assignment — Service Admin of that service, or PRIME

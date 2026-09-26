@@ -1,23 +1,17 @@
-const axios = require("axios");
+const { fetchStudentFromEcap } = require("../../utils/ecapService");
 const Program = require("../academics/program.model");
 const escapeRegex = require("../../utils/escapeRegex");
 const Branch = require("../academics/branch.model");
 const Department = require("../academics/department.model");
-
-const EXTERNAL_API_URL = "https://info.aec.edu.in/adityaapi/api/studentdata";
 
 /**
  * Fetch student data from external eCap API
  */
 const fetchStudentDataFromAPI = async (rollNo) => {
   try {
-    const response = await axios.get(`${EXTERNAL_API_URL}/${rollNo}`);
-    if (Array.isArray(response.data) && response.data.length > 0) {
-      const studentData = response.data[0];
-      // Check if it's an actual student record, not an error object like [{"Message": "Not found"}]
-      if (studentData && studentData.rollno) {
-        return studentData;
-      }
+    const studentData = await fetchStudentFromEcap(rollNo);
+    if (studentData && studentData.rollno) {
+      return studentData;
     }
     return null;
   } catch (error) {

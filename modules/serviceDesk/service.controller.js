@@ -45,7 +45,7 @@ const revokeCoarseRoleIfUnused = async (employeeId, roleName, roleType) => {
 // @access PRIME
 exports.createService = async (req, res, next) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, isGlobalService, directEmployeeInvolvement } = req.body;
     if (!name) {
       res.status(400);
       return next(new Error("Service name is required"));
@@ -60,6 +60,8 @@ exports.createService = async (req, res, next) => {
     const service = await Service.create({
       name: name.trim(),
       description,
+      isGlobalService: isGlobalService !== undefined ? isGlobalService : true,
+      directEmployeeInvolvement: directEmployeeInvolvement !== undefined ? directEmployeeInvolvement : true,
       createdBy: req.user.userId
     });
 
@@ -98,15 +100,21 @@ exports.getServiceById = async (req, res, next) => {
   }
 };
 
-// @desc   Update a service (name/description/isActive)
+// @desc   Update a service (name/description/isActive/isGlobalService/directEmployeeInvolvement)
 // @route  PUT /api/service-desk/services/:id
 // @access PRIME
 exports.updateService = async (req, res, next) => {
   try {
-    const { name, description, isActive } = req.body;
+    const { name, description, isActive, isGlobalService, directEmployeeInvolvement } = req.body;
     const service = await Service.findByIdAndUpdate(
       req.params.id,
-      { ...(name && { name: name.trim() }), ...(description !== undefined && { description }), ...(isActive !== undefined && { isActive }) },
+      {
+        ...(name && { name: name.trim() }),
+        ...(description !== undefined && { description }),
+        ...(isActive !== undefined && { isActive }),
+        ...(isGlobalService !== undefined && { isGlobalService }),
+        ...(directEmployeeInvolvement !== undefined && { directEmployeeInvolvement })
+      },
       { new: true, runValidators: true }
     );
     if (!service) {
@@ -165,7 +173,7 @@ exports.getMyMemberships = async (req, res, next) => {
 exports.assignServiceAdmin = async (req, res, next) => {
   try {
     const { serviceId } = req.params;
-    const { employeeId } = req.body;
+    const { employeeId, blocks } = req.body;
 
     if (!employeeId) {
       res.status(400);
@@ -200,6 +208,7 @@ exports.assignServiceAdmin = async (req, res, next) => {
       service: serviceId,
       employee: employeeId,
       roleType: "SERVICE_ADMIN",
+      blocks: Array.isArray(blocks) ? blocks : [],
       addedBy: req.user.userId
     });
 
@@ -239,9 +248,35 @@ exports.getServiceAdmins = async (req, res, next) => {
       isActive: true
     })
       .populate("employee", "name institutionId email designation")
+      .populate("blocks", "blockName blockCode status")
       .lean();
 
     res.json({ success: true, data: admins });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Update Service Admin blocks
+// @route  PUT /api/service-desk/services/:serviceId/admins/:employeeId/blocks
+// @access PRIME
+exports.updateServiceAdminBlocks = async (req, res, next) => {
+  try {
+    const { serviceId, employeeId } = req.params;
+    const { blocks } = req.body;
+
+    const member = await ServiceMember.findOneAndUpdate(
+      { service: serviceId, employee: employeeId, roleType: "SERVICE_ADMIN" },
+      { blocks: Array.isArray(blocks) ? blocks : [] },
+      { new: true }
+    ).populate("blocks", "blockName blockCode status");
+
+    if (!member) {
+      res.status(404);
+      return next(new Error("Service Admin mapping not found"));
+    }
+
+    res.json({ success: true, message: "Admin block mappings updated successfully", data: member });
   } catch (error) {
     next(error);
   }
@@ -281,7 +316,7 @@ exports.removeServiceAdmin = async (req, res, next) => {
 exports.assignServiceEmp = async (req, res, next) => {
   try {
     const { serviceId } = req.params;
-    const { employeeId } = req.body;
+    const { employeeId, blocks } = req.body;
 
     const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
     if (!isPrime) {
@@ -327,6 +362,7 @@ exports.assignServiceEmp = async (req, res, next) => {
       service: serviceId,
       employee: employeeId,
       roleType: "SERVICE_EMP",
+      blocks: Array.isArray(blocks) ? blocks : [],
       addedBy: req.user.userId
     });
 
@@ -377,6 +413,7 @@ exports.getServiceEmps = async (req, res, next) => {
       isActive: true
     })
       .populate("employee", "name institutionId email designation phone")
+      .populate("blocks", "blockName blockCode status")
       .lean();
 
     res.json({ success: true, data: emps });

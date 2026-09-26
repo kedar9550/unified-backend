@@ -21,6 +21,16 @@ const serviceSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+
+  isGlobalService: {
+    type: Boolean,
+    default: true
+  },
+
+  directEmployeeInvolvement: {
+    type: Boolean,
+    default: true
   }
 
 }, { timestamps: true });

@@ -25,6 +25,12 @@ const ticketSchema = new mongoose.Schema({
     required: true
   },
 
+  block: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceModuleBlock",
+    default: null
+  },
+
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Employee",

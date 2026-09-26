@@ -85,8 +85,21 @@ const recalculateTicketStatus = (ticket) => {
   }
 };
 
-const notifyServiceAdmins = async (serviceId, { excludeEmployeeId, ...notif }) => {
-  const admins = await ServiceMember.find({ service: serviceId, roleType: "SERVICE_ADMIN", isActive: true }).lean();
+const notifyServiceAdmins = async (serviceId, { excludeEmployeeId, blockId, ...notif }) => {
+  let filter = { service: serviceId, roleType: "SERVICE_ADMIN", isActive: true };
+  if (blockId) {
+    const blockAdmins = await ServiceMember.find({
+      service: serviceId,
+      roleType: "SERVICE_ADMIN",
+      isActive: true,
+      blocks: blockId
+    }).lean();
+    if (blockAdmins.length > 0) {
+      filter = { _id: { $in: blockAdmins.map(a => a._id) } };
+    }
+  }
+
+  const admins = await ServiceMember.find(filter).lean();
   for (const admin of admins) {
     if (excludeEmployeeId && admin.employee.toString() === excludeEmployeeId.toString()) continue;
     
@@ -112,7 +125,7 @@ const notifyServiceAdmins = async (serviceId, { excludeEmployeeId, ...notif }) =
 // @access Any employee
 exports.createTicket = async (req, res, next) => {
   try {
-    const { title, description, service, priority } = req.body;
+    const { title, description, service, priority, block } = req.body;
 
     if (!title || !description || !service) {
       res.status(400);
@@ -123,6 +136,11 @@ exports.createTicket = async (req, res, next) => {
     if (!serviceDoc || !serviceDoc.isActive) {
       res.status(404);
       return next(new Error("Selected service is not available"));
+    }
+
+    if (!serviceDoc.isGlobalService && !block) {
+      res.status(400);
+      return next(new Error("Block selection is required for this service"));
     }
 
     const attachments = (req.files || []).map(file => ({
@@ -138,6 +156,7 @@ exports.createTicket = async (req, res, next) => {
       title,
       description,
       service,
+      block: block || null,
       priority: priority || "MEDIUM",
       createdBy: req.user.userId,
       attachments
@@ -152,9 +171,10 @@ exports.createTicket = async (req, res, next) => {
     const creator = await Employee.findById(req.user.userId).select("name").lean();
 
     await notifyServiceAdmins(service, {
+      blockId: block || null,
       type: "ACTION_REQUIRED",
       title: "New Service Ticket Raised",
-      message: `A new support ticket has been created by ${creator ? creator.name : "a user"} for the ${serviceDoc.name} service.\nTicket ID: ${ticket.ticketNumber}\nPlease review and assign the ticket to an appropriate service employee.`,
+      message: `A new support ticket has been created by ${creator ? creator.name : "a user"} for the ${serviceDoc.name} service.\nTicket ID: ${ticket.ticketNumber}\nPlease review and process the ticket.`,
       link: `/service-desk/ticket/${ticket._id}`,
       metadata: { ticketId: ticket._id, serviceId: service }
     });
@@ -170,7 +190,8 @@ exports.createTicket = async (req, res, next) => {
 exports.getMyTickets = async (req, res, next) => {
   try {
     const tickets = await Ticket.find({ createdBy: req.user.userId })
-      .populate("service", "name")
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode")
       .sort({ createdAt: -1 })
       .lean();
     res.json({ success: true, data: tickets });
@@ -193,7 +214,8 @@ exports.getAssignedTickets = async (req, res, next) => {
     }
 
     const tickets = await Ticket.find(filter)
-      .populate("service", "name")
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode")
       .populate("createdBy", "name institutionId email")
       .sort({ createdAt: -1 })
       .lean();
@@ -230,6 +252,8 @@ exports.getServiceTickets = async (req, res, next) => {
       filter.status = { $ne: "REJECTED" };
     }
     const tickets = await Ticket.find(filter)
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode")
       .populate("createdBy", "name institutionId email")
       .populate("assignedTo.employee", "name institutionId email")
       .sort({ createdAt: -1 })
@@ -246,7 +270,8 @@ exports.getServiceTickets = async (req, res, next) => {
 exports.getTicketById = async (req, res, next) => {
   try {
     const ticket = await Ticket.findById(req.params.id)
-      .populate("service", "name")
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode")
       .populate("createdBy", "name institutionId email profileImage")
       .populate("assignedTo.employee", "name institutionId email profileImage")
       .populate("assignedTo.assignedBy", "name")
@@ -423,6 +448,72 @@ exports.adminRejectTicket = async (req, res, next) => {
     });
 
     res.json({ success: true, message: "Ticket rejected", data: ticket });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Admin directly updates ticket status (when directEmployeeInvolvement is false or handled directly)
+// @route  PUT /api/service-desk/tickets/:id/admin-status
+// @access SERVICE_ADMIN of the ticket's service
+exports.adminUpdateTicketStatus = async (req, res, next) => {
+  try {
+    const { status, note } = req.body;
+    if (!["IN_PROGRESS", "RESOLVED", "REJECTED"].includes(status)) {
+      res.status(400);
+      return next(new Error("Invalid status. Allowed: IN_PROGRESS, RESOLVED, REJECTED"));
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      res.status(404);
+      return next(new Error("Ticket not found"));
+    }
+
+    if (ticket.status === "CLOSED") {
+      res.status(400);
+      return next(new Error("Ticket is closed and cannot be updated"));
+    }
+
+    ticket.status = status;
+    if (status === "REJECTED") {
+      ticket.rejectionReason = note || "";
+      await purgeTicketData(ticket);
+    }
+
+    await ticket.save();
+
+    await Activity.create({
+      ticket: ticket._id,
+      action: status === "RESOLVED" ? "TICKET_RESOLVED" : (status === "REJECTED" ? "TICKET_REJECTED" : "TICKET_IN_PROGRESS"),
+      performedBy: req.user.userId,
+      metadata: { note: note || "", directAdminAction: true }
+    });
+
+    const notifTypes = {
+      IN_PROGRESS: "INFO",
+      RESOLVED: "ACTION_REQUIRED",
+      REJECTED: "REJECTED"
+    };
+
+    const notifMessages = {
+      IN_PROGRESS: `Your ticket ${ticket.ticketNumber} is now in progress with the service admin.`,
+      RESOLVED: `Your ticket ${ticket.ticketNumber} has been resolved by the service admin. Please confirm and provide feedback.`,
+      REJECTED: `Your ticket ${ticket.ticketNumber} was rejected by the service admin. ${note ? "Reason: " + note : ""}`
+    };
+
+    await NotificationService.sendNotification({
+      recipientId: ticket.createdBy,
+      senderId: req.user.userId,
+      module: MODULE,
+      type: notifTypes[status] || "INFO",
+      title: `Ticket ${status.replace("_", " ")}`,
+      message: notifMessages[status],
+      link: `/service-desk/ticket/${ticket._id}`,
+      metadata: { ticketId: ticket._id }
+    });
+
+    res.json({ success: true, message: `Ticket status updated to ${status}`, data: ticket });
   } catch (error) {
     next(error);
   }
