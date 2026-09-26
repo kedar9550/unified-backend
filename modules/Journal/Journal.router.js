@@ -47,6 +47,7 @@ router.put('/:id', protect, upload.fields([
 router.get('/', protect, journalController.getMyJournals);
 router.post('/wos-type', journalController.getClarivateJournalType);
 router.post('/fetch-doi', journalController.fetchDoiDetails);
+router.post('/calculate-incentive', protect, journalController.getEstimatedIncentive);
 router.get('/:id', protect, journalController.getJournalById);
 
 // HOD: View pending and Action

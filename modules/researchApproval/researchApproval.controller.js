@@ -230,6 +230,8 @@ exports.getResearchRequests = async (req, res) => {
                     type: 'Journal',
                     faculty: fac,
                     title: `${item.paperTitle} (${item.journalName})`,
+                    doi: item.doi,
+                    isNoDoi: item.isNoDoi || (item.doi && String(item.doi).startsWith('NODOI') ? 'Yes' : 'No'),
                     status: item.status,
                     createdAt: item.createdAt,
                     academicYear: item.academicYear,

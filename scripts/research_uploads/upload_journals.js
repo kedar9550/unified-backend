@@ -107,6 +107,11 @@ async function processCSV() {
                     }
 
                     // 4. Prepare Journal Object
+                    const rawJType = (row['journalType'] || '').toUpperCase().trim();
+                    const validJTypes = ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'];
+                    const cleanJType = validJTypes.find(t => rawJType.includes(t)) || (rawJType === 'NONE' ? 'None' : 'None');
+                    const isWos = cleanJType !== 'None' ? 'Yes' : 'No';
+
                     const journalData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
@@ -115,7 +120,8 @@ async function processCSV() {
                         doi: row['doi'] || 'N/A',
                         publicationScope: row['publicationScope'] || 'National/International',
                         journalQuartile: row['journalQuartile'] || 'Q1',
-                        journalType: row['journalType'] || '',
+                        journalType: cleanJType,
+                        isWos: isWos,
                         paperTitle: row['paperTitle'] || 'Unknown Title',
                         journalName: row['journalName'] || 'Unknown Journal',
                         vol: row['volume'] || '',

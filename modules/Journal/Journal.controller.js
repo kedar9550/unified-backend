@@ -2,6 +2,31 @@ const Journal = require('./Journal.model');
 const Employee = require('../employee/employee.model');
 const escapeRegex = require('../../utils/escapeRegex');
 const { isFutureYearMonth } = require('../../utils/validationHelper');
+const { calculateJournalIncentive } = require('../../utils/journalIncentiveCalculator');
+
+const ALLOWED_JOURNAL_TYPES = ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'];
+const WOS_PRIORITY = ['SCIE', 'SCI', 'SSCI', 'AHCI', 'ESCI'];
+
+const resolveWoSTypeAndStatus = (input) => {
+    if (!input) return { journalType: 'None', isWos: 'No' };
+    const str = String(input).toUpperCase().trim();
+    if (ALLOWED_JOURNAL_TYPES.includes(str)) {
+        return { journalType: str, isWos: 'Yes' };
+    }
+    if (str === 'NONE' || str === '' || str === 'NO' || str === 'NULL' || str === 'UNDEFINED') {
+        return { journalType: 'None', isWos: 'No' };
+    }
+    // If composite string (e.g. "SCIE/ESCI", "SCIE, ESCI"), extract matching types and resolve by priority
+    const foundTypes = new Set();
+    ALLOWED_JOURNAL_TYPES.forEach(t => {
+        if (str.includes(t)) foundTypes.add(t);
+    });
+    if (foundTypes.size > 0) {
+        const best = WOS_PRIORITY.find(t => foundTypes.has(t)) || 'None';
+        return { journalType: best, isWos: best !== 'None' ? 'Yes' : 'No' };
+    }
+    return { journalType: 'None', isWos: 'No' };
+};
 
 // @desc    Submit new journal publication
 // @route   POST /api/research/journal
@@ -10,15 +35,21 @@ exports.createJournal = async (req, res) => {
     try {
         const data = req.body;
 
+        const isNoDoi = (data.isNoDoi === 'Yes' || data.isNoDoi === true || data.isNoDoi === 'true') ? 'Yes' : 'No';
+        let cleanedDoi = (data.doi || '').trim();
+
+        if (isNoDoi === 'Yes' && !cleanedDoi) {
+            cleanedDoi = `NODOI-AUS-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        }
+
         // Validation
-        if (!data.doi || !data.doi.trim()) {
+        if (!cleanedDoi) {
             return res.status(400).json({ success: false, message: "DOI is mandatory." });
         }
         if (!data.paperTitle || !data.paperTitle.trim()) {
             return res.status(400).json({ success: false, message: "Paper Title is mandatory." });
         }
 
-        const cleanedDoi = data.doi.trim();
         const trimmedTitle = data.paperTitle.trim();
 
         // Check if there is any submission with the same DOI or Title
@@ -168,8 +199,33 @@ exports.createJournal = async (req, res) => {
             computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
         }
 
+        const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(data.journalType);
+
+        // Calculate Estimated Incentive Amount
+        let estimatedIncentiveAmount = 0;
+        if (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive({
+                ...data,
+                journalType: cleanJournalType,
+                isWos,
+                journalCategory: resolvedJournalCategory,
+                jcrImpactFactor,
+                numberOfReferencesBelongingToAGEC,
+                coAuthors: resolvedAuthors
+            });
+
+            if (!incentiveCalc.success) {
+                return res.status(400).json({ success: false, message: incentiveCalc.message });
+            }
+            estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+        }
+
         const journal = new Journal({
             ...data,
+            doi: cleanedDoi,
+            isNoDoi,
+            journalType: cleanJournalType,
+            isWos,
             journalCategory: resolvedJournalCategory,
             facultyId: finalFacultyId,
             coAuthors: resolvedAuthors,
@@ -180,7 +236,8 @@ exports.createJournal = async (req, res) => {
             appraisalEligible: finalAppraisalEligible,
             incentiveClaimant: computedIncentiveClaimant,
             entryType: finalEntryType,
-            correspondingAuthor: data.correspondingAuthor || 'No'
+            correspondingAuthor: data.correspondingAuthor || 'No',
+            estimatedIncentiveAmount
         });
 
         if (req.files) {
@@ -383,10 +440,14 @@ exports.updateJournal = async (req, res) => {
 
         // Update fields
         Object.keys(data).forEach(key => {
-            if (key !== 'coAuthors' && key !== 'status' && key !== 'facultyId' && key !== 'journalCategory' && data[key] !== undefined) {
+            if (key !== 'coAuthors' && key !== 'status' && key !== 'facultyId' && key !== 'journalCategory' && key !== 'journalType' && key !== 'isWos' && data[key] !== undefined) {
                 journal[key] = data[key];
             }
         });
+
+        const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(data.journalType !== undefined ? data.journalType : journal.journalType);
+        journal.journalType = cleanJournalType;
+        journal.isWos = isWos;
 
         journal.journalCategory = resolvedJournalCategory;
         journal.coAuthors = resolvedAuthors;
@@ -397,6 +458,28 @@ exports.updateJournal = async (req, res) => {
         if (data.correspondingAuthor !== undefined) {
             journal.correspondingAuthor = data.correspondingAuthor;
         }
+
+        // Calculate Estimated Incentive on update
+        if (applyIncentive === 'Yes' || applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive({
+                ...journal.toObject(),
+                ...data,
+                journalType: cleanJournalType,
+                isWos,
+                journalCategory: resolvedJournalCategory,
+                jcrImpactFactor,
+                numberOfReferencesBelongingToAGEC,
+                coAuthors: resolvedAuthors,
+                applyIncentive
+            });
+            if (!incentiveCalc.success) {
+                return res.status(400).json({ success: false, message: incentiveCalc.message });
+            }
+            journal.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+        } else {
+            journal.estimatedIncentiveAmount = 0;
+        }
+
         journal.status = 'Pending at R&D'; // Resubmit
         
         // Reset comments since it is a new submission effectively
@@ -611,7 +694,11 @@ exports.rndAction = async (req, res) => {
         if (finalJcrImpactFactor !== undefined) journal.jcrImpactFactor = finalJcrImpactFactor;
         if (req.body.citations !== undefined) journal.citations = req.body.citations;
         if (req.body.journalQuartile !== undefined) journal.journalQuartile = req.body.journalQuartile;
-        if (req.body.journalType !== undefined) journal.journalType = req.body.journalType;
+        if (req.body.journalType !== undefined) {
+            const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(req.body.journalType);
+            journal.journalType = cleanJournalType;
+            journal.isWos = isWos;
+        }
         if (req.body.journalCategory !== undefined) {
             let jCat = (req.body.journalCategory || '').trim();
             if (jCat === 'OTHERS' && journal.journalName) {
@@ -628,6 +715,13 @@ exports.rndAction = async (req, res) => {
             }
             journal.journalCategory = jCat;
         }
+        if (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive(journal.toObject());
+            if (incentiveCalc.success) {
+                journal.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+            }
+        }
+
         if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             journal.appraisalEligible = req.body.appraisalEligible;
         }
@@ -740,12 +834,13 @@ exports.getClarivateJournalType = async (req, res) => {
             }
         });
 
-        const WOS_PRIORITY = ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'];
-        const resolvedType = WOS_PRIORITY.find(t => types.has(t)) || ([...types][0] || null);
+        const resolvedType = WOS_PRIORITY.find(t => types.has(t)) || 'None';
+        const isWos = resolvedType !== 'None' ? 'Yes' : 'No';
 
         return res.json({
             success: true,
-            inWoS: types.size > 0,
+            inWoS: isWos === 'Yes',
+            isWos: isWos,
             journalType: resolvedType,
             totalRecords: response.data?.totalRecords || 0
         });
@@ -772,7 +867,11 @@ exports.updateJournalMetrics = async (req, res) => {
         if (finalJcrImpactFactor !== undefined) updates.jcrImpactFactor = finalJcrImpactFactor;
         if (citations !== undefined) updates.citations = citations;
         if (journalQuartile !== undefined) updates.journalQuartile = journalQuartile;
-        if (journalType !== undefined) updates.journalType = journalType;
+        if (journalType !== undefined) {
+            const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(journalType);
+            updates.journalType = cleanJournalType;
+            updates.isWos = isWos;
+        }
         if (journalCategory !== undefined) {
             let jCat = (journalCategory || '').trim();
             if (jCat === 'OTHERS') {
@@ -810,9 +909,30 @@ exports.updateJournalMetrics = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Journal not found' });
         }
 
+        if (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive(journal.toObject());
+            if (incentiveCalc.success) {
+                journal.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+                await journal.save();
+            }
+        }
+
         res.json({ success: true, data: journal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Calculate Estimated Incentive dynamically
+// @route   POST /api/research/journal/calculate-incentive
+// @access  Private
+exports.getEstimatedIncentive = async (req, res) => {
+    try {
+        const result = calculateJournalIncentive(req.body);
+        return res.json(result);
+    } catch (err) {
+        console.error("Error calculating incentive:", err);
+        return res.status(500).json({ success: false, message: err.message });
     }
 };
 
@@ -841,6 +961,7 @@ exports.fetchDoiDetails = async (req, res) => {
             issn: "",
             eissn: "",
             isScopus: "No",
+            isWos: "No",
             journalQuartile: "None",
             journalType: "None",
             citations: ""
@@ -1099,10 +1220,13 @@ exports.fetchDoiDetails = async (req, res) => {
                     });
 
                     if (types.size > 0) {
-                        const WOS_PRIORITY = ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'];
-                        metadata.journalType = WOS_PRIORITY.find(t => types.has(t)) || [...types][0];
+                        const resolved = WOS_PRIORITY.find(t => types.has(t)) || 'None';
+                        metadata.journalType = resolved;
+                        metadata.isWos = resolved !== 'None' ? 'Yes' : 'No';
                         return true;
                     }
+                    metadata.journalType = 'None';
+                    metadata.isWos = 'No';
                     return false;
                 };
 
