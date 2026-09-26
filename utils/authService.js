@@ -82,9 +82,13 @@ const normalizeUser = (user, userType) => {
         wosId: userType === 'Employee' ? user.wosId : "",
         orcidId: userType === 'Employee' ? user.orcidId : "",
         googleScholarId: userType === 'Employee' ? user.googleScholarId : "",
+        linkedInId: userType === 'Employee' ? user.linkedInId : "",
+        publonsId: userType === 'Employee' ? user.publonsId : "",
+        vidwanId: userType === 'Employee' ? user.vidwanId : "",
         panNumber: userType === 'Employee' ? user.panNumber : "",
         college: userType === 'Employee' ? user.college : "",
         qualifications: userType === 'Employee' ? (user.qualifications || []) : [],
+        coursesTaught: userType === 'Employee' ? (user.coursesTaught || []) : [],
         doctorate: userType === 'Employee' ? (user.doctorate || "no") : "no",
         leadership: userType === 'Employee' ? (user.leadership || "no") : "no",
         coreDepartment: userType === 'Employee' 
