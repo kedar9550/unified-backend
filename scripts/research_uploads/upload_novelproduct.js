@@ -113,10 +113,11 @@ async function processCSV() {
                                 appraisalClaimants.push(coEmp.institutionId);
                             } else {
                                 try {
-                                    const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/staffdata/${coEmpId}`);
-                                    if (response.data && response.data.length > 0 && response.data[0].employeename) {
-                                        empName = response.data[0].employeename;
-                                        affiliation = response.data[0].college || 'Aditya University';
+                                    const { fetchStaffFromEcap } = require('../../utils/ecapService');
+                                    const staffData = await fetchStaffFromEcap(coEmpId);
+                                    if (staffData && (staffData.employeename || staffData.EmployeeName)) {
+                                        empName = staffData.employeename || staffData.EmployeeName;
+                                        affiliation = staffData.college || 'Aditya University';
                                     }
                                 } catch (apiErr) {
                                     console.log(`API lookup failed for ${coEmpId}`);

@@ -16,6 +16,7 @@ const {
   getTicketById,
   assignTicket,
   adminRejectTicket,
+  adminUpdateTicketStatus,
   updateAssignmentStatus,
   addComment,
   getComments,
@@ -32,7 +33,7 @@ const {
 } = require("./feedback.controller");
 
 // ---------------------------------------------------------------------
-// Local guard — assignTicket / adminRejectTicket don't check the caller's
+// Local guard — assignTicket / adminRejectTicket / adminUpdateTicketStatus don't check the caller's
 // permission themselves (unlike getServiceTickets, which already checks
 // this inline), so it's enforced here instead of touching the
 // already-built controller.
@@ -96,10 +97,11 @@ router.get("/service/:serviceId", getServiceTickets);
 router.get("/:id", getTicketById);
 
 // ---------------------------------------------------------------------
-// Assignment (Service Admin of the ticket's service, or PRIME)
+// Assignment & Direct Status (Service Admin of the ticket's service, or PRIME)
 // ---------------------------------------------------------------------
 router.post("/:id/assign", requireServiceAdminOfTicket, assignTicket);
 router.post("/:id/reject", requireServiceAdminOfTicket, adminRejectTicket);
+router.put("/:id/admin-status", requireServiceAdminOfTicket, adminUpdateTicketStatus);
 
 // ---------------------------------------------------------------------
 // Status update — Service Emp updates their own row

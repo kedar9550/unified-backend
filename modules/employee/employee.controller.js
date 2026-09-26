@@ -17,11 +17,9 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const ExcelJS = require('exceljs');
 const { getHODDepartments } = require('../../utils/hodHelper');
+const { fetchStaffFromEcap, fetchStudentFromEcap } = require('../../utils/ecapService');
 
 const isProd = process.env.NODE_ENV === 'production';
-
-const STAFF_DATA_API_URL = process.env.STAFF_DATA_API_URL || "https://info.aec.edu.in/adityaapi/api/staffdata/";
-const STUDENT_DATA_API_URL = process.env.STUDENT_DATA_API_URL || "https://info.aec.edu.in/adityaapi/api/studentdata/";
 /**
  * Register Employee
  */
@@ -77,8 +75,7 @@ const registerUser = async (req, res) => {
         // Verify Identity with Institute API (Persona Check)
         let identityData;
         try {
-            const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${id}`);
-            identityData = identityResponse?.data?.[0];
+            identityData = await fetchStaffFromEcap(id);
 
             if (!identityData || identityData.error) {
                 return res.status(404).json({ message: `Invalid Employee ID. Not found in ECAP` });
@@ -570,16 +567,19 @@ const getEmployeeByEmpId = async (req, res) => {
 const getecapdata = async (req, res) => {
     try {
         const { institutionId, role } = req.body;
-        let response;
+        let data = null;
         if (role === "Employee") {
-            response = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`);
+            data = await fetchStaffFromEcap(institutionId);
         } else if (role === "Student") {
-            response = await axios.get(`${STUDENT_DATA_API_URL}${institutionId}`);
+            data = await fetchStudentFromEcap(institutionId);
         }
-        const data = response.data?.[0];
+        if (!data) {
+            return res.status(404).json({ message: "Record not found in ECAP" });
+        }
         res.json(data);
     } catch (error) {
-        res.status(500).json({ message: "Failed to fetch data" });
+        console.error("getecapdata error:", error.message);
+        res.status(500).json({ message: "Failed to fetch data from ECAP" });
     }
 };
 
@@ -600,8 +600,7 @@ const syncProfileWithECAP = async (req, res) => {
         }
 
         // Fetch ECAP Data
-        const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`);
-        const identityData = identityResponse?.data?.[0];
+        const identityData = await fetchStaffFromEcap(institutionId);
 
         if (!identityData || identityData.error) {
             return res.status(404).json({ message: "Employee details not found in ECAP API." });
@@ -838,8 +837,7 @@ const bulkRegisterUser = async (req, res) => {
                 // Fetch ECAP Data
                 let identityData = null;
                 try {
-                    const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`);
-                    identityData = identityResponse?.data?.[0];
+                    identityData = await fetchStaffFromEcap(institutionId);
                 } catch (apiErr) {
                     errors.push({ id: institutionId, error: "Failed to connect to ECAP API" });
                     continue;

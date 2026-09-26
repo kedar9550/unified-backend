@@ -159,6 +159,7 @@ app.use('/api/notifications', require('./modules/notification/notification.route
 app.use('/api/hierarchy-mapping', require('./modules/hierarchy/hierarchyMapping.route'));
 app.use('/api/utilities', require('./modules/utilities/utilities.route'));
 app.use('/api/service-desk/services', require('./modules/serviceDesk/service.route'));
+app.use('/api/service-desk/blocks', require('./modules/serviceDesk/block.route'));
 app.use('/api/service-desk/tickets', require('./modules/serviceDesk/ticket.route'));
 app.use('/api/events', require('./modules/Events/Events.route'));
 app.use('/api/clubs', require('./modules/Club/Club.route'));
