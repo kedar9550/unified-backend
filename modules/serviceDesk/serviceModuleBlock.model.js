@@ -13,6 +13,16 @@ const serviceModuleBlockSchema = new mongoose.Schema({
     unique: true,
     trim: true
   },
+  blockType: {
+    type: String,
+    enum: ["ACADEMIC", "HOSTEL"],
+    default: "ACADEMIC"
+  },
+  genderTag: {
+    type: String,
+    enum: ["BOYS", "GIRLS", "NONE"],
+    default: "NONE"
+  },
   description: {
     type: String,
     default: ""

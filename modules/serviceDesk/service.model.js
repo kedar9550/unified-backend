@@ -28,9 +28,20 @@ const serviceSchema = new mongoose.Schema({
     default: true
   },
 
+  applicableBlockType: {
+    type: String,
+    enum: ["ALL", "ACADEMIC", "HOSTEL"],
+    default: "ALL"
+  },
+
   directEmployeeInvolvement: {
     type: Boolean,
     default: true
+  },
+
+  subcategories: {
+    type: [String],
+    default: []
   }
 
 }, { timestamps: true });
