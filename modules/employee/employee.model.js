@@ -63,6 +63,13 @@ const EmployeeSchema = new mongoose.Schema({
     coursesTaught: [{
         courseName: { type: String, required: true }
     }],
+    researchInterests: {
+        type: String,
+        default: ""
+    },
+    honorsAndAwards: [{
+        title: String
+    }],
     doctorate: {
         type: String,
         enum: ["yes", "no"],

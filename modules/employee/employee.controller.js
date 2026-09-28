@@ -165,12 +165,12 @@ const registerUser = async (req, res) => {
         });
 
         const appName = process.env.APP_NAME || "UNIFIED_SYSTEM";
-        
+
         let defaultRole;
         if (roleId) {
             defaultRole = await Role.findById(roleId);
         }
-        
+
         if (!defaultRole) {
             defaultRole = await Role.findOne({ key: "FACULTY", app: appName });
         }
@@ -349,7 +349,7 @@ const updateProfile = async (req, res) => {
 
             return res.json({ user: normalizedUser });
         } else {
-            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "linkedInId", "publonsId", "vidwanId", "panNumber", "college", "qualifications", "coursesTaught"];
+            const allowedFields = ["name", "phone", "email", "scopusId", "wosId", "orcidId", "googleScholarId", "linkedInId", "publonsId", "vidwanId", "panNumber", "college", "qualifications", "coursesTaught", "researchInterests", "honorsAndAwards"];
             const updates = {};
             allowedFields.forEach((field) => {
                 // Allow setting empty values except email and phone which are required
@@ -363,11 +363,11 @@ const updateProfile = async (req, res) => {
             });
 
             if (updates.qualifications !== undefined) {
-                const hasDoctorate = updates.qualifications.some(q => 
-                    q.level === "Doctoral" || 
-                    (q.qualification || "").toUpperCase().trim() === "PHD" || 
+                const hasDoctorate = updates.qualifications.some(q =>
+                    q.level === "Doctoral" ||
+                    (q.qualification || "").toUpperCase().trim() === "PHD" ||
                     (q.qualification || "").toUpperCase().trim() === "PH.D." ||
-                    (q.qualification || "").toUpperCase().trim() === "PHARMD" || 
+                    (q.qualification || "").toUpperCase().trim() === "PHARMD" ||
                     (q.qualification || "").toUpperCase().trim() === "PHARM.D."
                 );
                 updates.doctorate = hasDoctorate ? "yes" : "no";
@@ -734,10 +734,10 @@ const bulkRegisterUser = async (req, res) => {
                         const instId = (rowData['institution id'] || rowData['id'] || rowData['institutionid'])?.toString().trim();
                         if (instId) {
                             if (!qualificationsData[instId]) qualificationsData[instId] = [];
-                            
+
                             const level = rowData['level']?.toString().trim();
                             const qual = rowData['qualification']?.toString().trim();
-                            
+
                             // Only add if level and qualification are present
                             if (level && qual) {
                                 qualificationsData[instId].push({
@@ -799,8 +799,8 @@ const bulkRegisterUser = async (req, res) => {
                 const dojInput = formatDOJ(dojRaw);
                 const defaultRoleInput = (row.defaultRole || row['default role'] || row.DefaultRole || row.role)?.toString().trim();
                 const cosInput = (row.cos || row.Cos || row['cos'])?.toString().trim().toLowerCase() === "no" ? "no" : "yes";
-                
-                
+
+
 
 
                 if (!institutionId) {
@@ -932,7 +932,7 @@ const bulkRegisterUser = async (req, res) => {
                 // Add qualifications if extracted from Excel Sheet 2
                 if (qualificationsData[institutionId] && qualificationsData[institutionId].length > 0) {
                     newEmployeeData.qualifications = qualificationsData[institutionId];
-                } 
+                }
                 // Or parse qualifications from CSV/Excel flat columns
                 else {
                     const parsedQuals = [];
@@ -942,7 +942,7 @@ const bulkRegisterUser = async (req, res) => {
                         const qual = (row[`qual ${i} degree`] || row[`Qual ${i} Degree`] || row[`qual ${i} qualification`] || row[`qual${i}degree`] || row[`qualification ${i}`])?.toString().trim();
                         const month = (row[`qual ${i} month`] || row[`Qual ${i} Month`] || row[`qual${i}month`])?.toString().trim();
                         const year = (row[`qual ${i} year`] || row[`Qual ${i} Year`] || row[`qual${i}year`])?.toString().trim();
-                        
+
                         if (level && qual) {
                             parsedQuals.push({
                                 level: level,
@@ -1116,10 +1116,10 @@ const adminUpdateEmployee = async (req, res) => {
         if (defaultRoleId) {
             const currentAppRoles = await UserAppRole.find({ userId: employee._id, app: process.env.APP_NAME || 'UNIFIED_SYSTEM' }).populate('role');
             const existingDefaultUserAppRole = currentAppRoles.find(ur => ur.role && ur.role.defaultRole);
-            
+
             if (existingDefaultUserAppRole && existingDefaultUserAppRole.role._id.toString() !== defaultRoleId.toString()) {
                 await UserAppRole.findByIdAndDelete(existingDefaultUserAppRole._id);
-                
+
                 const alreadyHasNewRole = currentAppRoles.find(ur => ur.role && ur.role._id.toString() === defaultRoleId.toString());
                 if (!alreadyHasNewRole) {
                     await UserAppRole.create({
@@ -1161,7 +1161,7 @@ const adminUpdateEmployee = async (req, res) => {
             }
             employee.dateOfJoining = dateOfJoining;
         }
-        
+
         await employee.save();
 
         const updatedEmployee = await Employee.findById(id)
@@ -1513,7 +1513,7 @@ const sendSignupOtp = async (req, res) => {
         const phone = (identityData.mobileno || identityData.MobileNo)?.trim();
         const department = (identityData.departmentname || identityData.DepartmentName)?.trim();
         const designation = (identityData.designation || identityData.Designation)?.trim();
-        
+
         let dateOfJoining = "";
         const dojRaw = identityData.dateofjoin || identityData.DateOfJoin;
         if (dojRaw) {
@@ -1665,13 +1665,13 @@ const downloadBulkTemplate = async (req, res) => {
 
         // Headers
         const headers = [
-            "Institution ID", "Email Address", "Serving Dept Code", 
+            "Institution ID", "Email Address", "Serving Dept Code",
             "Parent Dept Code", "Date of Joining", "Leadership", "Default Role", "Cos",
             "Qual 1 Level", "Qual 1 Degree", "Qual 1 Month", "Qual 1 Year",
             "Qual 2 Level", "Qual 2 Degree", "Qual 2 Month", "Qual 2 Year",
             "Qual 3 Level", "Qual 3 Degree", "Qual 3 Month", "Qual 3 Year"
         ];
-        
+
         sheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
 
         // Add sample row
