@@ -17,6 +17,7 @@ const {
   assignTicket,
   adminRejectTicket,
   adminUpdateTicketStatus,
+  updateTicketSLA,
   updateAssignmentStatus,
   addComment,
   getComments,
@@ -102,6 +103,7 @@ router.get("/:id", getTicketById);
 router.post("/:id/assign", requireServiceAdminOfTicket, assignTicket);
 router.post("/:id/reject", requireServiceAdminOfTicket, adminRejectTicket);
 router.put("/:id/admin-status", requireServiceAdminOfTicket, adminUpdateTicketStatus);
+router.put("/:id/sla", requireServiceAdminOfTicket, updateTicketSLA);
 
 // ---------------------------------------------------------------------
 // Status update — Service Emp updates their own row

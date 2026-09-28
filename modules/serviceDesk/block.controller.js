@@ -2,14 +2,18 @@ const ServiceModuleBlock = require("./serviceModuleBlock.model");
 
 // @desc   Get all blocks
 // @route  GET /api/service-desk/blocks
-// @access Any authenticated user (activeOnly query param for dropdowns)
+// @access Any authenticated user (activeOnly, blockType, genderTag query params for dropdowns)
 exports.getBlocks = async (req, res, next) => {
   try {
-    const { activeOnly } = req.query;
-    const filter = activeOnly === "true" ? { status: "ACTIVE" } : {};
+    const { activeOnly, blockType, genderTag } = req.query;
+    const filter = {};
+    if (activeOnly === "true") filter.status = "ACTIVE";
+    if (blockType) filter.blockType = blockType.toUpperCase();
+    if (genderTag) filter.genderTag = genderTag.toUpperCase();
+
     const blocks = await ServiceModuleBlock.find(filter)
       .populate("createdBy", "name institutionId")
-      .sort({ blockName: 1 })
+      .sort({ blockType: 1, genderTag: 1, blockName: 1 })
       .lean();
     res.json({ success: true, data: blocks });
   } catch (error) {
@@ -40,7 +44,7 @@ exports.getBlockById = async (req, res, next) => {
 // @access PRIME
 exports.createBlock = async (req, res, next) => {
   try {
-    const { blockName, blockCode, description, status } = req.body;
+    const { blockName, blockCode, description, status, blockType, genderTag } = req.body;
     if (!blockName || !blockCode) {
       res.status(400);
       return next(new Error("Block Name and Block Code are required"));
@@ -53,9 +57,16 @@ exports.createBlock = async (req, res, next) => {
       return next(new Error(`Block with code "${cleanCode}" already exists`));
     }
 
+    const normalizedType = blockType?.toUpperCase() === "HOSTEL" ? "HOSTEL" : "ACADEMIC";
+    const normalizedGender = normalizedType === "HOSTEL"
+      ? (genderTag?.toUpperCase() === "GIRLS" ? "GIRLS" : "BOYS")
+      : "NONE";
+
     const block = await ServiceModuleBlock.create({
       blockName: blockName.trim(),
       blockCode: cleanCode,
+      blockType: normalizedType,
+      genderTag: normalizedGender,
       description: description || "",
       status: status || "ACTIVE",
       createdBy: req.user.userId
@@ -72,7 +83,7 @@ exports.createBlock = async (req, res, next) => {
 // @access PRIME
 exports.updateBlock = async (req, res, next) => {
   try {
-    const { blockName, blockCode, description, status } = req.body;
+    const { blockName, blockCode, description, status, blockType, genderTag } = req.body;
 
     const block = await ServiceModuleBlock.findById(req.params.id);
     if (!block) {
@@ -95,6 +106,16 @@ exports.updateBlock = async (req, res, next) => {
     if (blockName) block.blockName = blockName.trim();
     if (description !== undefined) block.description = description;
     if (status) block.status = status;
+    if (blockType) {
+      block.blockType = blockType.toUpperCase() === "HOSTEL" ? "HOSTEL" : "ACADEMIC";
+      if (block.blockType === "HOSTEL") {
+        block.genderTag = genderTag?.toUpperCase() === "GIRLS" ? "GIRLS" : "BOYS";
+      } else {
+        block.genderTag = "NONE";
+      }
+    } else if (genderTag && block.blockType === "HOSTEL") {
+      block.genderTag = genderTag.toUpperCase() === "GIRLS" ? "GIRLS" : "BOYS";
+    }
 
     await block.save();
 
