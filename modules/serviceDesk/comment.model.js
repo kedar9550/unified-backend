@@ -8,10 +8,27 @@ const commentSchema = new mongoose.Schema({
     required: true
   },
 
+  senderType: {
+    type: String,
+    enum: ["EMPLOYEE", "STUDENT"],
+    default: "EMPLOYEE"
+  },
+
   sender: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Employee",
-    required: true
+    default: null
+  },
+
+  senderStudent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceDeskStudent",
+    default: null
+  },
+
+  senderName: {
+    type: String,
+    default: ""
   },
 
   message: {

@@ -43,10 +43,33 @@ const ticketSchema = new mongoose.Schema({
     default: null
   },
 
+  // Creator identification
+  creatorType: {
+    type: String,
+    enum: ["EMPLOYEE", "STUDENT"],
+    default: "EMPLOYEE",
+    required: true
+  },
+
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Employee",
-    required: true
+    default: null
+  },
+
+  student: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceDeskStudent",
+    default: null
+  },
+
+  studentDetails: {
+    rollno: { type: String, trim: true },
+    studentname: { type: String, trim: true },
+    coursename: { type: String, trim: true },
+    branch: { type: String, trim: true },
+    mobilenumber: { type: String, trim: true },
+    gender: { type: String, trim: true }
   },
 
   // Admin can assign the SAME ticket to MULTIPLE Service Emps.
@@ -142,6 +165,8 @@ const ticketSchema = new mongoose.Schema({
 
 ticketSchema.index({ service: 1, status: 1 });
 ticketSchema.index({ createdBy: 1 });
+ticketSchema.index({ student: 1 });
+ticketSchema.index({ "studentDetails.rollno": 1 });
 ticketSchema.index({ "assignedTo.employee": 1 });
 
 module.exports = mongoose.model("Ticket", ticketSchema);

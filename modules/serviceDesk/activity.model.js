@@ -13,10 +13,27 @@ const activitySchema = new mongoose.Schema({
     required: true // e.g. TICKET_CREATED, TICKET_ASSIGNED, STATUS_UPDATED, TICKET_REJECTED, TICKET_CLOSED
   },
 
+  performerType: {
+    type: String,
+    enum: ["EMPLOYEE", "STUDENT", "SYSTEM"],
+    default: "EMPLOYEE"
+  },
+
   performedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Employee",
-    required: true
+    default: null
+  },
+
+  performedByStudent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceDeskStudent",
+    default: null
+  },
+
+  performerName: {
+    type: String,
+    default: ""
   },
 
   metadata: {

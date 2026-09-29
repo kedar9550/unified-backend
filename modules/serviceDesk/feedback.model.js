@@ -9,10 +9,28 @@ const feedbackSchema = new mongoose.Schema({
     unique: true // one feedback per ticket
   },
 
+  submittedByType: {
+    type: String,
+    enum: ["EMPLOYEE", "STUDENT"],
+    default: "EMPLOYEE"
+  },
+
   submittedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Employee",
-    required: true
+    default: null
+  },
+
+  submittedByStudent: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceDeskStudent",
+    default: null
+  },
+
+  studentRollNo: {
+    type: String,
+    trim: true,
+    default: null
   },
 
   rating: {
