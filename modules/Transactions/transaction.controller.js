@@ -36,52 +36,71 @@ const getRazorpayStatement = async (req, res) => {
             today.setHours(23, 59, 59, 999);
             toTimestamp = Math.floor(today.getTime() / 1000);
         }
-
         const authHeader = "Basic " + Buffer.from(`${keyId}:${keySecret}`).toString("base64");
-        
-        // Fast parallel batch fetching (up to 1,000 items max per statement request for instant response)
+
+        // Robust batched fetching (3 concurrent requests) with retry logic to avoid rate limits
         let items = [];
         let batchSkip = 0;
-        const batchSize = 5; // 5 parallel requests * 100 = 500 items per round trip
-        const maxLimit = 1000;
+        const batchSize = 3; // Safe concurrency limit
+        const maxLimit = 15000;
         let keepFetching = true;
+        const axios = require('axios');
+
+        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         while (keepFetching && items.length < maxLimit) {
             const promises = [];
-            const axios = require('axios');
             for (let i = 0; i < batchSize; i++) {
                 const skipVal = batchSkip + (i * 100);
                 if (skipVal >= maxLimit) break;
-                const razorpayUrl = `https://api.razorpay.com/v1/payments?from=${fromTimestamp}&to=${toTimestamp}&count=100&skip=${skipVal}`;
                 
-                promises.push(
-                    axios.get(razorpayUrl, {
-                        headers: {
-                            "Authorization": authHeader,
-                            "Content-Type": "application/json"
-                        },
-                        timeout: 10000 // 10s timeout
-                    }).then(r => r.data).catch(e => ({ items: [] }))
-                );
+                const fetchPage = async (skip, retries = 3) => {
+                    const razorpayUrl = `https://api.razorpay.com/v1/payments?from=${fromTimestamp}&to=${toTimestamp}&count=100&skip=${skip}`;
+                    for (let attempt = 1; attempt <= retries; attempt++) {
+                        try {
+                            const response = await axios.get(razorpayUrl, {
+                                headers: {
+                                    "Authorization": authHeader,
+                                    "Content-Type": "application/json"
+                                },
+                                timeout: 15000
+                            });
+                            return response.data.items || [];
+                        } catch (err) {
+                            if (attempt === retries) {
+                                console.error(`Failed to fetch skip=${skip} after ${retries} attempts:`, err.message);
+                                throw err; // Throw to fail the batch instead of silently missing data
+                            }
+                            await delay(1000 * attempt); // Exponential-ish backoff
+                        }
+                    }
+                };
+                
+                promises.push(fetchPage(skipVal));
             }
 
-            const results = await Promise.all(promises);
-            let addedInBatch = 0;
-            let hitEnd = false;
+            try {
+                const results = await Promise.all(promises);
+                let addedInBatch = 0;
+                let hitEnd = false;
 
-            for (const resData of results) {
-                const fetched = resData.items || [];
-                items = items.concat(fetched);
-                addedInBatch += fetched.length;
-                if (fetched.length < 100) {
-                    hitEnd = true;
+                for (const fetched of results) {
+                    items = items.concat(fetched);
+                    addedInBatch += fetched.length;
+                    if (fetched.length < 100) {
+                        hitEnd = true;
+                    }
                 }
-            }
 
-            if (hitEnd || addedInBatch === 0) {
-                keepFetching = false;
-            } else {
-                batchSkip += (batchSize * 100);
+                if (hitEnd || addedInBatch === 0) {
+                    keepFetching = false;
+                } else {
+                    batchSkip += (batchSize * 100);
+                    await delay(300); // Small pause between batches
+                }
+            } catch (error) {
+                console.error("Batch fetch failed, stopping pagination:", error.message);
+                keepFetching = false; // Stop fetching, but process what we have
             }
         }
 
