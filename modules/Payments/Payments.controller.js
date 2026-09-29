@@ -306,7 +306,12 @@ exports.getRegistrations = async (req, res) => {
           { 'participants.mobile': searchRegex },
           { receipt: searchRegex },
           { eventName: searchRegex },
-          { category: searchRegex }
+          { category: searchRegex },
+          { razorpayPaymentId: searchRegex },
+          { razorpayOrderId: searchRegex },
+          { 'rawPaymentData.razorpayCompleteResponse.acquirer_data.rrn': searchRegex },
+          { 'rawPaymentData.razorpayCompleteResponse.acquirer_data.bank_transaction_id': searchRegex },
+          { 'rawPaymentData.razorpayCompleteResponse.acquirer_data.upi_transaction_id': searchRegex }
         ]
       });
     } else {
