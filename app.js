@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
@@ -66,14 +66,14 @@ app.use('/api/employees/login', authLimiter);
 app.use(logger('dev'));
 // Conditionally apply body parser limits: 50mb for PDF generation, 10kb for everything else
 app.use((req, res, next) => {
-    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools')) {
+    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools') || req.path === '/api/payslips/send-email') {
         express.json({ limit: '50mb' })(req, res, next);
     } else {
         express.json({ limit: '10kb' })(req, res, next);
     }
 });
 app.use((req, res, next) => {
-    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools')) {
+    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools') || req.path === '/api/payslips/send-email') {
         express.urlencoded({ extended: false, limit: '50mb' })(req, res, next);
     } else {
         express.urlencoded({ extended: false, limit: '10kb' })(req, res, next);

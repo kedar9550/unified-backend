@@ -236,9 +236,9 @@ exports.createPayslip = async (req, res) => {
  */
 exports.sendPayslipEmail = async (req, res) => {
     try {
-        const { fromMonth, toMonth, year, empId } = req.body;
+        const { fromMonth, toMonth, year, empId, pdfBase64, targetEmail } = req.body;
         const targetEmpId = empId || req.user?.institutionId;
-        const userEmail = req.user?.email;
+        const userEmail = targetEmail || req.user?.email;
 
         let nodemailer;
         try {
@@ -256,7 +256,7 @@ exports.sendPayslipEmail = async (req, res) => {
                 auth: { user: smtpUser, pass: smtpPass }
             });
 
-            await transporter.sendMail({
+            const mailOptions = {
                 from: `"Aditya University HR" <${smtpUser}>`,
                 to: userEmail,
                 subject: `Payslips for ${fromMonth} - ${toMonth} ${year}`,
@@ -265,12 +265,24 @@ exports.sendPayslipEmail = async (req, res) => {
                         <h2>Salary Slips Notification</h2>
                         <p>Dear Employee (${targetEmpId}),</p>
                         <p>Your requested salary slips for the period <strong>${fromMonth} - ${toMonth} ${year}</strong> have been processed.</p>
-                        <p>Please log into the portal to view and download your payslips.</p>
+                        <p>Please find your payslips attached as a PDF document.</p>
                         <br/>
                         <p>Regards,<br/><strong>Accounts & Finance Department</strong><br/>Aditya University</p>
                     </div>
                 `
-            });
+            };
+
+            if (pdfBase64) {
+                mailOptions.attachments = [
+                    {
+                        filename: `Payslips_${targetEmpId}_${fromMonth}_to_${toMonth}_${year}.pdf`,
+                        content: pdfBase64,
+                        encoding: 'base64'
+                    }
+                ];
+            }
+
+            await transporter.sendMail(mailOptions);
         }
 
         return res.status(200).json({
