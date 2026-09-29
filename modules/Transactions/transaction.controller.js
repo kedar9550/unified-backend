@@ -105,6 +105,7 @@ const getRazorpayStatement = async (req, res) => {
             // Format date & time string
             const createdDate = item.created_at ? new Date(item.created_at * 1000) : new Date();
             const dateStr = createdDate.toLocaleString('en-GB', {
+                timeZone: 'Asia/Kolkata',
                 day: '2-digit',
                 month: '2-digit',
                 year: 'numeric',
