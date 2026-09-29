@@ -126,7 +126,7 @@ exports.createPhdApplication = async (req, res) => {
         }
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -323,7 +323,7 @@ exports.updatePhdApplication = async (req, res) => {
         application.rollNumber = rollNo;
         application.type = checkType;
         application.scholarStatus = checkScholarStatus;
-        application.status = 'Pending at R&D'; // Resubmit
+        application.status = 'Pending'; // Resubmit
         application.hodComment = '';
         application.rndComment = '';
 
@@ -445,7 +445,7 @@ exports.getPendingAtHOD = async (req, res) => {
         
         const applications = await PhdApplication.find({ 
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
         
         res.json({ success: true, data: applications });
@@ -462,7 +462,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const application = await PhdApplication.findByIdAndUpdate(id, { 
             status, 
             hodComment: comment 

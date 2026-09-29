@@ -73,7 +73,7 @@ exports.createConsultancy = async (req, res) => {
             : [...new Set(claimantsList)];
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -266,7 +266,7 @@ exports.updateConsultancy = async (req, res) => {
         consultancy.appraisalClaimants = appraisalClaimants;
         consultancy.applyIncentive = 'No';
         consultancy.incentiveClaimant = null;
-        consultancy.status = 'Pending at R&D'; // Resubmit
+        consultancy.status = 'Pending'; // Resubmit
         consultancy.hodComment = '';
         consultancy.rndComment = '';
 
@@ -380,7 +380,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const consultancy = await Consultancy.findByIdAndUpdate(id, { 
             status, 
             hodComment: comment 

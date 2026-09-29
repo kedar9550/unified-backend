@@ -6,6 +6,19 @@ const fs = require('fs');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 const phdScholarController = require('./PhdScholar.controller');
 
+const primaryEvaluatorRoles = [
+    "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", 
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+    "CONTROLLER OF EXAMINATIONS", "CONTROLLER_OF_EXAMINATIONS"
+];
+
 // Multer directory setup for PhD supporting documents
 const uploadDir = path.join(__dirname, '../../uploads/phdScholars');
 if (!fs.existsSync(uploadDir)) {
@@ -26,7 +39,8 @@ const upload = multer({
     fileFilter: (req, file, cb) => {
         const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
         const ext = path.extname(file.originalname).toLowerCase();
-        if (allowed.includes(ext)) return cb(null, true);
+
+if (allowed.includes(ext)) return cb(null, true);
         cb(new Error('Only PDF and image files are allowed. Max size 500KB.'));
     }
 });
@@ -46,8 +60,8 @@ router.get('/:id', protect, phdScholarController.getApplicationById);
 router.put('/:id', protect, upload.single('document'), phdScholarController.updatePhdApplication);
 
 // HOD: View pending and Action
-router.get('/pending-hod', protect, authorize('HOD'), phdScholarController.getPendingAtHOD);
-router.put('/hod-action/:id', protect, authorize('HOD'), phdScholarController.hodAction);
+router.get('/pending-hod', protect, authorize(...primaryEvaluatorRoles), phdScholarController.getPendingAtHOD);
+router.put('/hod-action/:id', protect, authorize(...primaryEvaluatorRoles), phdScholarController.hodAction);
 
 // R&D: View pending and Action
 router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), phdScholarController.getPendingAtRND);

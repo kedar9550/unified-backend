@@ -131,7 +131,7 @@ const TextbookSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: ['Draft', 'Pending at R&D', 'Approved', 'Rejected by R&D'],
-        default: 'Pending at R&D'
+        default: 'Pending'
     },
     
     // Feedback

@@ -54,8 +54,8 @@ const ConferenceSchema = new mongoose.Schema({
 
     status: {
         type: String,
-        enum: ['Pending at R&D', 'Approved', 'Rejected by R&D'],
-        default: 'Pending at R&D'
+        enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'],
+        default: 'Pending'
     },
     hodComment: { type: String },
     rndComment: { type: String },
