@@ -29,31 +29,32 @@ exports.getResearchRequests = async (req, res) => {
         // Check if user has research management roles
         const userRoleNames = req.user.roles?.map(r => r.role?.toUpperCase()) || [];
         const isResearchAdmin = userRoleNames.includes('RESEARCH_DEAN') || userRoleNames.includes('RESEARCH_COORDINATOR');
-        const isHOD = userRoleNames.includes('HOD') || userRoleNames.includes('SCHOOL_DEAN') || userRoleNames.includes('SCHOOL DEAN');
 
         console.log(`[DEBUG] Research Approval Access - User: ${req.user.userId}, isResearchAdmin: ${isResearchAdmin}`);
 
+        const { getFacultyIdsForApprover } = require('../hierarchy/reportingBoss.helper');
+        
         let facultyIds = [];
         let facultyMap = {};
+
+        if (!isResearchAdmin) {
+            facultyIds = await getFacultyIdsForApprover(req.user);
+        }
+
+        const isHOD = userRoleNames.includes('HOD') || userRoleNames.includes('SCHOOL_DEAN') || userRoleNames.includes('SCHOOL DEAN') || facultyIds.length > 0;
 
         if (isResearchAdmin) {
             // Deans and Coordinators see everything at institutional level
         } else if (isHOD) {
-            // Get HOD Departments using robust helper
-            const deptIds = await getHODDepartments(req.user);
-
-            if (deptIds.length === 0) {
+            if (facultyIds.length === 0) {
                 return res.json({ success: true, data: [] });
             }
 
-            // Fetch faculty for these departments (matching either coreDepartment or department)
+            // Optional: Populate facultyMap if needed by subsequent code
             const facultyDocs = await Employee.find({
-                $or: [
-                    { coreDepartment: { $in: deptIds } },
-                    { department: { $in: deptIds } }
-                ]
+                _id: { $in: facultyIds }
             }).select('_id name institutionId department coreDepartment profileImage');
-            facultyIds = facultyDocs.map(f => f._id);
+            
             facultyMap = facultyDocs.reduce((acc, f) => {
                 acc[f._id.toString()] = f;
                 return acc;
@@ -71,18 +72,18 @@ exports.getResearchRequests = async (req, res) => {
         // Status Filter Logic
         if (status && status !== 'All') {
             if (status === 'Pending') {
-                query.status = 'Pending at R&D';
+                query.status = isResearchAdmin ? 'Pending at R&D' : 'Pending';
             }
             else if (status === 'Approved') {
                 query.status = 'Approved';
             }
             else if (status === 'Rejected') {
-                query.status = 'Rejected by R&D';
+                query.status = isResearchAdmin ? 'Rejected by R&D' : 'Rejected';
             }
             else query.status = status;
         } else if (!status) {
             // Default view when NO status is provided (initial load)
-            query.status = 'Pending at R&D';
+            query.status = isResearchAdmin ? 'Pending at R&D' : 'Pending';
         }
 
         // Date Filter
@@ -849,6 +850,19 @@ exports.editResearchDetails = async (req, res) => {
         if (data.dateOfFiling) data.dateOfFiling = new Date(data.dateOfFiling);
         if (data.admissionOrAwardDate) data.admissionOrAwardDate = new Date(data.admissionOrAwardDate);
         if (data.sanctionDate) data.sanctionDate = new Date(data.sanctionDate);
+
+        // Auto-calculate number of references belonging to AGEC if modified
+        if (data.agecReferencingNumbers !== undefined) {
+            if (data.agecReferencingNumbers.trim()) {
+                if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
+                    return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
+                }
+                data.numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
+            } else {
+                data.numberOfReferencesBelongingToAGEC = 0;
+                data.agecReferencingNumbers = "";
+            }
+        }
 
         // Update document fields
         Object.assign(doc, data);

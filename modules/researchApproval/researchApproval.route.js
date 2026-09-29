@@ -25,7 +25,7 @@ const upload = multer({
 
 // Main route for fetching research requests for approval
 // Access restricted to HODs, Deans and R&D Administration
-router.get('/', protect, authorize('HOD', 'SCHOOL_DEAN', 'RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), researchApprovalController.getResearchRequests);
+router.get('/', protect, researchApprovalController.getResearchRequests);
 
 // Consolidated reports route for Research Admin
 router.get('/reports', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), researchApprovalController.getResearchReports);

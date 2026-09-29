@@ -73,7 +73,7 @@ exports.createPatent = async (req, res) => {
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -291,7 +291,7 @@ exports.updatePatent = async (req, res) => {
         patent.coInventors = resolvedAuthors;
         patent.appraisalClaimant = appraisalClaimant;
         patent.incentiveClaimant = computedIncentiveClaimant;
-        patent.status = 'Pending at R&D'; // Resubmit
+        patent.status = 'Pending'; // Resubmit
         patent.hodComment = '';
         patent.rndComment = '';
 
@@ -419,7 +419,7 @@ exports.getPendingAtHOD = async (req, res) => {
 
         const patents = await Patent.find({
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
 
         res.json({ success: true, data: patents });
@@ -436,7 +436,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const patent = await Patent.findByIdAndUpdate(id, {
             status,
             hodComment: comment

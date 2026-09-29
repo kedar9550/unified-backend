@@ -234,7 +234,15 @@ const calculateJournalIncentive = (journalData = {}) => {
 
     // 3. Compute Base Incentive with Author Multiplier
     const base100 = matchedRule.baseAmount;
-    const baseShare = Math.round(base100 * authorPercentage);
+    let baseShare = Math.round(base100 * authorPercentage);
+
+    let breakdown = `[${matchedRule.name}] Base ₹${base100.toLocaleString('en-IN')} × ${(authorPercentage * 100)}% (₹${baseShare.toLocaleString('en-IN')})`;
+
+    const isSeedGrantWork = (journalData.applyingSeedGrant || '').trim().toLowerCase() === 'yes';
+    if (isSeedGrantWork) {
+        baseShare = Math.round(baseShare * 0.5);
+        breakdown += ` -> Seed Grant 50% Deduction (₹${baseShare.toLocaleString('en-IN')})`;
+    }
 
     // 4. Compute AGEC References Bonus
     const agecBonus = getAgecBonus(numAgecRefs, matchedRule.agecRates);
@@ -242,7 +250,7 @@ const calculateJournalIncentive = (journalData = {}) => {
     // 5. Total Estimated Incentive
     const totalEstimated = baseShare + agecBonus;
 
-    const breakdown = `[${matchedRule.name}] Base ₹${base100.toLocaleString('en-IN')} × ${(authorPercentage * 100)}% (₹${baseShare.toLocaleString('en-IN')}) + AGEC Ref (${numAgecRefs} Paper${numAgecRefs === 1 ? '' : 's'}): ₹${agecBonus.toLocaleString('en-IN')} = Total ₹${totalEstimated.toLocaleString('en-IN')}`;
+    breakdown += ` + AGEC Ref (${numAgecRefs} Paper${numAgecRefs === 1 ? '' : 's'}): ₹${agecBonus.toLocaleString('en-IN')} = Total ₹${totalEstimated.toLocaleString('en-IN')}`;
 
     return {
         success: true,

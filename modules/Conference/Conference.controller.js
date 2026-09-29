@@ -157,7 +157,7 @@ exports.createConference = async (req, res) => {
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -386,7 +386,7 @@ exports.updateConference = async (req, res) => {
         conference.scopusSubtype = scopusSubtype;
         conference.appraisalClaimant = appraisalClaimant;
         conference.incentiveClaimant = computedIncentiveClaimant;
-        conference.status = 'Pending at R&D'; // Resubmit
+        conference.status = 'Pending'; // Resubmit
         conference.hodComment = '';
         conference.rndComment = '';
 
@@ -509,7 +509,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const conference = await Conference.findByIdAndUpdate(id, {
             status,
             hodComment: comment

@@ -6,6 +6,19 @@ const fs = require('fs');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 const journalController = require('./Journal.controller');
 
+const primaryEvaluatorRoles = [
+    "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", 
+    "VICE CHANCELLOR", "VICE_CHANCELLOR", 
+    "DY. PRO CHANCELLOR", "DY_PRO_CHANCELLOR", 
+    "REGISTRAR",
+    "PRO VICE-CHANCELLOR (E & S)", "PRO_VICE_CHANCELLOR_E_S",
+    "PRO VICE-CHANCELLOR (A)", "PRO_VICE_CHANCELLOR_A",
+    "PRO VICE-CHANCELLOR (S & P)", "PRO_VICE_CHANCELLOR_S_P",
+    "DEAN - (IQAC)", "DEAN_IQAC",
+    "DEAN - (ADMISSIONS)", "DEAN_ADMISSIONS",
+    "CONTROLLER OF EXAMINATIONS", "CONTROLLER_OF_EXAMINATIONS"
+];
+
 // Multer setup
 const uploadDir = path.join(__dirname, '../../uploads/journals');
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
@@ -24,7 +37,8 @@ const upload = multer({
     fileFilter: (req, file, cb) => {
         const allowed = ['.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
-        if (allowed.includes(ext) || file.mimetype === 'application/pdf') return cb(null, true);
+
+if (allowed.includes(ext) || file.mimetype === 'application/pdf') return cb(null, true);
         cb(new Error('Only PDF files are allowed.'));
     }
 });
@@ -51,8 +65,8 @@ router.post('/calculate-incentive', protect, journalController.getEstimatedIncen
 router.get('/:id', protect, journalController.getJournalById);
 
 // HOD: View pending and Action
-router.get('/pending-hod', protect, authorize('HOD'), journalController.getPendingAtHOD);
-router.put('/hod-action/:id', protect, authorize('HOD'), journalController.hodAction);
+router.get('/pending-hod', protect, authorize(...primaryEvaluatorRoles), journalController.getPendingAtHOD);
+router.put('/hod-action/:id', protect, authorize(...primaryEvaluatorRoles), journalController.hodAction);
 
 // R&D: View pending and Action
 router.get('/pending-rnd', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'), journalController.getPendingAtRND);

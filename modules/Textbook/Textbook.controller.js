@@ -109,7 +109,7 @@ exports.createTextbook = async (req, res) => {
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -540,7 +540,7 @@ exports.getPendingAtHOD = async (req, res) => {
         
         const textbooks = await Textbook.find({ 
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
         
         res.json({ success: true, data: textbooks });
@@ -557,7 +557,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const textbook = await Textbook.findByIdAndUpdate(id, { 
             status, 
             hodComment: comment 

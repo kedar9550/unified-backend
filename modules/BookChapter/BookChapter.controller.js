@@ -73,7 +73,7 @@ exports.createBookChapter = async (req, res) => {
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -292,7 +292,7 @@ exports.updateBookChapter = async (req, res) => {
         bookChapter.coAuthors = resolvedAuthors;
         bookChapter.appraisalClaimant = appraisalClaimant;
         bookChapter.incentiveClaimant = computedIncentiveClaimant;
-        bookChapter.status = 'Pending at R&D'; // Resubmit
+        bookChapter.status = 'Pending'; // Resubmit
         bookChapter.hodComment = '';
         bookChapter.rndComment = '';
 
@@ -435,7 +435,7 @@ exports.getPendingAtHOD = async (req, res) => {
 
         const chapters = await BookChapter.find({
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
 
         res.json({ success: true, data: chapters });
@@ -452,7 +452,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const chapter = await BookChapter.findByIdAndUpdate(id, {
             status,
             hodComment: comment

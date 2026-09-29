@@ -155,7 +155,7 @@ exports.createJournal = async (req, res) => {
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalAppraisalEligible = 'No'; // default
         let finalEntryType = 'Self';
 
@@ -480,7 +480,7 @@ exports.updateJournal = async (req, res) => {
             journal.estimatedIncentiveAmount = 0;
         }
 
-        journal.status = 'Pending at R&D'; // Resubmit
+        journal.status = 'Pending'; // Resubmit
         
         // Reset comments since it is a new submission effectively
         journal.hodComment = '';
@@ -617,7 +617,7 @@ exports.getPendingAtHOD = async (req, res) => {
 
         const journals = await Journal.find({
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
 
         res.json({ success: true, data: journals });
@@ -634,7 +634,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment, hIndex, jcrImpactFactor, impactFactor } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const updates = {
             status,
             hodComment: comment
@@ -1275,3 +1275,36 @@ exports.fetchDoiDetails = async (req, res) => {
     }
 };
 
+exports.fetchDetailsByName = async (req, res) => {
+    try {
+        const { journalName } = req.body;
+        if (!journalName) return res.status(400).json({ success: false, message: 'Journal name is required' });
+        
+        const metadata = { journalName, journalCategory: 'OTHERS', jcrImpactFactor: '0' };
+        const JournalMaster = require('../JournalMaster/JournalMaster.model');
+        const escapeRegex = require('../../utils/escapeRegex');
+        const searchName = journalName.trim().toUpperCase();
+        
+        const match = await JournalMaster.findOne({
+            journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+        });
+        
+        if (match && match.type) {
+            metadata.journalCategory = match.type;
+        }
+        
+        const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
+        const jifRecord = await JournalImpactFactor.findOne({
+            journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+        });
+        
+        if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
+            metadata.jcrImpactFactor = String(jifRecord.jif);
+        }
+        
+        return res.json({ success: true, data: metadata });
+    } catch (err) {
+        console.error("fetchDetailsByName Error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error while fetching details by name." });
+    }
+};

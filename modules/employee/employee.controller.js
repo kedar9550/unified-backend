@@ -75,6 +75,8 @@ const registerUser = async (req, res) => {
         // Verify Identity with Institute API (Persona Check)
         let identityData;
         try {
+            const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${id}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
+            identityData = identityResponse?.data?.[0];
             identityData = await fetchStaffFromEcap(id);
 
             if (!identityData || identityData.error) {
@@ -569,6 +571,9 @@ const getecapdata = async (req, res) => {
         const { institutionId, role } = req.body;
         let data = null;
         if (role === "Employee") {
+            response = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
+        } else if (role === "Student") {
+            response = await axios.get(`${STUDENT_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
             data = await fetchStaffFromEcap(institutionId);
         } else if (role === "Student") {
             data = await fetchStudentFromEcap(institutionId);
@@ -600,6 +605,8 @@ const syncProfileWithECAP = async (req, res) => {
         }
 
         // Fetch ECAP Data
+        const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
+        const identityData = identityResponse?.data?.[0];
         const identityData = await fetchStaffFromEcap(institutionId);
 
         if (!identityData || identityData.error) {
@@ -837,6 +844,8 @@ const bulkRegisterUser = async (req, res) => {
                 // Fetch ECAP Data
                 let identityData = null;
                 try {
+                    const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
+                    identityData = identityResponse?.data?.[0];
                     identityData = await fetchStaffFromEcap(institutionId);
                 } catch (apiErr) {
                     errors.push({ id: institutionId, error: "Failed to connect to ECAP API" });
@@ -1009,7 +1018,7 @@ const bulkUpdateEmployees = async (req, res) => {
                 if (!institutionId) continue;
 
                 // Fetch ECAP Data
-                const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`);
+                const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
                 const identityData = identityResponse?.data?.[0];
 
                 if (!identityData || identityData.error) {
@@ -1245,7 +1254,7 @@ const changePassword = async (req, res) => {
 const getStaffData = async (req, res) => {
     try {
         const { id } = req.params;
-        const response = await axios.get(`${STAFF_DATA_API_URL}${id}`);
+        const response = await axios.get(`${STAFF_DATA_API_URL}${id}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
         const data = response.data;
 
         if (!data || data.length === 0) {
@@ -1499,7 +1508,7 @@ const sendSignupOtp = async (req, res) => {
         // 2. Fetch from ECAP API
         let identityData;
         try {
-            const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${cleanId}`);
+            const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${cleanId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
             identityData = identityResponse?.data?.[0];
         } catch (apiErr) {
             console.error("ECAP ERROR:", apiErr.message);
