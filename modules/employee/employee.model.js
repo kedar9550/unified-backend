@@ -60,6 +60,16 @@ const EmployeeSchema = new mongoose.Schema({
         type: String,
         default: ""
     },
+    coursesTaught: [{
+        courseName: { type: String, required: true }
+    }],
+    researchInterests: {
+        type: String,
+        default: ""
+    },
+    honorsAndAwards: [{
+        title: String
+    }],
     doctorate: {
         type: String,
         enum: ["yes", "no"],
@@ -109,6 +119,9 @@ const EmployeeSchema = new mongoose.Schema({
         }
     },
     googleScholarId: { type: String, default: "" },
+    linkedInId: { type: String, default: "" },
+    publonsId: { type: String, default: "" },
+    vidwanId: { type: String, default: "" },
     panNumber: {
         type: String,
         uppercase: true,

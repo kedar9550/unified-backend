@@ -87,11 +87,11 @@ async function processCSV() {
                             let affiliation = 'Aditya';
                             
                             try {
-                                const axios = require('axios');
-                                const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/staffdata/${coAuthorEmpId}`);
-                                if (response.data && response.data.length > 0 && response.data[0].employeename) {
-                                    empName = response.data[0].employeename;
-                                    affiliation = response.data[0].college || 'Aditya';
+                                const { fetchStaffFromEcap } = require('../../utils/ecapService');
+                                const staffData = await fetchStaffFromEcap(coAuthorEmpId);
+                                if (staffData && (staffData.employeename || staffData.EmployeeName)) {
+                                    empName = staffData.employeename || staffData.EmployeeName;
+                                    affiliation = staffData.college || 'Aditya';
                                 }
                             } catch (apiErr) {
                                 console.log(`API lookup failed for ${coAuthorEmpId}`);

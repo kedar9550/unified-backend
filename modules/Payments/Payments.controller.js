@@ -306,7 +306,12 @@ exports.getRegistrations = async (req, res) => {
           { 'participants.mobile': searchRegex },
           { receipt: searchRegex },
           { eventName: searchRegex },
-          { category: searchRegex }
+          { category: searchRegex },
+          { razorpayPaymentId: searchRegex },
+          { razorpayOrderId: searchRegex },
+          { 'rawPaymentData.razorpayCompleteResponse.acquirer_data.rrn': searchRegex },
+          { 'rawPaymentData.razorpayCompleteResponse.acquirer_data.bank_transaction_id': searchRegex },
+          { 'rawPaymentData.razorpayCompleteResponse.acquirer_data.upi_transaction_id': searchRegex }
         ]
       });
     } else {
@@ -670,9 +675,9 @@ exports.triggerVerifyAllPendingGateway = async (req, res) => {
 exports.getStudentBranch = async (req, res) => {
   try {
     const { roll } = req.params;
-    const response = await fetch(`https://info.aec.edu.in/adityaapi/api/studentdata/${roll}`);
-    const data = await response.json();
-    return res.json(data);
+    const { fetchStudentFromEcap } = require('../../utils/ecapService');
+    const data = await fetchStudentFromEcap(roll);
+    return res.json(data ? [data] : []);
   } catch (err) {
     console.error('Error fetching student branch:', err.message);
     return res.status(500).json({ error: 'Failed to fetch from Aditya API', details: err.message });

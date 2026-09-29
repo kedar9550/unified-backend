@@ -21,6 +21,27 @@ const serviceSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+
+  isGlobalService: {
+    type: Boolean,
+    default: true
+  },
+
+  applicableBlockType: {
+    type: String,
+    enum: ["ALL", "ACADEMIC", "HOSTEL"],
+    default: "ALL"
+  },
+
+  directEmployeeInvolvement: {
+    type: Boolean,
+    default: true
+  },
+
+  subcategories: {
+    type: [String],
+    default: []
   }
 
 }, { timestamps: true });

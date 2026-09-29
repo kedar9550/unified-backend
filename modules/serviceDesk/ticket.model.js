@@ -14,6 +14,18 @@ const ticketSchema = new mongoose.Schema({
     trim: true
   },
 
+  subcategory: {
+    type: String,
+    trim: true,
+    default: ""
+  },
+
+  customSubcategory: {
+    type: String,
+    trim: true,
+    default: ""
+  },
+
   description: {
     type: String,
     required: true
@@ -23,6 +35,12 @@ const ticketSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: "Service",
     required: true
+  },
+
+  block: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceModuleBlock",
+    default: null
   },
 
   createdBy: {
@@ -81,8 +99,8 @@ const ticketSchema = new mongoose.Schema({
 
   priority: {
     type: String,
-    enum: ["LOW", "MEDIUM", "HIGH"],
-    default: "MEDIUM"
+    enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+    required: true
   },
 
   dueDate: {

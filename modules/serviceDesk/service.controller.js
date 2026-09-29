@@ -45,7 +45,7 @@ const revokeCoarseRoleIfUnused = async (employeeId, roleName, roleType) => {
 // @access PRIME
 exports.createService = async (req, res, next) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, isGlobalService, applicableBlockType, directEmployeeInvolvement, subcategories } = req.body;
     if (!name) {
       res.status(400);
       return next(new Error("Service name is required"));
@@ -57,9 +57,17 @@ exports.createService = async (req, res, next) => {
       return next(new Error("A service with this name already exists"));
     }
 
+    const cleanedSubcategories = Array.isArray(subcategories)
+      ? Array.from(new Set(subcategories.map(s => String(s).trim()).filter(Boolean)))
+      : [];
+
     const service = await Service.create({
       name: name.trim(),
       description,
+      isGlobalService: isGlobalService !== undefined ? isGlobalService : true,
+      applicableBlockType: applicableBlockType || "ALL",
+      directEmployeeInvolvement: directEmployeeInvolvement !== undefined ? directEmployeeInvolvement : true,
+      subcategories: cleanedSubcategories,
       createdBy: req.user.userId
     });
 
@@ -98,15 +106,31 @@ exports.getServiceById = async (req, res, next) => {
   }
 };
 
-// @desc   Update a service (name/description/isActive)
+// @desc   Update a service (name/description/isActive/isGlobalService/directEmployeeInvolvement/subcategories)
 // @route  PUT /api/service-desk/services/:id
 // @access PRIME
 exports.updateService = async (req, res, next) => {
   try {
-    const { name, description, isActive } = req.body;
+    const { name, description, isActive, isGlobalService, applicableBlockType, directEmployeeInvolvement, subcategories } = req.body;
+
+    const updatePayload = {
+      ...(name && { name: name.trim() }),
+      ...(description !== undefined && { description }),
+      ...(isActive !== undefined && { isActive }),
+      ...(isGlobalService !== undefined && { isGlobalService }),
+      ...(applicableBlockType && { applicableBlockType }),
+      ...(directEmployeeInvolvement !== undefined && { directEmployeeInvolvement })
+    };
+
+    if (subcategories !== undefined) {
+      updatePayload.subcategories = Array.isArray(subcategories)
+        ? Array.from(new Set(subcategories.map(s => String(s).trim()).filter(Boolean)))
+        : [];
+    }
+
     const service = await Service.findByIdAndUpdate(
       req.params.id,
-      { ...(name && { name: name.trim() }), ...(description !== undefined && { description }), ...(isActive !== undefined && { isActive }) },
+      updatePayload,
       { new: true, runValidators: true }
     );
     if (!service) {
@@ -165,7 +189,7 @@ exports.getMyMemberships = async (req, res, next) => {
 exports.assignServiceAdmin = async (req, res, next) => {
   try {
     const { serviceId } = req.params;
-    const { employeeId } = req.body;
+    const { employeeId, blocks } = req.body;
 
     if (!employeeId) {
       res.status(400);
@@ -186,20 +210,65 @@ exports.assignServiceAdmin = async (req, res, next) => {
       return next(new Error("Employee not found"));
     }
 
+    const incomingBlocks = Array.isArray(blocks) ? blocks.map(b => b.toString()) : [];
+
+    // Enforce: One block cannot have multiple Service Admins for the same service
+    if (incomingBlocks.length > 0) {
+      const otherAdminsWithBlocks = await ServiceMember.find({
+        service: serviceId,
+        roleType: "SERVICE_ADMIN",
+        employee: { $ne: employeeId },
+        isActive: true,
+        blocks: { $in: incomingBlocks }
+      })
+        .populate("employee", "name institutionId")
+        .populate("blocks", "blockName blockCode blockType genderTag");
+      if (otherAdminsWithBlocks.length > 0) {
+        const conflictDescriptions = [];
+        for (const other of otherAdminsWithBlocks) {
+          const conflicting = (other.blocks || []).filter(b => incomingBlocks.includes(b._id.toString()));
+          for (const cb of conflicting) {
+            const typeLabel = cb.blockType === 'HOSTEL' ? ` (${cb.genderTag === 'GIRLS' ? 'Girls Hostel' : 'Boys Hostel'})` : '';
+            conflictDescriptions.push(`"${cb.blockName || cb.blockCode}${typeLabel}" (assigned to ${other.employee?.name || 'another admin'} - ${other.employee?.institutionId || ''})`);
+          }
+        }
+        if (conflictDescriptions.length > 0) {
+          res.status(400);
+          return next(new Error(`A block cannot have multiple Service Admins. Conflicting blocks: ${conflictDescriptions.join(", ")}`));
+        }
+      }
+    }
+
     const existing = await ServiceMember.findOne({
       service: serviceId,
       employee: employeeId,
       roleType: "SERVICE_ADMIN"
     });
+
     if (existing) {
-      res.status(400);
-      return next(new Error("This employee is already a Service Admin for this service"));
+      // Set the blocks directly to what the admin selected in the form
+      existing.blocks = Array.from(new Set(incomingBlocks));
+      existing.isActive = true;
+      await existing.save();
+
+      await grantCoarseRole(employeeId, "SERVICE_ADMIN");
+
+      const populated = await ServiceMember.findById(existing._id)
+        .populate("employee", "name institutionId email designation")
+        .populate("blocks", "blockName blockCode blockType genderTag status");
+
+      return res.status(200).json({
+        success: true,
+        message: "Admin block assignments updated successfully",
+        data: populated
+      });
     }
 
     const member = await ServiceMember.create({
       service: serviceId,
       employee: employeeId,
       roleType: "SERVICE_ADMIN",
+      blocks: incomingBlocks,
       addedBy: req.user.userId
     });
 
@@ -218,7 +287,11 @@ exports.assignServiceAdmin = async (req, res, next) => {
       metadata: { serviceId, targetRole: "SERVICE_ADMIN" }
     });
 
-    res.status(201).json({ success: true, message: "Service Admin assigned successfully", data: member });
+    const populated = await ServiceMember.findById(member._id)
+      .populate("employee", "name institutionId email designation")
+      .populate("blocks", "blockName blockCode blockType genderTag status");
+
+    res.status(201).json({ success: true, message: "Service Admin assigned successfully", data: populated });
   } catch (error) {
     if (error.code === 11000) {
       res.status(400);
@@ -239,9 +312,64 @@ exports.getServiceAdmins = async (req, res, next) => {
       isActive: true
     })
       .populate("employee", "name institutionId email designation")
+      .populate("blocks", "blockName blockCode blockType genderTag status")
       .lean();
 
     res.json({ success: true, data: admins });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Update Service Admin blocks
+// @route  PUT /api/service-desk/services/:serviceId/admins/:employeeId/blocks
+// @access PRIME
+exports.updateServiceAdminBlocks = async (req, res, next) => {
+  try {
+    const { serviceId, employeeId } = req.params;
+    const { blocks } = req.body;
+    const incomingBlocks = Array.isArray(blocks) ? blocks.map(b => b.toString()) : [];
+
+    // Conflict check
+    if (incomingBlocks.length > 0) {
+      const otherAdminsWithBlocks = await ServiceMember.find({
+        service: serviceId,
+        roleType: "SERVICE_ADMIN",
+        employee: { $ne: employeeId },
+        isActive: true,
+        blocks: { $in: incomingBlocks }
+      })
+        .populate("employee", "name institutionId")
+        .populate("blocks", "blockName blockCode blockType genderTag");
+
+      if (otherAdminsWithBlocks.length > 0) {
+        const conflictDescriptions = [];
+        for (const other of otherAdminsWithBlocks) {
+          const conflicting = (other.blocks || []).filter(b => incomingBlocks.includes(b._id.toString()));
+          for (const cb of conflicting) {
+            const typeLabel = cb.blockType === 'HOSTEL' ? ` (${cb.genderTag === 'GIRLS' ? 'Girls Hostel' : 'Boys Hostel'})` : '';
+            conflictDescriptions.push(`"${cb.blockName || cb.blockCode}${typeLabel}" (assigned to ${other.employee?.name || 'another admin'} - ${other.employee?.institutionId || ''})`);
+          }
+        }
+        if (conflictDescriptions.length > 0) {
+          res.status(400);
+          return next(new Error(`A block cannot have multiple Service Admins. Conflicting blocks: ${conflictDescriptions.join(", ")}`));
+        }
+      }
+    }
+
+    const member = await ServiceMember.findOneAndUpdate(
+      { service: serviceId, employee: employeeId, roleType: "SERVICE_ADMIN" },
+      { blocks: incomingBlocks },
+      { new: true }
+    ).populate("blocks", "blockName blockCode blockType genderTag status");
+
+    if (!member) {
+      res.status(404);
+      return next(new Error("Service Admin mapping not found"));
+    }
+
+    res.json({ success: true, message: "Admin block mappings updated successfully", data: member });
   } catch (error) {
     next(error);
   }
@@ -281,7 +409,7 @@ exports.removeServiceAdmin = async (req, res, next) => {
 exports.assignServiceEmp = async (req, res, next) => {
   try {
     const { serviceId } = req.params;
-    const { employeeId } = req.body;
+    const { employeeId, blocks } = req.body;
 
     const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
     if (!isPrime) {
@@ -313,20 +441,37 @@ exports.assignServiceEmp = async (req, res, next) => {
       return next(new Error("Employee not found"));
     }
 
+    const incomingBlocks = Array.isArray(blocks) ? blocks.map(b => b.toString()) : [];
+
     const existing = await ServiceMember.findOne({
       service: serviceId,
       employee: employeeId,
       roleType: "SERVICE_EMP"
     });
+
     if (existing) {
-      res.status(400);
-      return next(new Error("This employee is already a Service Emp for this service"));
+      existing.blocks = Array.from(new Set(incomingBlocks));
+      existing.isActive = true;
+      await existing.save();
+
+      await grantCoarseRole(employeeId, "SERVICE_EMP");
+
+      const populated = await ServiceMember.findById(existing._id)
+        .populate("employee", "name institutionId email designation phone")
+        .populate("blocks", "blockName blockCode blockType genderTag status");
+
+      return res.status(200).json({
+        success: true,
+        message: "Service Emp block assignments updated successfully",
+        data: populated
+      });
     }
 
     const member = await ServiceMember.create({
       service: serviceId,
       employee: employeeId,
       roleType: "SERVICE_EMP",
+      blocks: incomingBlocks,
       addedBy: req.user.userId
     });
 
@@ -343,7 +488,11 @@ exports.assignServiceEmp = async (req, res, next) => {
       metadata: { serviceId, targetRole: "SERVICE_EMP" }
     });
 
-    res.status(201).json({ success: true, message: "Service Emp assigned successfully", data: member });
+    const populated = await ServiceMember.findById(member._id)
+      .populate("employee", "name institutionId email designation phone")
+      .populate("blocks", "blockName blockCode blockType genderTag status");
+
+    res.status(201).json({ success: true, message: "Service Emp assigned successfully", data: populated });
   } catch (error) {
     if (error.code === 11000) {
       res.status(400);
@@ -377,6 +526,7 @@ exports.getServiceEmps = async (req, res, next) => {
       isActive: true
     })
       .populate("employee", "name institutionId email designation phone")
+      .populate("blocks", "blockName blockCode blockType genderTag status")
       .lean();
 
     res.json({ success: true, data: emps });
