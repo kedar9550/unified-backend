@@ -30,7 +30,7 @@ exports.submitFeedback = async (req, res, next) => {
       return next(new Error("Ticket not found"));
     }
 
-    if (ticket.createdBy.toString() !== userId.toString()) {
+    if (ticket.createdBy && ticket.createdBy.toString() !== userId.toString()) {
       res.status(403);
       return next(new Error("Only the ticket creator can submit feedback"));
     }

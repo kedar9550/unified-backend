@@ -243,7 +243,8 @@ exports.createStudentTicket = async (req, res, next) => {
       service,
       block: block || null,
       creatorType: "STUDENT",
-      createdBy: null,
+      creatorModel: "ServiceDeskStudent",
+      createdBy: student._id,
       student: student._id,
       studentDetails: {
         rollno: student.rollno,
@@ -309,6 +310,7 @@ exports.getMyStudentTickets = async (req, res, next) => {
 
     const tickets = await Ticket.find({
       $or: [
+        { createdBy: student._id },
         { student: student._id },
         { "studentDetails.rollno": student.rollno }
       ]
@@ -371,6 +373,7 @@ exports.getStudentTicketDetail = async (req, res, next) => {
 
     // Ensure student owns this ticket
     const isOwner = (
+      (ticket.createdBy && ticket.createdBy.toString() === student._id.toString()) ||
       (ticket.student && ticket.student.toString() === student._id.toString()) ||
       (ticket.studentDetails && ticket.studentDetails.rollno === student.rollno)
     );
@@ -435,6 +438,7 @@ exports.submitStudentFeedback = async (req, res, next) => {
     }
 
     const isOwner = (
+      (ticket.createdBy && ticket.createdBy.toString() === student._id.toString()) ||
       (ticket.student && ticket.student.toString() === student._id.toString()) ||
       (ticket.studentDetails && ticket.studentDetails.rollno === student.rollno)
     );
@@ -520,6 +524,7 @@ exports.getStudentComments = async (req, res, next) => {
     }
 
     const isOwner = (
+      (ticket.createdBy && ticket.createdBy.toString() === student._id.toString()) ||
       (ticket.student && ticket.student.toString() === student._id.toString()) ||
       (ticket.studentDetails && ticket.studentDetails.rollno === student.rollno)
     );
@@ -572,6 +577,7 @@ exports.addStudentComment = async (req, res, next) => {
     }
 
     const isOwner = (
+      (ticket.createdBy && ticket.createdBy.toString() === student._id.toString()) ||
       (ticket.student && ticket.student.toString() === student._id.toString()) ||
       (ticket.studentDetails && ticket.studentDetails.rollno === student.rollno)
     );
