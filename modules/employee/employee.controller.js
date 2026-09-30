@@ -306,10 +306,12 @@ const logoutUser = async (req, res) => {
         }
     }
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.clearCookie("token", {
         httpOnly: true,
         secure: isProd,
-        sameSite: isProd ? "none" : "lax"
+        sameSite: "none",
+        path: "/"
     });
     res.json({ message: "Logged out" });
 };
@@ -567,6 +569,11 @@ const getEmployeeByEmpId = async (req, res) => {
 const getecapdata = async (req, res) => {
     try {
         const { institutionId, role } = req.body;
+        if (!institutionId) {
+            return res.status(400).json({ message: "institutionId is required" });
+        }
+
+        const isStudent = (role && String(role).toLowerCase() === "student") || (!role && !/^\d+$/.test(String(institutionId).trim()));
         let data = null;
         if (role === "Employee") {
             data = await fetchStaffFromEcap(institutionId);
@@ -575,9 +582,12 @@ const getecapdata = async (req, res) => {
             data = await fetchStaffFromEcap(institutionId);
         } else if (role === "Student") {
             data = await fetchStudentFromEcap(institutionId);
+        } else {
+            data = await fetchStaffFromEcap(institutionId);
         }
+
         if (!data) {
-            return res.status(404).json({ message: "Record not found in ECAP" });
+            return res.status(404).json({ message: `Record not found in ECAP for ${isStudent ? 'Student' : 'Employee'}` });
         }
         res.json(data);
     } catch (error) {

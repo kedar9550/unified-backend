@@ -9,6 +9,7 @@ const ticketNumber = require("./ticketNumber.middleware");
 // --- Public Auth Endpoints (No Token Required) ---
 router.post("/auth/send-otp", studentAuth.sendStudentOtp);
 router.post("/auth/verify-otp", studentAuth.verifyStudentOtp);
+router.post("/auth/clear-staff-session", studentAuth.clearStaffSession);
 
 // --- Authenticated Student Endpoints (Requires Student Token) ---
 router.use(studentService.verifyStudentAuth);

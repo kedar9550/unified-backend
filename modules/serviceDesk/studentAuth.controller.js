@@ -295,3 +295,23 @@ exports.getStudentProfile = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @desc   Clear staff/employee session cookie when accessing campus desk
+ * @route  POST /api/campus-service-request/auth/clear-staff-session
+ * @access Public
+ */
+exports.clearStaffSession = async (req, res, next) => {
+  try {
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "none",
+      path: "/"
+    });
+    return res.status(200).json({ success: true, message: "Staff session cookie cleared" });
+  } catch (error) {
+    next(error);
+  }
+};

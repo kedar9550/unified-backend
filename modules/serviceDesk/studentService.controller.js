@@ -589,21 +589,53 @@ exports.addStudentComment = async (req, res, next) => {
       message: message.trim()
     });
 
-    // Notify assigned staff / admin
+    const populated = await Comment.findById(comment._id)
+      .populate("senderStudent", "studentname rollno mobilenumber")
+      .lean();
+
+    // Real-time push to everyone viewing the ticket room
     try {
+      const io = socketConfig.getIO();
+      io.to(`service-desk-ticket-${ticket._id}`).emit("new_message", populated || comment);
+    } catch (socketErr) {
+      console.error("[Student Comment] Socket emit error:", socketErr.message);
+    }
+
+    // Notify assigned staff & service admins
+    try {
+      const recipientMap = new Map();
+
       if (ticket.assignedTo && ticket.assignedTo.length > 0) {
         for (const a of ticket.assignedTo) {
-          if (a.employee) {
-            await NotificationService.sendNotification({
-              recipientId: a.employee,
-              module: MODULE,
-              title: `Student Message on [${ticket.ticketNumber}]`,
-              body: `${student.studentname}: ${message.trim().substring(0, 80)}`,
-              ticketId: ticket._id,
-              link: `/service-desk/ticket/${ticket._id}`
-            });
+          if (a.employee && a.status !== "REJECTED") {
+            recipientMap.set(a.employee.toString(), "SERVICE_EMP");
           }
         }
+      }
+
+      // If no active assignees, notify Service Admins
+      if (recipientMap.size === 0 && ticket.service) {
+        const admins = await ServiceMember.find({ service: ticket.service, roleType: "SERVICE_ADMIN", isActive: true }).lean();
+        for (const admin of admins) {
+          if (admin.employee) {
+            recipientMap.set(admin.employee.toString(), "SERVICE_ADMIN");
+          }
+        }
+      }
+
+      for (const [recipientId, targetRole] of recipientMap.entries()) {
+        await NotificationService.sendNotification({
+          recipientId,
+          module: MODULE,
+          type: "INFO",
+          title: `Student Message on [${ticket.ticketNumber}]`,
+          message: `${student.studentname}: ${message.trim().substring(0, 100)}`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: {
+            ticketId: ticket._id,
+            targetRole
+          }
+        });
       }
     } catch (notifErr) {
       console.error("[Student Comment] Notification error:", notifErr.message);
@@ -611,7 +643,7 @@ exports.addStudentComment = async (req, res, next) => {
 
     return res.status(201).json({
       success: true,
-      data: comment
+      data: populated || comment
     });
 
   } catch (error) {
