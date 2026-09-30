@@ -19,6 +19,10 @@ class NotificationService {
      */
     static async sendNotification(data) {
         try {
+            if (!data || !data.recipientId) {
+                return null;
+            }
+
             // Normalize message / body aliases
             if (!data.message && data.body) {
                 data.message = data.body;

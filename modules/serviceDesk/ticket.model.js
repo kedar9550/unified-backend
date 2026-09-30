@@ -51,10 +51,17 @@ const ticketSchema = new mongoose.Schema({
     required: true
   },
 
+  creatorModel: {
+    type: String,
+    enum: ["Employee", "ServiceDeskStudent"],
+    default: "Employee",
+    required: true
+  },
+
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Employee",
-    default: null
+    refPath: "creatorModel",
+    required: true
   },
 
   student: {
@@ -169,4 +176,21 @@ ticketSchema.index({ student: 1 });
 ticketSchema.index({ "studentDetails.rollno": 1 });
 ticketSchema.index({ "assignedTo.employee": 1 });
 
-module.exports = mongoose.model("Ticket", ticketSchema);
+const Ticket = mongoose.model("Ticket", ticketSchema);
+
+// One-time non-blocking migration for legacy student tickets
+setImmediate(async () => {
+  try {
+    const res = await Ticket.updateMany(
+      { creatorType: "STUDENT", createdBy: null, student: { $ne: null } },
+      [{ $set: { createdBy: "$student", creatorModel: "ServiceDeskStudent" } }]
+    );
+    if (res.modifiedCount > 0) {
+      console.log(`[Ticket Migration] Backfilled createdBy for ${res.modifiedCount} student ticket(s).`);
+    }
+  } catch (err) {
+    // Non-critical auto-migration
+  }
+});
+
+module.exports = Ticket;

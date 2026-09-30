@@ -196,6 +196,8 @@ exports.createTicket = async (req, res, next) => {
       description,
       service,
       block: block || null,
+      creatorType: "EMPLOYEE",
+      creatorModel: "Employee",
       priority: normalizedPriority,
       dueDate,
       createdBy: req.user.userId,
@@ -434,19 +436,21 @@ exports.assignTicket = async (req, res, next) => {
       }
 
       // Notify the ticket creator about the assignment
-      const assignedEmps = await Employee.find({ _id: { $in: allNotifiedIds } }).select("name").lean();
-      const empNames = assignedEmps.map(e => e.name).join(", ");
-      
-      await NotificationService.sendNotification({
-        recipientId: ticket.createdBy,
-        senderId: req.user.userId,
-        module: MODULE,
-        type: "INFO",
-        title: "Ticket Assigned",
-        message: `Your ticket ${ticket.ticketNumber} has been assigned to a service representative and is now under progress.\nAssigned To: ${empNames}`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
-      });
+      if (ticket.createdBy) {
+        const assignedEmps = await Employee.find({ _id: { $in: allNotifiedIds } }).select("name").lean();
+        const empNames = assignedEmps.map(e => e.name).join(", ");
+        
+        await NotificationService.sendNotification({
+          recipientId: ticket.createdBy,
+          senderId: req.user.userId,
+          module: MODULE,
+          type: "INFO",
+          title: "Ticket Assigned",
+          message: `Your ticket ${ticket.ticketNumber} has been assigned to a service representative and is now under progress.\nAssigned To: ${empNames}`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: { ticketId: ticket._id }
+        });
+      }
     }
 
     res.json({ success: true, message: "Ticket assigned successfully", data: ticket });
@@ -480,16 +484,18 @@ exports.adminRejectTicket = async (req, res, next) => {
       metadata: { reason: reason || "" }
     });
 
-    await NotificationService.sendNotification({
-      recipientId: ticket.createdBy,
-      senderId: req.user.userId,
-      module: MODULE,
-      type: "REJECTED",
-      title: "Ticket Rejected",
-      message: `Ticket ${ticket.ticketNumber} was rejected. ${reason ? "Reason: " + reason : ""}`,
-      link: `/service-desk/ticket/${ticket._id}`,
-      metadata: { ticketId: ticket._id }
-    });
+    if (ticket.createdBy) {
+      await NotificationService.sendNotification({
+        recipientId: ticket.createdBy,
+        senderId: req.user.userId,
+        module: MODULE,
+        type: "REJECTED",
+        title: "Ticket Rejected",
+        message: `Ticket ${ticket.ticketNumber} was rejected. ${reason ? "Reason: " + reason : ""}`,
+        link: `/service-desk/ticket/${ticket._id}`,
+        metadata: { ticketId: ticket._id }
+      });
+    }
 
     res.json({ success: true, message: "Ticket rejected", data: ticket });
   } catch (error) {
@@ -546,16 +552,18 @@ exports.adminUpdateTicketStatus = async (req, res, next) => {
       REJECTED: `Your ticket ${ticket.ticketNumber} was rejected by the service admin. ${note ? "Reason: " + note : ""}`
     };
 
-    await NotificationService.sendNotification({
-      recipientId: ticket.createdBy,
-      senderId: req.user.userId,
-      module: MODULE,
-      type: notifTypes[status] || "INFO",
-      title: `Ticket ${status.replace("_", " ")}`,
-      message: notifMessages[status],
-      link: `/service-desk/ticket/${ticket._id}`,
-      metadata: { ticketId: ticket._id }
-    });
+    if (ticket.createdBy) {
+      await NotificationService.sendNotification({
+        recipientId: ticket.createdBy,
+        senderId: req.user.userId,
+        module: MODULE,
+        type: notifTypes[status] || "INFO",
+        title: `Ticket ${status.replace("_", " ")}`,
+        message: notifMessages[status],
+        link: `/service-desk/ticket/${ticket._id}`,
+        metadata: { ticketId: ticket._id }
+      });
+    }
 
     res.json({ success: true, message: `Ticket status updated to ${status}`, data: ticket });
   } catch (error) {
@@ -674,19 +682,18 @@ exports.updateAssignmentStatus = async (req, res, next) => {
 
     if (ticket.status === "RESOLVED") {
       // 1. Notify User (Resolved)
-      await NotificationService.sendNotification({
-        recipientId: ticket.createdBy,
-        senderId: userId,
-        module: MODULE,
-        type: "SUCCESS",
-        title: "Ticket Resolved",
-        message: `Your ticket ${ticket.ticketNumber} has been marked as Resolved.\nPlease verify the resolution and submit your feedback regarding the support experience.`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
-      });
-      
-      // Feedback Requested specific link is skipped as it is now combined above or you can keep it separate.
-      // The user workflow combines them into one message. We will keep just the one message as requested.
+      if (ticket.createdBy) {
+        await NotificationService.sendNotification({
+          recipientId: ticket.createdBy,
+          senderId: userId,
+          module: MODULE,
+          type: "SUCCESS",
+          title: "Ticket Resolved",
+          message: `Your ticket ${ticket.ticketNumber} has been marked as Resolved.\nPlease verify the resolution and submit your feedback regarding the support experience.`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: { ticketId: ticket._id }
+        });
+      }
 
       // 2. Notify Service Admins (Resolved)
       await notifyServiceAdmins(ticket.service, {
@@ -700,16 +707,18 @@ exports.updateAssignmentStatus = async (req, res, next) => {
       });
     } else {
       // 1. Notify User (Status Updated)
-      await NotificationService.sendNotification({
-        recipientId: ticket.createdBy,
-        senderId: userId,
-        module: MODULE,
-        type: "INFO",
-        title: "Ticket Status Updated",
-        message: `The status of your ticket ${ticket.ticketNumber} has been updated to ${ticket.status}.${note ? '\nLatest Update:\n' + note : ''}`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
-      });
+      if (ticket.createdBy) {
+        await NotificationService.sendNotification({
+          recipientId: ticket.createdBy,
+          senderId: userId,
+          module: MODULE,
+          type: "INFO",
+          title: "Ticket Status Updated",
+          message: `The status of your ticket ${ticket.ticketNumber} has been updated to ${ticket.status}.${note ? '\nLatest Update:\n' + note : ''}`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: { ticketId: ticket._id }
+        });
+      }
 
       // 2. Notify Service Admins (Status Updated)
       await notifyServiceAdmins(ticket.service, {
@@ -778,37 +787,66 @@ exports.addComment = async (req, res, next) => {
       console.error("Socket emit failed (chat still saved):", err.message);
     }
 
-    // Notify participants who are NOT currently the sender
-    const participantIds = new Set([ticket.createdBy.toString()]);
-    (ticket.assignedTo || []).forEach(a => participantIds.add(a.employee.toString()));
-    const admins = await ServiceMember.find({ service: ticket.service, roleType: "SERVICE_ADMIN", isActive: true }).lean();
-    admins.forEach(a => participantIds.add(a.employee.toString()));
-    participantIds.delete(req.user.userId.toString());
-
-    for (const recipientId of participantIds) {
-      let targetRole = undefined;
-      const isAssignee = (ticket.assignedTo || []).some(a => a.employee.toString() === recipientId.toString());
-      const isAdmin = admins.some(a => a.employee.toString() === recipientId.toString());
-
-      if (isAssignee) {
-        targetRole = "SERVICE_EMP";
-      } else if (isAdmin) {
-        targetRole = "SERVICE_ADMIN";
-      }
-
-      await NotificationService.sendNotification({
-        recipientId,
-        senderId: req.user.userId,
-        module: MODULE,
-        type: "INFO",
-        title: "New Message",
-        message: `New message on Ticket ${ticket.ticketNumber}`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id, targetRole }
-      });
-    }
-
+    // Send HTTP response immediately for instant UI feedback
     res.status(201).json({ success: true, data: populated });
+
+    // Asynchronously dispatch notifications in the background (non-blocking)
+    setImmediate(async () => {
+      try {
+        const participantIds = new Set();
+        if (ticket.createdBy) {
+          participantIds.add(ticket.createdBy.toString());
+        }
+        (ticket.assignedTo || []).forEach(a => {
+          const empId = (a.employee?._id || a.employee)?.toString();
+          if (empId) participantIds.add(empId);
+        });
+
+        const admins = await ServiceMember.find({ service: ticket.service, roleType: "SERVICE_ADMIN", isActive: true }).lean();
+        admins.forEach(a => {
+          const empId = (a.employee?._id || a.employee)?.toString();
+          if (empId) participantIds.add(empId);
+        });
+
+        if (req.user?.userId) {
+          participantIds.delete(req.user.userId.toString());
+        }
+
+        const notifPromises = [];
+        for (const recipientId of participantIds) {
+          let targetRole = undefined;
+          const isAssignee = (ticket.assignedTo || []).some(
+            a => (a.employee?._id || a.employee)?.toString() === recipientId
+          );
+          const isAdmin = admins.some(
+            a => (a.employee?._id || a.employee)?.toString() === recipientId
+          );
+
+          if (isAssignee) {
+            targetRole = "SERVICE_EMP";
+          } else if (isAdmin) {
+            targetRole = "SERVICE_ADMIN";
+          }
+
+          notifPromises.push(
+            NotificationService.sendNotification({
+              recipientId,
+              senderId: req.user.userId,
+              module: MODULE,
+              type: "INFO",
+              title: "New Message",
+              message: `New message on Ticket ${ticket.ticketNumber}`,
+              link: `/service-desk/ticket/${ticket._id}`,
+              metadata: { ticketId: ticket._id, targetRole }
+            }).catch(e => console.error("[Comment Notif] Single dispatch error:", e.message))
+          );
+        }
+
+        await Promise.allSettled(notifPromises);
+      } catch (bgNotifErr) {
+        console.error("[Comment Notif] Background notification error:", bgNotifErr.message);
+      }
+    });
   } catch (error) {
     next(error);
   }
