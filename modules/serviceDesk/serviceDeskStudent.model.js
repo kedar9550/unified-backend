@@ -61,7 +61,6 @@ const serviceDeskStudentSchema = new mongoose.Schema({
   collection: "servicedesk_students"
 });
 
-serviceDeskStudentSchema.index({ rollno: 1 }, { unique: true });
 serviceDeskStudentSchema.index({ mobilenumber: 1 });
 
 module.exports = mongoose.model("ServiceDeskStudent", serviceDeskStudentSchema);
