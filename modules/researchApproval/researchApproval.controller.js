@@ -11,6 +11,7 @@ const NovelProduct = require('../NovelProduct/NovelProduct.model');
 
 const { getHODDepartments } = require('../../utils/hodHelper');
 const escapeRegex = require('../../utils/escapeRegex');
+const { calculateJournalIncentive } = require('../../utils/journalIncentiveCalculator');
 
 // @desc    Get all research requests for HOD departments or Research Admin
 // @route   GET /api/research-approval
@@ -864,8 +865,33 @@ exports.editResearchDetails = async (req, res) => {
             }
         }
 
+        const oldApprovedAmount = doc.approvedAmount;
+        const providedApprovedAmount = data.approvedAmount !== undefined ? Number(data.approvedAmount) : undefined;
+
         // Update document fields
         Object.assign(doc, data);
+
+        if (type.toLowerCase() === 'journal') {
+            if (doc.applyIncentive === 'Yes' || doc.applyIncentive === 'yes') {
+                console.log(`[editResearchDetails] Recalculating incentive for journal ${doc._id}. userAuthorPosition: ${doc.userAuthorPosition}, totalAuthors: ${doc.totalAuthors}, isStudentsInvolved: ${doc.isStudentsInvolved}, applyingSeedGrant: ${doc.applyingSeedGrant}`);
+                const incentiveCalc = calculateJournalIncentive(doc.toObject());
+                if (incentiveCalc.success) {
+                    console.log(`[editResearchDetails] Calculation successful. Old Amount: ${doc.estimatedIncentiveAmount}, New Amount: ${incentiveCalc.estimatedIncentiveAmount}`);
+                    doc.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+                    
+                    if (doc.status === 'Approved' && (providedApprovedAmount === undefined || providedApprovedAmount === oldApprovedAmount)) {
+                        doc.approvedAmount = doc.estimatedIncentiveAmount;
+                    }
+                } else {
+                    console.log(`[editResearchDetails] Calculation failed. Reason:`, incentiveCalc.missing);
+                }
+            } else {
+                doc.estimatedIncentiveAmount = 0;
+                if (doc.status === 'Approved' && (providedApprovedAmount === undefined || providedApprovedAmount === oldApprovedAmount)) {
+                    doc.approvedAmount = 0;
+                }
+            }
+        }
 
         // Save updated document
         const savedDoc = await doc.save();
