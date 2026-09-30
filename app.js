@@ -17,10 +17,6 @@ dotenv.config();
 // Initialize Database connection
 connectDB();
 
-// Initialize Payment Verification Cron Job
-const { initPaymentCron } = require('./modules/Payments/paymentVerification.cron');
-initPaymentCron();
-
 const app = express();
 
 // Trust reverse proxy (e.g., Nginx, ALB) to correctly parse X-Forwarded-For headers.

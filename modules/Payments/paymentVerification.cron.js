@@ -188,47 +188,8 @@ const verifyAllPendingOrders = async (options = {}) => {
   }
 };
 
-let activeCronTask = null;
-
-/**
- * Stop all payment verification cron job operations
- */
-const stopPaymentCron = () => {
-  if (activeCronTask) {
-    try {
-      activeCronTask.stop();
-      if (typeof activeCronTask.destroy === 'function') {
-        activeCronTask.destroy();
-      }
-    } catch (e) {
-      // ignore
-    }
-    activeCronTask = null;
-  }
-
-  // Stop any active tasks in node-cron registry
-  if (typeof cron.getTasks === 'function') {
-    const tasks = cron.getTasks();
-    for (const t of tasks.values()) {
-      try {
-        t.stop();
-      } catch (err) {
-        // ignore
-      }
-    }
-  }
-
-  console.log('[Payment Cron] Payment verification cron job operations are STOPPED.');
-};
-
-/**
- * Initializes the node-cron scheduled task (Currently STOPPED)
- */
-const initPaymentCron = () => {
-  console.log('[Payment Cron] Payment verification cron job is explicitly STOPPED.');
-  stopPaymentCron();
-  return null;
-};
+const stopPaymentCron = () => {};
+const initPaymentCron = () => {};
 
 module.exports = {
   verifySinglePendingOrder,

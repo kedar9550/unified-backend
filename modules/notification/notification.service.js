@@ -19,6 +19,17 @@ class NotificationService {
      */
     static async sendNotification(data) {
         try {
+            // Normalize message / body aliases
+            if (!data.message && data.body) {
+                data.message = data.body;
+            }
+            if (!data.body && data.message) {
+                data.body = data.message;
+            }
+            if (!data.title) {
+                data.title = 'Notification';
+            }
+
             // Auto-detect targetRole if not explicitly set
             if (!data.metadata) {
                 data.metadata = {};

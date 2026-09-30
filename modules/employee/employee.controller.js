@@ -308,10 +308,12 @@ const logoutUser = async (req, res) => {
         }
     }
 
+    const isProd = process.env.NODE_ENV === 'production';
     res.clearCookie("token", {
         httpOnly: true,
         secure: isProd,
-        sameSite: isProd ? "none" : "lax"
+        sameSite: "none",
+        path: "/"
     });
     res.json({ message: "Logged out" });
 };
