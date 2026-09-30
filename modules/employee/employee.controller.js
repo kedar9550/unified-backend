@@ -77,7 +77,7 @@ const registerUser = async (req, res) => {
         try {
             const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${id}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
             identityData = identityResponse?.data?.[0];
-            identityData = await fetchStaffFromEcap(id);
+            //identityData = await fetchStaffFromEcap(id);
 
             if (!identityData || identityData.error) {
                 return res.status(404).json({ message: `Invalid Employee ID. Not found in ECAP` });
@@ -569,17 +569,21 @@ const getEmployeeByEmpId = async (req, res) => {
 const getecapdata = async (req, res) => {
     try {
         const { institutionId, role } = req.body;
-        let data = null;
-        if (role === "Employee") {
-            response = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
-        } else if (role === "Student") {
-            response = await axios.get(`${STUDENT_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
-            data = await fetchStaffFromEcap(institutionId);
-        } else if (role === "Student") {
-            data = await fetchStudentFromEcap(institutionId);
+        if (!institutionId) {
+            return res.status(400).json({ message: "institutionId is required" });
         }
+
+        const isStudent = (role && String(role).toLowerCase() === "student") || (!role && !/^\d+$/.test(String(institutionId).trim()));
+        let data = null;
+
+        if (isStudent) {
+            data = await fetchStudentFromEcap(institutionId);
+        } else {
+            data = await fetchStaffFromEcap(institutionId);
+        }
+
         if (!data) {
-            return res.status(404).json({ message: "Record not found in ECAP" });
+            return res.status(404).json({ message: `Record not found in ECAP for ${isStudent ? 'Student' : 'Employee'}` });
         }
         res.json(data);
     } catch (error) {
@@ -605,8 +609,6 @@ const syncProfileWithECAP = async (req, res) => {
         }
 
         // Fetch ECAP Data
-        const identityResponse = await axios.get(`${STAFF_DATA_API_URL}${institutionId}`, { headers: { 'x-api-key': process.env.ECAP_API_KEY } });
-        const identityData = identityResponse?.data?.[0];
         const identityData = await fetchStaffFromEcap(institutionId);
 
         if (!identityData || identityData.error) {
