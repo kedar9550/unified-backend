@@ -1,11 +1,71 @@
+const mongoose = require("mongoose");
 const Service = require("./service.model");
 const ServiceMember = require("./serviceMember.model");
+const ServiceBlock = require("./serviceModuleBlock.model");
 const Employee = require("../employee/employee.model");
+const Department = require("../academics/department.model");
 const Role = require("../role/role.model");
 const UserAppRole = require("../userAppRole/userAppRole.model");
 const NotificationService = require("../notification/notification.service");
+const { fetchStaffFromEcap } = require("../../utils/ecapService");
 
 const APP_NAME = process.env.APP_NAME || "UNIFIED_SYSTEM";
+
+// Helper: Resolve employee document by ObjectId or institutionId (with ECAP fallback)
+const resolveEmployee = async (idOrInstitutionId) => {
+  if (!idOrInstitutionId) return null;
+  const trimmed = idOrInstitutionId.toString().trim();
+  let emp = null;
+  if (mongoose.Types.ObjectId.isValid(trimmed)) {
+    emp = await Employee.findById(trimmed);
+  }
+  if (!emp) {
+    emp = await Employee.findOne({ institutionId: trimmed });
+  }
+  if (!emp) {
+    try {
+      const ecapStaff = await fetchStaffFromEcap(trimmed);
+      if (ecapStaff && typeof ecapStaff === 'object') {
+        const ecapName = (ecapStaff.employeename || ecapStaff.EmployeeName || ecapStaff.empname || ecapStaff.EMP_NAME || ecapStaff.name || ecapStaff.NAME || "Staff Member").toString().trim();
+        const ecapEmpId = (ecapStaff.empcode || ecapStaff.EmpCode || ecapStaff.employeeid || ecapStaff.EmployeeId || ecapStaff.EMP_ID || ecapStaff.emp_id || trimmed).toString().trim();
+        const ecapDept = (ecapStaff.departmentname || ecapStaff.DepartmentName || ecapStaff.department || ecapStaff.DEPARTMENT || ecapStaff.dept || ecapStaff.DEPT || "").toString().trim();
+        const ecapDesig = (ecapStaff.designation || ecapStaff.Designation || ecapStaff.DESIGNATION || ecapStaff.desg || ecapStaff.DESG || "").toString().trim();
+        const ecapPhone = (ecapStaff.mobileno || ecapStaff.MobileNo || ecapStaff.mobile || ecapStaff.MOBILE || ecapStaff.phone || ecapStaff.PHONE || "").toString().trim();
+        const ecapEmail = (ecapStaff.email || ecapStaff.Email || ecapStaff.EMAIL || `${ecapEmpId}@aditya.ac.in`).toString().trim();
+        const ecapCollege = (ecapStaff.college || ecapStaff.College || ecapStaff.college_code || ecapStaff.COLLEGE_CODE || "").toString().trim();
+
+        let deptDoc = null;
+        if (ecapDept) {
+          deptDoc = await Department.findOne({
+            $or: [
+              { name: { $regex: new RegExp(`^${ecapDept.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i") } },
+              { code: { $regex: new RegExp(`^${ecapDept.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, "i") } }
+            ]
+          });
+        }
+        emp = await Employee.findOneAndUpdate(
+          { institutionId: ecapEmpId },
+          {
+            $setOnInsert: {
+              name: ecapName,
+              institutionId: ecapEmpId,
+              email: ecapEmail,
+              phone: ecapPhone,
+              department: deptDoc?._id || null,
+              designation: ecapDesig,
+              college: ecapCollege,
+              isActive: true
+            }
+          },
+          { upsert: true, new: true }
+        );
+      }
+    } catch (err) {
+      console.error("ECAP resolve employee error:", err.message);
+    }
+  }
+  return emp;
+};
 
 // ---------------------------------------------------------------------
 // Coarse role helpers — SERVICE_ADMIN / SERVICE_EMP are per-service in
@@ -169,7 +229,7 @@ exports.getMyMemberships = async (req, res, next) => {
     const userId = req.user.userId;
 
     const memberships = await ServiceMember.find({ employee: userId, isActive: true })
-      .populate("service", "name description isActive")
+      .populate("service", "name description isActive isGlobalService directEmployeeInvolvement")
       .lean();
 
     const adminOf = memberships.filter(m => m.roleType === "SERVICE_ADMIN").map(m => m.service);
@@ -198,7 +258,7 @@ exports.assignServiceAdmin = async (req, res, next) => {
 
     const [service, employee] = await Promise.all([
       Service.findById(serviceId),
-      Employee.findById(employeeId)
+      resolveEmployee(employeeId)
     ]);
 
     if (!service) {
@@ -210,6 +270,7 @@ exports.assignServiceAdmin = async (req, res, next) => {
       return next(new Error("Employee not found"));
     }
 
+    const resolvedEmpId = employee._id;
     const incomingBlocks = Array.isArray(blocks) ? blocks.map(b => b.toString()) : [];
 
     // Enforce: One block cannot have multiple Service Admins for the same service
@@ -217,7 +278,7 @@ exports.assignServiceAdmin = async (req, res, next) => {
       const otherAdminsWithBlocks = await ServiceMember.find({
         service: serviceId,
         roleType: "SERVICE_ADMIN",
-        employee: { $ne: employeeId },
+        employee: { $ne: resolvedEmpId },
         isActive: true,
         blocks: { $in: incomingBlocks }
       })
@@ -241,7 +302,7 @@ exports.assignServiceAdmin = async (req, res, next) => {
 
     const existing = await ServiceMember.findOne({
       service: serviceId,
-      employee: employeeId,
+      employee: resolvedEmpId,
       roleType: "SERVICE_ADMIN"
     });
 
@@ -251,7 +312,7 @@ exports.assignServiceAdmin = async (req, res, next) => {
       existing.isActive = true;
       await existing.save();
 
-      await grantCoarseRole(employeeId, "SERVICE_ADMIN");
+      await grantCoarseRole(resolvedEmpId, "SERVICE_ADMIN");
 
       const populated = await ServiceMember.findById(existing._id)
         .populate("employee", "name institutionId email designation")
@@ -266,18 +327,18 @@ exports.assignServiceAdmin = async (req, res, next) => {
 
     const member = await ServiceMember.create({
       service: serviceId,
-      employee: employeeId,
+      employee: resolvedEmpId,
       roleType: "SERVICE_ADMIN",
       blocks: incomingBlocks,
       addedBy: req.user.userId
     });
 
     // Keep the coarse Switch-Role marker in sync (see helpers above)
-    await grantCoarseRole(employeeId, "SERVICE_ADMIN");
+    await grantCoarseRole(resolvedEmpId, "SERVICE_ADMIN");
 
     // Notify the newly assigned admin using unified's existing notification system
     await NotificationService.sendNotification({
-      recipientId: employeeId,
+      recipientId: resolvedEmpId,
       senderId: req.user.userId,
       module: "ServiceDesk",
       type: "INFO",
@@ -429,7 +490,7 @@ exports.assignServiceEmp = async (req, res, next) => {
 
     const [service, employee] = await Promise.all([
       Service.findById(serviceId),
-      Employee.findById(employeeId)
+      resolveEmployee(employeeId)
     ]);
 
     if (!service) {
@@ -441,11 +502,12 @@ exports.assignServiceEmp = async (req, res, next) => {
       return next(new Error("Employee not found"));
     }
 
+    const resolvedEmpId = employee._id;
     const incomingBlocks = Array.isArray(blocks) ? blocks.map(b => b.toString()) : [];
 
     const existing = await ServiceMember.findOne({
       service: serviceId,
-      employee: employeeId,
+      employee: resolvedEmpId,
       roleType: "SERVICE_EMP"
     });
 
@@ -454,7 +516,7 @@ exports.assignServiceEmp = async (req, res, next) => {
       existing.isActive = true;
       await existing.save();
 
-      await grantCoarseRole(employeeId, "SERVICE_EMP");
+      await grantCoarseRole(resolvedEmpId, "SERVICE_EMP");
 
       const populated = await ServiceMember.findById(existing._id)
         .populate("employee", "name institutionId email designation phone")
@@ -469,16 +531,16 @@ exports.assignServiceEmp = async (req, res, next) => {
 
     const member = await ServiceMember.create({
       service: serviceId,
-      employee: employeeId,
+      employee: resolvedEmpId,
       roleType: "SERVICE_EMP",
       blocks: incomingBlocks,
       addedBy: req.user.userId
     });
 
-    await grantCoarseRole(employeeId, "SERVICE_EMP");
+    await grantCoarseRole(resolvedEmpId, "SERVICE_EMP");
 
     await NotificationService.sendNotification({
-      recipientId: employeeId,
+      recipientId: resolvedEmpId,
       senderId: req.user.userId,
       module: "ServiceDesk",
       type: "INFO",

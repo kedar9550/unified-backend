@@ -94,11 +94,11 @@ const normalizeUser = (user, userType) => {
                 ? user.researchInterests.map(r => typeof r === 'object' ? r.interest : r).filter(Boolean).join(", ")
                 : (user.researchInterests || ""))
             : "",
-        honorsAndAwards: userType === 'Employee' 
-            ? (Array.isArray(user.honorsAndAwards) 
-                ? user.honorsAndAwards 
-                : (typeof user.honorsAndAwards === 'string' && user.honorsAndAwards.trim() !== '' 
-                    ? [{ title: user.honorsAndAwards }] 
+        honorsAndAwards: userType === 'Employee'
+            ? (Array.isArray(user.honorsAndAwards)
+                ? user.honorsAndAwards
+                : (typeof user.honorsAndAwards === 'string' && user.honorsAndAwards.trim() !== ''
+                    ? [{ title: user.honorsAndAwards }]
                     : []))
             : [],
         doctorate: userType === 'Employee' ? (user.doctorate || "no") : "no",

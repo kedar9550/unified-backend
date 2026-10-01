@@ -55,6 +55,10 @@ const serviceDeskStudentSchema = new mongoose.Schema({
   lastLoginAt: {
     type: Date,
     default: Date.now
+  },
+  fcmIds: {
+    type: [String],
+    default: []
   }
 }, { 
   timestamps: true,

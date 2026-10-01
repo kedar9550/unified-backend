@@ -1,6 +1,8 @@
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 const ServiceDeskStudent = require("./serviceDeskStudent.model");
+const Employee = require("../employee/employee.model");
+const Student = require("../StudentData/Studentdata.model");
 const { fetchStudentFromEcap } = require("../../utils/ecapService");
 
 // Mask Mobile Utility (e.g., 9392356314 -> ******6314)
@@ -182,7 +184,7 @@ exports.sendStudentOtp = async (req, res, next) => {
  */
 exports.verifyStudentOtp = async (req, res, next) => {
   try {
-    const { rollno, otp } = req.body;
+    const { rollno, otp, fcmToken } = req.body;
 
     if (!rollno || !otp) {
       return res.status(400).json({
@@ -230,7 +232,34 @@ exports.verifyStudentOtp = async (req, res, next) => {
     student.otp = null;
     student.otpExpiry = null;
     student.lastLoginAt = new Date();
+
+    // Disassociate FCM token from any employee or previous user to prevent mixed push notifications
+    if (fcmToken) {
+      student.fcmIds = [...new Set([...(student.fcmIds || []), fcmToken])];
+      try {
+        await Employee.updateMany(
+          { fcmIds: fcmToken },
+          { $pull: { fcmIds: fcmToken } }
+        );
+        await Student.updateMany(
+          { fcmIds: fcmToken },
+          { $pull: { fcmIds: fcmToken } }
+        );
+      } catch (err) {
+        console.error("[Student Auth] Error pulling FCM from Employee/Student:", err);
+      }
+    }
+
     await student.save();
+
+    // Clear employee/staff session cookie if present on the browser
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "none",
+      path: "/"
+    });
 
     // Generate JWT token with 7-Day (1 Week) Expiry
     const token = jwt.sign(
@@ -312,6 +341,46 @@ exports.clearStaffSession = async (req, res, next) => {
     });
     return res.status(200).json({ success: true, message: "Staff session cookie cleared" });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc   Logout student & Remove FCM Token
+ * @route  POST /api/campus-service-request/auth/logout
+ * @access Public
+ */
+exports.logoutStudent = async (req, res, next) => {
+  try {
+    const { fcmToken } = req.body;
+    const studentId = req.student?._id;
+
+    if (fcmToken) {
+      if (studentId) {
+        await ServiceDeskStudent.findByIdAndUpdate(studentId, {
+          $pull: { fcmIds: fcmToken }
+        }).catch(err => console.error("[Student Auth] Error pulling FCM by studentId:", err));
+      }
+      await ServiceDeskStudent.updateMany(
+        { fcmIds: fcmToken },
+        { $pull: { fcmIds: fcmToken } }
+      ).catch(err => console.error("[Student Auth] Error pulling FCM by token:", err));
+    }
+
+    const isProd = process.env.NODE_ENV === "production";
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: "none",
+      path: "/"
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Student logged out and device token removed successfully"
+    });
+  } catch (error) {
+    console.error("[Student Auth] Error in logoutStudent:", error);
     next(error);
   }
 };
