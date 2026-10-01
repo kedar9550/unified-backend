@@ -5,6 +5,7 @@ const Ticket = require("./ticket.model");
 const Comment = require("./comment.model");
 const Activity = require("./activity.model");
 const ServiceMember = require("./serviceMember.model");
+const ServiceWorker = require("./serviceWorker.model");
 const Service = require("./service.model");
 const Employee = require("../employee/employee.model");
 const { hasTicketAccess } = require("./ticket.access");
@@ -298,6 +299,8 @@ exports.getServiceTickets = async (req, res, next) => {
       .populate("block", "blockName blockCode blockType genderTag")
       .populate("createdBy", "name institutionId email")
       .populate("assignedTo.employee", "name institutionId email")
+      .populate("assignedWorkers.worker", "name phone designation status")
+      .populate("assignedWorkers.assignedBy", "name")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -317,6 +320,8 @@ exports.getTicketById = async (req, res, next) => {
       .populate("createdBy", "name institutionId email profileImage")
       .populate("assignedTo.employee", "name institutionId email profileImage")
       .populate("assignedTo.assignedBy", "name")
+      .populate("assignedWorkers.worker", "name phone designation status")
+      .populate("assignedWorkers.assignedBy", "name")
       .lean();
 
     if (!ticket) {
@@ -454,6 +459,109 @@ exports.assignTicket = async (req, res, next) => {
     }
 
     res.json({ success: true, message: "Ticket assigned successfully", data: ticket });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Assign manual field worker(s) to a ticket (when directEmployeeInvolvement is false)
+// @route  POST /api/service-desk/tickets/:id/assign-workers
+// @access SERVICE_ADMIN of the ticket's service
+exports.assignWorkers = async (req, res, next) => {
+  try {
+    const { workerIds, priority, dueDate, note } = req.body;
+
+    if (!Array.isArray(workerIds) || workerIds.length === 0) {
+      res.status(400);
+      return next(new Error("Select at least one technician / worker"));
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      res.status(404);
+      return next(new Error("Ticket not found"));
+    }
+
+    if (ticket.status === "CLOSED" || ticket.status === "REJECTED") {
+      res.status(400);
+      return next(new Error(`Ticket is ${ticket.status} and cannot be assigned`));
+    }
+
+    // Validate that workers belong to this service and are ACTIVE
+    const validWorkers = await ServiceWorker.find({
+      _id: { $in: workerIds },
+      service: ticket.service,
+      status: "ACTIVE"
+    }).lean();
+
+    if (validWorkers.length !== workerIds.length) {
+      res.status(400);
+      return next(new Error("One or more selected workers are invalid or inactive"));
+    }
+
+    if (priority && SLA_HOURS[priority.toUpperCase()]) {
+      ticket.priority = priority.toUpperCase();
+    }
+    if (dueDate) {
+      ticket.dueDate = new Date(dueDate);
+    }
+
+    // Replace or set assigned workers
+    const newAssignedWorkers = workerIds.map(wId => ({
+      worker: wId,
+      assignedBy: req.user.userId,
+      assignedAt: new Date(),
+      note: note || ""
+    }));
+
+    ticket.assignedWorkers = newAssignedWorkers;
+
+    // If ticket was OPEN, transition to IN_PROGRESS
+    if (ticket.status === "OPEN") {
+      ticket.status = "IN_PROGRESS";
+    }
+
+    await ticket.save();
+
+    await Activity.create({
+      ticket: ticket._id,
+      action: "WORKERS_ASSIGNED",
+      performedBy: req.user.userId,
+      metadata: { 
+        workerNames: validWorkers.map(w => w.name).join(", "),
+        workerIds: workerIds
+      }
+    });
+
+    // Notify ticket creator about the assignment
+    if (ticket.createdBy) {
+      const workerNames = validWorkers.map(w => w.name).join(", ");
+      await NotificationService.sendNotification({
+        recipientId: ticket.createdBy,
+        senderId: req.user.userId,
+        module: MODULE,
+        type: "INFO",
+        title: "Technician Assigned",
+        message: `Your ticket ${ticket.ticketNumber} has been assigned to technician(s): ${workerNames}.\nWork is in progress.`,
+        link: `/service-desk/ticket/${ticket._id}`,
+        metadata: { ticketId: ticket._id }
+      }).catch(err => console.error("Notification error:", err));
+    }
+
+    const populated = await Ticket.findById(ticket._id)
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode blockType genderTag")
+      .populate("createdBy", "name institutionId email profileImage")
+      .populate("assignedTo.employee", "name institutionId email profileImage")
+      .populate("assignedWorkers.worker", "name phone designation status")
+      .populate("assignedWorkers.assignedBy", "name")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Technicians assigned successfully",
+      data: populated
+    });
   } catch (error) {
     next(error);
   }

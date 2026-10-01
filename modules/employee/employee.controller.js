@@ -1,5 +1,6 @@
 const Employee = require('./employee.model');
 const Student = require('../StudentData/Studentdata.model');
+const ServiceDeskStudent = require('../serviceDesk/serviceDeskStudent.model');
 const escapeRegex = require('../../utils/escapeRegex');
 const mongoose = require('mongoose');
 const Role = require('../role/role.model');
@@ -237,6 +238,7 @@ const validateUser = async (req, res) => {
             } else {
                 await Employee.findByIdAndUpdate(data.user._id, { $addToSet: { fcmIds: fcmToken } }).catch(err => console.error("FCM Token save error:", err));
             }
+            await ServiceDeskStudent.updateMany({ fcmIds: fcmToken }, { $pull: { fcmIds: fcmToken } }).catch(err => console.error("ServiceDeskStudent FCM pull error:", err));
         }
 
         res.json({ message: "Login success", token, user: { ...data.user, roles: data.roles } });
@@ -301,8 +303,17 @@ const logoutUser = async (req, res) => {
             } else {
                 await Employee.findByIdAndUpdate(userId, { $pull: { fcmIds: fcmToken } });
             }
+            await ServiceDeskStudent.updateMany({ fcmIds: fcmToken }, { $pull: { fcmIds: fcmToken } });
         } catch (err) {
             console.error("FCM Token remove error on logout:", err);
+        }
+    } else if (fcmToken) {
+        try {
+            await Employee.updateMany({ fcmIds: fcmToken }, { $pull: { fcmIds: fcmToken } });
+            await Student.updateMany({ fcmIds: fcmToken }, { $pull: { fcmIds: fcmToken } });
+            await ServiceDeskStudent.updateMany({ fcmIds: fcmToken }, { $pull: { fcmIds: fcmToken } });
+        } catch (err) {
+            console.error("FCM Token remove error on public logout:", err);
         }
     }
 
@@ -519,6 +530,64 @@ const searchUser = async (req, res) => {
         ]);
 
 
+
+        if (users.length === 0 && query.trim().length >= 2) {
+            try {
+                const trimmedQuery = query.trim();
+                const ecapStaff = await fetchStaffFromEcap(trimmedQuery);
+                if (ecapStaff && typeof ecapStaff === 'object') {
+                    const ecapName = (ecapStaff.employeename || ecapStaff.EmployeeName || ecapStaff.empname || ecapStaff.EMP_NAME || ecapStaff.name || ecapStaff.NAME || "Staff Member").toString().trim();
+                    const ecapEmpId = (ecapStaff.empcode || ecapStaff.EmpCode || ecapStaff.employeeid || ecapStaff.EmployeeId || ecapStaff.EMP_ID || ecapStaff.emp_id || trimmedQuery).toString().trim();
+                    const ecapDept = (ecapStaff.departmentname || ecapStaff.DepartmentName || ecapStaff.department || ecapStaff.DEPARTMENT || ecapStaff.dept || ecapStaff.DEPT || "").toString().trim();
+                    const ecapDesig = (ecapStaff.designation || ecapStaff.Designation || ecapStaff.DESIGNATION || ecapStaff.desg || ecapStaff.DESG || "").toString().trim();
+                    const ecapPhone = (ecapStaff.mobileno || ecapStaff.MobileNo || ecapStaff.mobile || ecapStaff.MOBILE || ecapStaff.phone || ecapStaff.PHONE || "").toString().trim();
+                    const ecapEmail = (ecapStaff.email || ecapStaff.Email || ecapStaff.EMAIL || `${ecapEmpId}@aditya.ac.in`).toString().trim();
+                    const ecapCollege = (ecapStaff.college || ecapStaff.College || ecapStaff.college_code || ecapStaff.COLLEGE_CODE || "").toString().trim();
+
+                    let deptDoc = null;
+                    if (ecapDept) {
+                        deptDoc = await Department.findOne({
+                            $or: [
+                                { name: { $regex: new RegExp(`^${escapeRegex(ecapDept)}$`, "i") } },
+                                { code: { $regex: new RegExp(`^${escapeRegex(ecapDept)}$`, "i") } }
+                            ]
+                        });
+                    }
+
+                    const newEmp = await Employee.findOneAndUpdate(
+                        { institutionId: ecapEmpId },
+                        {
+                            $setOnInsert: {
+                                name: ecapName,
+                                institutionId: ecapEmpId,
+                                email: ecapEmail,
+                                phone: ecapPhone,
+                                department: deptDoc?._id || null,
+                                designation: ecapDesig,
+                                college: ecapCollege,
+                                isActive: true
+                            }
+                        },
+                        { upsert: true, new: true }
+                    );
+
+                    users = [{
+                        _id: newEmp._id,
+                        name: newEmp.name,
+                        institutionId: newEmp.institutionId,
+                        email: newEmp.email,
+                        phone: newEmp.phone,
+                        department: ecapDept || deptDoc?.name || "",
+                        designation: newEmp.designation,
+                        isActive: true,
+                        userType: 'Employee',
+                        roles: []
+                    }];
+                }
+            } catch (ecapErr) {
+                console.error("ECAP search fallback error:", ecapErr.message);
+            }
+        }
 
         res.status(200).json(users);
     } catch (error) {
@@ -1639,6 +1708,7 @@ const saveFcmToken = async (req, res) => {
         } else {
             await Employee.findByIdAndUpdate(userId, { $addToSet: { fcmIds: fcmToken } });
         }
+        await ServiceDeskStudent.updateMany({ fcmIds: fcmToken }, { $pull: { fcmIds: fcmToken } }).catch(err => console.error("ServiceDeskStudent FCM pull error in saveFcmToken:", err));
 
         res.status(200).json({ success: true, message: "FCM Token saved successfully" });
     } catch (e) {

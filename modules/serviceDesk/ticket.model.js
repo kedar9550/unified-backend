@@ -112,6 +112,28 @@ const ticketSchema = new mongoose.Schema({
     }
   }],
 
+  // For services where directEmployeeInvolvement is false, Admin assigns manual field workers (no login)
+  assignedWorkers: [{
+    worker: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceWorker",
+      required: true
+    },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      required: true
+    },
+    note: {
+      type: String,
+      default: ""
+    },
+    assignedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
   attachments: [{
     fileName: String,      // original name shown to user
     storedName: String,    // actual name saved on disk

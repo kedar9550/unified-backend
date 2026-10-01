@@ -28,15 +28,15 @@ router.get("/stats", authorize("UNIPRIME"), getServiceStats); // must come befor
 router.get("/:id", getServiceById);
 
 // Write access — PRIME only
-router.post("/", authorize("UNIPRIME"), createService);
-router.put("/:id", authorize("UNIPRIME"), updateService);
-router.delete("/:id", authorize("UNIPRIME"), deactivateService);
+router.post("/", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), createService);
+router.put("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), updateService);
+router.delete("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), deactivateService);
 
 // Service Admin assignment — PRIME only
-router.post("/:serviceId/admins", authorize("UNIPRIME"), assignServiceAdmin);
-router.get("/:serviceId/admins", authorize("UNIPRIME"), getServiceAdmins);
-router.put("/:serviceId/admins/:employeeId/blocks", authorize("UNIPRIME"), updateServiceAdminBlocks);
-router.delete("/:serviceId/admins/:employeeId", authorize("UNIPRIME"), removeServiceAdmin);
+router.post("/:serviceId/admins", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), assignServiceAdmin);
+router.get("/:serviceId/admins", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), getServiceAdmins);
+router.put("/:serviceId/admins/:employeeId/blocks", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), updateServiceAdminBlocks);
+router.delete("/:serviceId/admins/:employeeId", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), removeServiceAdmin);
 
 // Service Emp assignment — Service Admin of that service, or PRIME
 // (checked inline in the controller, same pattern as getServiceTickets,
@@ -44,5 +44,13 @@ router.delete("/:serviceId/admins/:employeeId", authorize("UNIPRIME"), removeSer
 router.post("/:serviceId/emps", assignServiceEmp);
 router.get("/:serviceId/emps", getServiceEmps);
 router.delete("/:serviceId/emps/:employeeId", removeServiceEmp);
+
+// Manual Field Workers (for services where directEmployeeInvolvement === false)
+const workerController = require("./worker.controller");
+router.get("/:serviceId/workers", workerController.getServiceWorkers);
+router.post("/:serviceId/workers", workerController.createServiceWorker);
+router.put("/:serviceId/workers/:workerId", workerController.updateServiceWorker);
+router.patch("/:serviceId/workers/:workerId/status", workerController.toggleServiceWorkerStatus);
+router.delete("/:serviceId/workers/:workerId", workerController.deleteServiceWorker);
 
 module.exports = router;

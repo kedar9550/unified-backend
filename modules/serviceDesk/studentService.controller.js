@@ -150,9 +150,11 @@ exports.getPublicServicesAndBlocks = async (req, res, next) => {
       .sort({ name: 1 })
       .lean();
 
-    const blocks = await ServiceModuleBlock.find({ isActive: true })
-      .select("blockName blockCode blockType genderTag")
-      .sort({ blockName: 1 })
+    const blocks = await ServiceModuleBlock.find({
+      $or: [{ status: "ACTIVE" }, { status: { $exists: false } }, { isActive: true }]
+    })
+      .select("blockName blockCode blockType genderTag status")
+      .sort({ blockType: 1, genderTag: 1, blockName: 1 })
       .lean();
 
     return res.status(200).json({
@@ -318,6 +320,7 @@ exports.getMyStudentTickets = async (req, res, next) => {
       .populate("service", "name isGlobalService applicableBlockType")
       .populate("block", "blockName blockCode blockType genderTag")
       .populate("assignedTo.employee", "name phone email")
+      .populate("assignedWorkers.worker", "name phone designation")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -365,6 +368,7 @@ exports.getStudentTicketDetail = async (req, res, next) => {
       .populate("service", "name description isGlobalService")
       .populate("block", "blockName blockCode blockType genderTag")
       .populate("assignedTo.employee", "name phone email")
+      .populate("assignedWorkers.worker", "name phone designation")
       .lean();
 
     if (!ticket) {

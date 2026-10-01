@@ -15,6 +15,7 @@ const {
   getServiceTickets,
   getTicketById,
   assignTicket,
+  assignWorkers,
   adminRejectTicket,
   adminUpdateTicketStatus,
   updateTicketSLA,
@@ -101,6 +102,7 @@ router.get("/:id", getTicketById);
 // Assignment & Direct Status (Service Admin of the ticket's service, or PRIME)
 // ---------------------------------------------------------------------
 router.post("/:id/assign", requireServiceAdminOfTicket, assignTicket);
+router.post("/:id/assign-workers", requireServiceAdminOfTicket, assignWorkers);
 router.post("/:id/reject", requireServiceAdminOfTicket, adminRejectTicket);
 router.put("/:id/admin-status", requireServiceAdminOfTicket, adminUpdateTicketStatus);
 router.put("/:id/sla", requireServiceAdminOfTicket, updateTicketSLA);
