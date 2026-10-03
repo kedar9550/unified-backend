@@ -3,11 +3,14 @@ const ServiceMember = require("./serviceMember.model");
 const Service = require("./service.model");
 const Ticket = require("./ticket.model");
 
-// Helper: Ensure caller is SERVICE_ADMIN for this service
-const verifyAdminAccess = async (serviceId, userId) => {
+// Helper: Ensure caller is SERVICE_ADMIN for this service, or global admin (UNIPRIME, CSR_ADMIN)
+const verifyAdminAccess = async (serviceId, req) => {
+  const isGlobalAdmin = (req.user?.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
+  if (isGlobalAdmin) return true;
+
   const isAdmin = await ServiceMember.exists({
     service: serviceId,
-    employee: userId,
+    employee: req.user.userId,
     roleType: "SERVICE_ADMIN",
     isActive: true
   });
@@ -24,7 +27,7 @@ exports.getServiceWorkers = async (req, res, next) => {
     const { serviceId } = req.params;
     const { status } = req.query;
 
-    const hasAccess = await verifyAdminAccess(serviceId, req.user.userId);
+    const hasAccess = await verifyAdminAccess(serviceId, req);
     if (!hasAccess) {
       res.status(403);
       return next(new Error("Only Service Admins can manage service workers"));
@@ -97,7 +100,7 @@ exports.createServiceWorker = async (req, res, next) => {
       return next(new Error("Worker name is required"));
     }
 
-    const hasAccess = await verifyAdminAccess(serviceId, req.user.userId);
+    const hasAccess = await verifyAdminAccess(serviceId, req);
     if (!hasAccess) {
       res.status(403);
       return next(new Error("Only Service Admins can add service workers"));
@@ -135,7 +138,7 @@ exports.updateServiceWorker = async (req, res, next) => {
     const { serviceId, workerId } = req.params;
     const { name, phone, designation, notes, status } = req.body;
 
-    const hasAccess = await verifyAdminAccess(serviceId, req.user.userId);
+    const hasAccess = await verifyAdminAccess(serviceId, req);
     if (!hasAccess) {
       res.status(403);
       return next(new Error("Only Service Admins can edit service workers"));
@@ -178,7 +181,7 @@ exports.toggleServiceWorkerStatus = async (req, res, next) => {
     const { serviceId, workerId } = req.params;
     const { status } = req.body;
 
-    const hasAccess = await verifyAdminAccess(serviceId, req.user.userId);
+    const hasAccess = await verifyAdminAccess(serviceId, req);
     if (!hasAccess) {
       res.status(403);
       return next(new Error("Only Service Admins can toggle worker status"));
@@ -218,7 +221,7 @@ exports.deleteServiceWorker = async (req, res, next) => {
   try {
     const { serviceId, workerId } = req.params;
 
-    const hasAccess = await verifyAdminAccess(serviceId, req.user.userId);
+    const hasAccess = await verifyAdminAccess(serviceId, req);
     if (!hasAccess) {
       res.status(403);
       return next(new Error("Only Service Admins can delete workers"));
