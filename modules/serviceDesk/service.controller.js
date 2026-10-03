@@ -572,13 +572,15 @@ exports.assignServiceEmp = async (req, res, next) => {
 
 // @desc   List Service Emps for a service
 // @route  GET /api/service-desk/services/:serviceId/emps
+// @desc   List Service Emps for a service
+// @route  GET /api/service-desk/services/:serviceId/emps
 // @access SERVICE_ADMIN of that service, or PRIME
 exports.getServiceEmps = async (req, res, next) => {
   try {
     const { serviceId } = req.params;
 
-    const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
-    if (!isPrime) {
+    const isGlobalAdmin = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR"].includes(r.role?.toUpperCase()));
+    if (!isGlobalAdmin) {
       const isAdmin = await ServiceMember.exists({
         service: serviceId, employee: req.user.userId, roleType: "SERVICE_ADMIN", isActive: true
       });
@@ -588,16 +590,108 @@ exports.getServiceEmps = async (req, res, next) => {
       }
     }
 
-    const emps = await ServiceMember.find({
+    const filter = {
       service: serviceId,
-      roleType: "SERVICE_EMP",
-      isActive: true
-    })
+      roleType: "SERVICE_EMP"
+    };
+
+    if (req.query.activeOnly === "true") {
+      filter.isActive = true;
+    }
+
+    const emps = await ServiceMember.find(filter)
       .populate("employee", "name institutionId email designation phone")
       .populate("blocks", "blockName blockCode blockType genderTag status")
       .lean();
 
-    res.json({ success: true, data: emps });
+    const Ticket = require("./ticket.model");
+    const empIds = emps.map(e => e.employee?._id || e.employee).filter(Boolean);
+
+    const ticketCounts = await Ticket.aggregate([
+      { $match: { service: new mongoose.Types.ObjectId(serviceId), "assignedTo.employee": { $in: empIds } } },
+      { $unwind: "$assignedTo" },
+      { $match: { "assignedTo.employee": { $in: empIds } } },
+      {
+        $group: {
+          _id: "$assignedTo.employee",
+          totalTickets: { $sum: 1 },
+          activeTickets: {
+            $sum: {
+              $cond: [{ $in: ["$status", ["OPEN", "ASSIGNED", "IN_PROGRESS"]] }, 1, 0]
+            }
+          }
+        }
+      }
+    ]);
+
+    const countsMap = {};
+    ticketCounts.forEach(c => {
+      countsMap[c._id.toString()] = {
+        totalTickets: c.totalTickets,
+        activeTickets: c.activeTickets
+      };
+    });
+
+    const enrichedEmps = emps.map(e => {
+      const idStr = (e.employee?._id || e.employee)?.toString();
+      return {
+        ...e,
+        totalTickets: countsMap[idStr]?.totalTickets || 0,
+        activeTickets: countsMap[idStr]?.activeTickets || 0
+      };
+    });
+
+    res.json({ success: true, data: enrichedEmps });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Toggle Service Emp Active / Deactivate status
+// @route  PATCH /api/service-desk/services/:serviceId/emps/:employeeId/status
+// @access SERVICE_ADMIN of that service, or PRIME
+exports.toggleServiceEmpStatus = async (req, res, next) => {
+  try {
+    const { serviceId, employeeId } = req.params;
+    const { status, isActive } = req.body;
+
+    const isGlobalAdmin = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
+    if (!isGlobalAdmin) {
+      const isAdmin = await ServiceMember.exists({
+        service: serviceId, employee: req.user.userId, roleType: "SERVICE_ADMIN", isActive: true
+      });
+      if (!isAdmin) {
+        res.status(403);
+        return next(new Error("You are not a Service Admin for this service"));
+      }
+    }
+
+    const member = await ServiceMember.findOne({
+      service: serviceId,
+      employee: employeeId,
+      roleType: "SERVICE_EMP"
+    });
+
+    if (!member) {
+      res.status(404);
+      return next(new Error("Service Emp mapping not found"));
+    }
+
+    let nextActive = !member.isActive;
+    if (typeof isActive === "boolean") {
+      nextActive = isActive;
+    } else if (status) {
+      nextActive = (status.toUpperCase() === "ACTIVE");
+    }
+
+    member.isActive = nextActive;
+    await member.save();
+
+    res.json({
+      success: true,
+      message: `Employee status changed to ${nextActive ? "Active" : "Inactive"}`,
+      data: member
+    });
   } catch (error) {
     next(error);
   }
@@ -610,8 +704,8 @@ exports.removeServiceEmp = async (req, res, next) => {
   try {
     const { serviceId, employeeId } = req.params;
 
-    const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
-    if (!isPrime) {
+    const isGlobalAdmin = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
+    if (!isGlobalAdmin) {
       const isAdmin = await ServiceMember.exists({
         service: serviceId, employee: req.user.userId, roleType: "SERVICE_ADMIN", isActive: true
       });
@@ -619,6 +713,20 @@ exports.removeServiceEmp = async (req, res, next) => {
         res.status(403);
         return next(new Error("You are not a Service Admin for this service"));
       }
+    }
+
+    // Prevent removal if employee has assigned tickets in history
+    const Ticket = require("./ticket.model");
+    const ticketCount = await Ticket.countDocuments({
+      service: serviceId,
+      "assignedTo.employee": employeeId
+    });
+
+    if (ticketCount > 0) {
+      res.status(400);
+      return next(new Error(
+        `Cannot remove this employee because they are linked to ${ticketCount} ticket(s) in history. You can deactivate them instead.`
+      ));
     }
 
     const removed = await ServiceMember.findOneAndDelete({

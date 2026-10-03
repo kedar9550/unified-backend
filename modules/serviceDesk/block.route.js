@@ -16,9 +16,9 @@ router.use(protect);
 router.get("/", getBlocks);
 router.get("/:id", getBlockById);
 
-// Manage blocks (PRIME only)
-router.post("/", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), createBlock);
-router.put("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), updateBlock);
-router.delete("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME"), deleteBlock);
+// Manage blocks (PRIME / CSR_ADMIN)
+router.post("/", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME", "CSR_ADMIN", "CSR ADMIN", "CSR"), createBlock);
+router.put("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME", "CSR_ADMIN", "CSR ADMIN", "CSR"), updateBlock);
+router.delete("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME", "CSR_ADMIN", "CSR ADMIN", "CSR"), deleteBlock);
 
 module.exports = router;
