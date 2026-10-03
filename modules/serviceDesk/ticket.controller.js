@@ -274,9 +274,9 @@ exports.getAssignedTickets = async (req, res, next) => {
 exports.getServiceTickets = async (req, res, next) => {
   try {
     const { serviceId } = req.params;
-    const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
+    const isGlobalAdmin = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
 
-    if (!isPrime) {
+    if (!isGlobalAdmin && serviceId !== "ALL") {
       const isAdmin = await ServiceMember.exists({
         service: serviceId, employee: req.user.userId, roleType: "SERVICE_ADMIN", isActive: true
       });
@@ -286,7 +286,7 @@ exports.getServiceTickets = async (req, res, next) => {
       }
     }
 
-    const filter = { service: serviceId };
+    const filter = (serviceId === "ALL") ? {} : { service: serviceId };
     if (req.query.status) filter.status = req.query.status;
 
     if (req.query.tab === 'rejected') {

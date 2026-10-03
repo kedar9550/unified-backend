@@ -22,8 +22,8 @@ const hasTicketAccess = async (req, ticket) => {
   const creatorId = (ticket.createdBy?._id || ticket.createdBy)?.toString();
   if (creatorId && creatorId === userId) return true;
 
-  // 3. Fast in-memory check: UNIPRIME role
-  const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
+  // 3. Fast in-memory check: UNIPRIME / CSR_ADMIN role
+  const isPrime = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
   if (isPrime) return true;
 
   // 4. Fallback DB check: Service Admin

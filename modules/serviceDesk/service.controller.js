@@ -227,12 +227,18 @@ exports.deactivateService = async (req, res, next) => {
 exports.getMyMemberships = async (req, res, next) => {
   try {
     const userId = req.user.userId;
+    const isGlobalAdmin = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
 
     const memberships = await ServiceMember.find({ employee: userId, isActive: true })
       .populate("service", "name description isActive isGlobalService directEmployeeInvolvement")
       .lean();
 
-    const adminOf = memberships.filter(m => m.roleType === "SERVICE_ADMIN").map(m => m.service);
+    let adminOf = [];
+    if (isGlobalAdmin) {
+      adminOf = await Service.find({ isActive: true }).select("name description isActive isGlobalService directEmployeeInvolvement").lean();
+    } else {
+      adminOf = memberships.filter(m => m.roleType === "SERVICE_ADMIN").map(m => m.service);
+    }
     const empOf = memberships.filter(m => m.roleType === "SERVICE_EMP").map(m => m.service);
 
     res.json({ success: true, data: { adminOf, empOf } });
