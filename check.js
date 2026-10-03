@@ -1,19 +1,35 @@
-
 const mongoose = require('mongoose');
-mongoose.connect('mongodb://localhost:27017/unified').then(async () => {
-    const Appraisal = mongoose.model('Appraisal', new mongoose.Schema({}, { strict: false }));
-    const apps = await Appraisal.find({ status: { $regex: 'Submitted to' } });
-    console.log('Appraisals submitted to someone:');
-    const grouped = {};
-    apps.forEach(a => {
-        grouped[a.status] = (grouped[a.status] || 0) + 1;
-    });
-    console.log(grouped);
+mongoose.connect('mongodb://127.0.0.1:27017/unified').then(async () => {
+    const Conference = require('./modules/Conference/Conference.model.js');
+    const doc = await Conference.findById('6ac0b264baa90ba67e7fef63');
+    console.log('Doc before:', doc.conferenceType, doc.location, doc.presentationMode);
     
-    const Role = mongoose.model('Role', new mongoose.Schema({}, { strict: false }));
-    const coeRoles = await Role.find({ name: { $regex: 'Controller', $options: 'i' } });
-    console.log('COE roles:', coeRoles.map(r => ({id: r._id, name: r.name, key: r.key})));
+    // Simulate what the frontend sends
+    const data = {
+        conferenceType: doc.conferenceType || '',
+        scopusIndexed: doc.scopusIndexed || '',
+        presentationMode: doc.presentationMode || '',
+        location: doc.location || '',
+        publisher: doc.publisher || '',
+        issnIsbn: doc.issnIsbn || '',
+        month: doc.month || '',
+        year: doc.year || '',
+        applyingSeedGrant: doc.applyingSeedGrant || 'No',
+        applyIncentive: doc.applyIncentive || 'No',
+        approvedAmount: doc.approvedAmount || '',
+        userAuthorPosition: doc.userAuthorPosition || 1,
+        totalAuthors: doc.totalAuthors || 1,
+        coAuthors: doc.coAuthors || [],
+        title: doc.title || '',
+        conferenceName: doc.conferenceName || ''
+    };
     
+    Object.assign(doc, data);
+    try {
+        await doc.save();
+        console.log('Saved successfully');
+    } catch(e) {
+        console.log('Validation Error:', e.message);
+    }
     process.exit(0);
 });
-

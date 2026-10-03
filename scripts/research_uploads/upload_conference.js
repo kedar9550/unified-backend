@@ -106,8 +106,8 @@ async function processCSV() {
 
                     // 4. Prepare Conference Object
                     let rawScope = (row['level'] || 'National').trim();
-                    if (rawScope.toLowerCase() === 'international') rawScope = 'International';
-                    else if (rawScope.toLowerCase() === 'national') rawScope = 'National';
+                    if (rawScope.toLowerCase() === 'abroad') rawScope = 'Abroad';
+                    else if (rawScope.toLowerCase() === 'india') rawScope = 'India';
 
                     const conferenceData = {
                         facultyId: faculty._id,
@@ -116,12 +116,12 @@ async function processCSV() {
                         title: row['title'] || 'Unknown Title',
                         doi: row['doi'] || 'N/A',
                         conferenceName: row['conferenceName'] || 'Unknown Conference',
-                        scope: rawScope,
+                        location: rawScope,
                         year: row['yearOfPublication'] || yearStr.split('-')[0],
                         month: row['month'] || 'JAN',
                         issnIsbn: row['issnIsbn'] || '',
                         publisher: row['publisher'] || '',
-                        indexing: row['indexing'] || '',
+                        scopusIndexed: row['indexing'] || '',
                         totalAuthors: Number(row['totalAuthors']) || 1,
                         userAuthorPosition: Number(row['facultyAuthorPosition']) || 1,
                         coAuthors: coAuthors,

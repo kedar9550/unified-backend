@@ -6,6 +6,7 @@ const CoAuthorSchema = new mongoose.Schema({
     employeeId: { type: String, default: null }, // stores institutionId string e.g. "5741"
     authorPosition: { type: Number, default: null },
     studentId: { type: String, default: null },
+    studentQualification: { type: String, enum: ['UG', 'PG', 'Ph.D'], default: null },
     CoAuthorType: { type: String, default: 'faculty' },
 }, { _id: false });
 
@@ -28,7 +29,9 @@ const ConferenceSchema = new mongoose.Schema({
 
     title: { type: String, required: true, trim: true, unique: true, sparse: true },
     conferenceName: { type: String, required: true },
-    scope: { type: String, enum: ['National', 'International'], required: true },
+    location: { type: String, enum: ['India', 'Abroad'], required: true },
+    presentationMode: { type: String, enum: ['Online', 'Offline'] },
+    conferenceType: { type: String, enum: ['IEEE', 'IITs/IISc/NITs/IIMs', 'IIT', 'IISc', 'NIT', 'IIM', 'Other'], required: true },
     month: { type: String },
     year: { type: String },
     
@@ -36,7 +39,7 @@ const ConferenceSchema = new mongoose.Schema({
     doi: { type: String, trim: true, default: null, unique: true, sparse: true },
     issnIsbn: { type: String },
     publisher: { type: String },
-    indexing: { type: String },
+    scopusIndexed: { type: String, enum: ['Yes', 'No'] },
     totalAuthors: { type: Number },
     userAuthorPosition: { type: Number },
     coAuthors: [CoAuthorSchema],
@@ -49,8 +52,10 @@ const ConferenceSchema = new mongoose.Schema({
     panNumber: { type: String },
 
     // Files
+    firstPage: { type: String },
     certificate: { type: String },
-    proceedings: { type: String },
+    completeDocument: { type: String },
+    flightTicket: { type: String },
 
     status: {
         type: String,
@@ -60,6 +65,7 @@ const ConferenceSchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
+    estimatedIncentiveAmount: { type: Number, default: 0 },
 
     appraisalClaimant: {
         type: String,
@@ -79,6 +85,8 @@ const ConferenceSchema = new mongoose.Schema({
         enum: ['Self', 'Admin'],
         default: 'Self'
     },
+
+    sdgs: { type: String, default: null },
 
     createdAt: {
         type: Date,
