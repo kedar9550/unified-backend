@@ -58,8 +58,10 @@ router.post('/validate-doi', protect, conferenceController.validateDOI);
 
 // Faculty: Submit and View own
 router.post('/', protect, upload.fields([
+    { name: 'firstPage', maxCount: 1 },
     { name: 'certificate', maxCount: 1 },
-    { name: 'proceedings', maxCount: 1 }
+    { name: 'completeDocument', maxCount: 1 },
+    { name: 'flightTicket', maxCount: 1 }
 ]), conferenceController.createConference);
 
 router.get('/', protect, conferenceController.getMyConferences);
@@ -67,8 +69,10 @@ router.get('/:id', protect, conferenceController.getConferenceById);
 
 // Faculty: Update/Resubmit rejected conference
 router.put('/:id', protect, upload.fields([
+    { name: 'firstPage', maxCount: 1 },
     { name: 'certificate', maxCount: 1 },
-    { name: 'proceedings', maxCount: 1 }
+    { name: 'completeDocument', maxCount: 1 },
+    { name: 'flightTicket', maxCount: 1 }
 ]), conferenceController.updateConference);
 
 // HOD: Action

@@ -75,7 +75,7 @@ exports.createConference = async (req, res) => {
         const data = req.body;
 
         // 1. Mandatory Fields Validation
-        if (!data.title || !data.conferenceName || !data.scope || !data.indexing || !data.applyingSeedGrant || !data.applyIncentive) {
+        if (!data.title || !data.conferenceName || !data.location || !data.conferenceType || !data.scopusIndexed || !data.applyingSeedGrant || !data.applyIncentive) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
@@ -131,7 +131,9 @@ exports.createConference = async (req, res) => {
 
         const files = req.files || {};
         const certificate = files.certificate ? `/uploads/conferences/${files.certificate[0].filename}` : null;
-        const proceedings = files.proceedings ? `/uploads/conferences/${files.proceedings[0].filename}` : null;
+        const firstPage = files.firstPage ? `/uploads/conferences/${files.firstPage[0].filename}` : null;
+        const completeDocument = files.completeDocument ? `/uploads/conferences/${files.completeDocument[0].filename}` : null;
+        const flightTicket = files.flightTicket ? `/uploads/conferences/${files.flightTicket[0].filename}` : null;
 
         // Parse co-authors
         let parsedCoAuthors = [];
@@ -219,12 +221,15 @@ exports.createConference = async (req, res) => {
             totalAuthors: totalAuths,
             coAuthors: resolvedAuthors,
             certificate,
-            proceedings,
+            firstPage,
+            completeDocument,
+            flightTicket,
             appraisalClaimant,
             status: finalStatus,
             incentiveClaimant: computedIncentiveClaimant,
             approvedAmount: (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
             appraisalEligible: data.appraisalEligible || (data.isDirectEntry === 'true' ? 'Yes' : null),
+            sdgs: data.sdgs || null,
             entryType: finalEntryType
         });
 
@@ -409,9 +414,17 @@ exports.updateConference = async (req, res) => {
                 deleteOldFile(conference.certificate);
                 conference.certificate = `/uploads/conferences/${req.files.certificate[0].filename}`;
             }
-            if (req.files.proceedings) {
-                deleteOldFile(conference.proceedings);
-                conference.proceedings = `/uploads/conferences/${req.files.proceedings[0].filename}`;
+            if (req.files.firstPage) {
+                deleteOldFile(conference.firstPage);
+                conference.firstPage = `/uploads/conferences/${req.files.firstPage[0].filename}`;
+            }
+            if (req.files.completeDocument) {
+                deleteOldFile(conference.completeDocument);
+                conference.completeDocument = `/uploads/conferences/${req.files.completeDocument[0].filename}`;
+            }
+            if (req.files.flightTicket) {
+                deleteOldFile(conference.flightTicket);
+                conference.flightTicket = `/uploads/conferences/${req.files.flightTicket[0].filename}`;
             }
         }
 
@@ -420,9 +433,17 @@ exports.updateConference = async (req, res) => {
             deleteOldFile(conference.certificate);
             conference.certificate = null;
         }
-        if (data.deleteProceedings === 'true' && !req.files?.proceedings) {
-            deleteOldFile(conference.proceedings);
-            conference.proceedings = null;
+        if (data.deleteFirstPage === 'true' && !req.files?.firstPage) {
+            deleteOldFile(conference.firstPage);
+            conference.firstPage = null;
+        }
+        if (data.deleteCompleteDocument === 'true' && !req.files?.completeDocument) {
+            deleteOldFile(conference.completeDocument);
+            conference.completeDocument = null;
+        }
+        if (data.deleteFlightTicket === 'true' && !req.files?.flightTicket) {
+            deleteOldFile(conference.flightTicket);
+            conference.flightTicket = null;
         }
 
         await conference.save();
