@@ -134,12 +134,14 @@ exports.sendStudentOtp = async (req, res, next) => {
       });
     }
 
-    // 6. Target Mobile for SMS (Allows dev override to 9550175369 for testing)
-    const targetMobile = process.env.DEV_TEST_MOBILE || "9550175369" || mobileNumber;
+    // 6. Target Mobile for SMS (uses student's mobile number from ECAP, or optional DEV_TEST_MOBILE override if set)
+    const targetMobile = process.env.DEV_TEST_MOBILE || mobileNumber;
 
-    // 7. Send OTP via SMS
-    const smsText = `Dear ${encodeURIComponent(studentName)},%0AYour+OTP+for+Campus+Service+Request+Portal+is+${otp}.+Valid+for+10+minutes.+@ADITYA+UNIVERSITY`;
-    const smsUrl = `${process.env.SMS_API_URL}${targetMobile}&text=${smsText}`;
+    // 7. Send OTP via SMS URL defined entirely in ENV (replaces {mobile} and {otp} placeholders)
+    const smsUrlTemplate = process.env.STUDENT_SMS_API_URL || `${process.env.SMS_API_URL}{mobile}`;
+    const smsUrl = smsUrlTemplate
+      .replace("{mobile}", targetMobile)
+      .replace("{otp}", otp);
 
     console.log(`\n======================================================`);
     console.log(`🔑 [CAMPUS DESK OTP] Roll: ${cleanRoll} (${studentName})`);
@@ -165,9 +167,7 @@ exports.sendStudentOtp = async (req, res, next) => {
         studentname: studentName,
         maskedMobile: maskMobile(targetMobile),
         branch: branch,
-        coursename: courseName,
-        // Provided during development for instant testing convenience
-        ...(process.env.NODE_ENV === "development" ? { devOtp: otp } : {})
+        coursename: courseName
       }
     });
 
