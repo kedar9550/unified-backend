@@ -74,9 +74,20 @@ exports.createConference = async (req, res) => {
     try {
         const data = req.body;
 
+        // Clean up empty string fields to prevent enum validation errors
+        Object.keys(data).forEach(key => {
+            if (data[key] === '') {
+                delete data[key];
+            }
+        });
+
         // 1. Mandatory Fields Validation
         if (!data.title || !data.conferenceName || !data.location || !data.conferenceType || !data.scopusIndexed || !data.applyingSeedGrant || !data.applyIncentive) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
+        }
+
+        if (data.location === 'Abroad' && !data.presentationMode) {
+            return res.status(400).json({ success: false, message: "Presentation Mode is required when Location is Abroad." });
         }
 
         // 2. Duplicate Validation (Flexible whitespace regex for Title + DOI check)
@@ -292,9 +303,22 @@ exports.updateConference = async (req, res) => {
         const { id } = req.params;
         const data = req.body;
 
+        // Clean up empty string fields to prevent enum validation errors
+        Object.keys(data).forEach(key => {
+            if (data[key] === '') {
+                delete data[key];
+            }
+        });
+
         const conference = await Conference.findById(id);
         if (!conference) {
             return res.status(404).json({ success: false, message: "Conference not found." });
+        }
+
+        const location = data.location || conference.location;
+        const presentationMode = data.presentationMode || conference.presentationMode;
+        if (location === 'Abroad' && !presentationMode) {
+            return res.status(400).json({ success: false, message: "Presentation Mode is required when Location is Abroad." });
         }
 
         // Verify ownership
