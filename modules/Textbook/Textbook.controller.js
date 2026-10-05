@@ -262,11 +262,16 @@ exports.updateTextbook = async (req, res) => {
             return res.status(404).json({ success: false, message: "Textbook not found." });
         }
 
-        if (textbook.facultyId.toString() !== req.user.userId) {
+        const isOwner = textbook.facultyId.toString() === req.user.userId;
+        const activeRole = req.headers['active-role'] || req.headers['Active-Role'];
+        const userRoles = req.user.roles || [];
+        const isResearchDean = activeRole === 'RESEARCH_DEAN' || userRoles.includes('RESEARCH_DEAN');
+
+        if (!isOwner && !isResearchDean) {
             return res.status(403).json({ success: false, message: "Not authorized to edit this textbook." });
         }
 
-        if (!textbook.status.includes('Rejected')) {
+        if (!isResearchDean && !textbook.status.includes('Rejected')) {
             return res.status(400).json({ success: false, message: "Only rejected textbooks can be edited and resubmitted." });
         }
 
