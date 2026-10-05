@@ -33,17 +33,18 @@ exports.createTextbook = async (req, res) => {
             }
         }
 
-        // 2. Mandatory Documents Validation
-        if (!req.files || !req.files.coverPage || !req.files.authorAffiliation || !req.files.index) {
-            return res.status(400).json({ success: false, message: "Cover Page, Author Affiliation, and Index documents are mandatory." });
-        }
+        // Documents are no longer mandatory
 
         const trimmedTitle = data.title ? data.title.trim() : '';
+        const trimmedPublisher = data.publisher ? data.publisher.trim() : '';
 
         const existingRecord = await Textbook.findOne({
             $or: [
                 { isbn: data.isbn },
-                ...(trimmedTitle ? [{ title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i') }] : [])
+                ...(trimmedTitle && trimmedPublisher ? [{ 
+                    title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+                    publisher: new RegExp(`^${escapeRegex(trimmedPublisher)}$`, 'i')
+                }] : [])
             ]
         });
 
@@ -53,7 +54,7 @@ exports.createTextbook = async (req, res) => {
                 success: false, 
                 message: isIsbnMatch
                     ? "A textbook with this ISBN already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
-                    : `A textbook with this Title ("${trimmedTitle}") already exists in the system.`
+                    : `A textbook with this Title ("${trimmedTitle}") and Publisher ("${trimmedPublisher}") already exists in the system.`
             });
         }
 
@@ -271,17 +272,31 @@ exports.updateTextbook = async (req, res) => {
 
         if (data.isbn) {
             data.isbn = data.isbn.trim().replace(/-/g, '');
-            const existingRecord = await Textbook.findOne({
-                _id: { $ne: id },
-                isbn: data.isbn
-            });
+        }
 
-            if (existingRecord) {
-                return res.status(400).json({
-                    success: false,
-                    message: "A textbook with this ISBN already exists."
-                });
-            }
+        const trimmedTitle = data.title ? data.title.trim() : (textbook.title || '');
+        const trimmedPublisher = data.publisher ? data.publisher.trim() : (textbook.publisher || '');
+        const isbnToCheck = data.isbn || textbook.isbn;
+
+        const existingRecord = await Textbook.findOne({
+            _id: { $ne: id },
+            $or: [
+                ...(isbnToCheck ? [{ isbn: isbnToCheck }] : []),
+                ...(trimmedTitle && trimmedPublisher ? [{ 
+                    title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+                    publisher: new RegExp(`^${escapeRegex(trimmedPublisher)}$`, 'i')
+                }] : [])
+            ]
+        });
+
+        if (existingRecord) {
+            const isIsbnMatch = existingRecord.isbn && isbnToCheck && existingRecord.isbn.toLowerCase() === isbnToCheck.toLowerCase();
+            return res.status(400).json({ 
+                success: false, 
+                message: isIsbnMatch
+                    ? "A textbook with this ISBN already exists."
+                    : `A textbook with this Title ("${trimmedTitle}") and Publisher ("${trimmedPublisher}") already exists in the system.`
+            });
         }
 
         if (data.year || data.month) {
@@ -521,22 +536,13 @@ exports.addEdition = async (req, res) => {
 };
 
 
-const { getHODDepartments } = require('../../utils/hodHelper');
-
 // @desc    Get textbooks pending at HOD
 // @route   GET /api/research/textbook/pending-hod
 // @access  Private (HOD)
 exports.getPendingAtHOD = async (req, res) => {
     try {
-        const Employee = require('../employee/employee.model');
-        const deptIds = await getHODDepartments(req.user);
-        
-        const facultyIds = await Employee.find({
-            $or: [
-                { coreDepartment: { $in: deptIds } },
-                { department: { $in: deptIds } }
-            ]
-        }).distinct('_id');
+        const { getFacultyIdsForApprover } = require('../hierarchy/reportingBoss.helper');
+        const facultyIds = await getFacultyIdsForApprover(req.user);
         
         const textbooks = await Textbook.find({ 
             facultyId: { $in: facultyIds },
