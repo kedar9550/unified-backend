@@ -2488,4 +2488,229 @@ exports.bulkUpdateByExcel = async (req, res) => {
   }
 };
 
+// ─── Verify Batch Payment IDs from CSV / Excel / Input List ─────────────────
+exports.verifyBatchPaymentIds = async (req, res) => {
+  try {
+    let inputIds = [];
+
+    if (Array.isArray(req.body.paymentIds) && req.body.paymentIds.length > 0) {
+      inputIds = req.body.paymentIds;
+    } else if (req.body.ids && typeof req.body.ids === 'string') {
+      inputIds = req.body.ids.split(/[\n,;\r]+/).map(s => s.trim()).filter(Boolean);
+    } else if (req.file) {
+      const XLSX = require('xlsx');
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const firstSheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[firstSheetName];
+      const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+      rawData.forEach(row => {
+        if (Array.isArray(row)) {
+          row.forEach(cell => {
+            if (cell) {
+              const str = String(cell).trim();
+              if (
+                str &&
+                !['id', 'payment_id', 'razorpay_payment_id', 'payment id', 'razorpay payment id'].includes(str.toLowerCase())
+              ) {
+                inputIds.push(str);
+              }
+            }
+          });
+        }
+      });
+    }
+
+    const cleanIds = Array.from(new Set(inputIds.map(id => String(id).trim()))).filter(Boolean);
+
+    if (cleanIds.length === 0) {
+      return res.status(400).json({ error: 'No valid Payment IDs provided in input or file' });
+    }
+
+    // Query database for matching registrations
+    const registrations = await PaymentRegistration.find({
+      $or: [
+        { razorpayPaymentId: { $in: cleanIds } },
+        { razorpayOrderId: { $in: cleanIds } },
+        { "rawPaymentData.razorpayCompleteResponse.id": { $in: cleanIds } }
+      ]
+    }).lean();
+
+    const dbMapByPaymentId = new Map();
+    const dbMapByOrderId = new Map();
+
+    registrations.forEach(reg => {
+      if (reg.razorpayPaymentId) dbMapByPaymentId.set(reg.razorpayPaymentId.trim(), reg);
+      if (reg.razorpayOrderId) dbMapByOrderId.set(reg.razorpayOrderId.trim(), reg);
+    });
+
+    let razorpayInstance = null;
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (keyId && keySecret && keyId !== 'dummy_key' && !keyId.includes('xxx')) {
+      try {
+        const Razorpay = require('razorpay');
+        razorpayInstance = new Razorpay({ key_id: keyId, key_secret: keySecret });
+      } catch (e) {
+        console.warn('Razorpay SDK init warning:', e.message);
+      }
+    }
+
+    // Fetch gateway data for clean IDs in parallel batches of 15 to get description, method, email, etc.
+    const gatewayMap = new Map();
+
+    if (razorpayInstance && cleanIds.length > 0) {
+      const BATCH_SIZE = 15;
+      for (let i = 0; i < cleanIds.length; i += BATCH_SIZE) {
+        const batch = cleanIds.slice(i, i + BATCH_SIZE);
+        await Promise.allSettled(
+          batch.map(async (pid) => {
+            if (!pid.startsWith('pay_') && !pid.startsWith('order_')) return;
+            try {
+              if (pid.startsWith('order_')) {
+                const orderPayments = await razorpayInstance.orders.fetchPayments(pid);
+                if (orderPayments && orderPayments.items && orderPayments.items.length > 0) {
+                  const pData = orderPayments.items.find(p => p.status === 'captured') || orderPayments.items[0];
+                  if (pData) gatewayMap.set(pid, pData);
+                }
+              } else {
+                const pData = await razorpayInstance.payments.fetch(pid);
+                if (pData) gatewayMap.set(pid, pData);
+              }
+            } catch (err) {
+              // Ignore invalid or not found Razorpay IDs
+            }
+          })
+        );
+      }
+    }
+
+    const results = [];
+    const summary = {
+      totalUploaded: cleanIds.length,
+      foundInDb: 0,
+      paidInDb: 0,
+      pendingInDb: 0,
+      gatewayOnly: 0,
+      notFound: 0,
+      totalAmount: 0
+    };
+
+    for (const pid of cleanIds) {
+      let reg = dbMapByPaymentId.get(pid) || dbMapByOrderId.get(pid);
+      const gatewayPayment = gatewayMap.get(pid) || gatewayMap.get(reg?.razorpayPaymentId);
+
+      const description =
+        gatewayPayment?.description ||
+        reg?.rawPaymentData?.razorpayCompleteResponse?.description ||
+        reg?.rawPaymentData?.description ||
+        reg?.eventName ||
+        '-';
+
+      if (reg) {
+        summary.foundInDb++;
+        const isPaid = (reg.paymentStatus || (reg.verified ? 'PAID' : 'PENDING')).toUpperCase() === 'PAID';
+        if (isPaid) summary.paidInDb++;
+        else summary.pendingInDb++;
+
+        const amt = Number(reg.amountRupees || reg.amount || (gatewayPayment ? gatewayPayment.amount / 100 : 0));
+        summary.totalAmount += amt;
+
+        results.push({
+          inputPaymentId: pid,
+          foundInDb: true,
+          foundOnGateway: !!gatewayPayment,
+          status: isPaid ? 'PAID' : 'PENDING',
+          paymentStatus: reg.paymentStatus || (isPaid ? 'PAID' : 'PENDING'),
+          verified: reg.verified !== false,
+          teamId: reg.teamId || '-',
+          eventName: reg.eventName || gatewayPayment?.description || '-',
+          description: description,
+          category: reg.category || '-',
+          schoolId: reg.schoolId || '-',
+          amount: amt,
+          currency: reg.currency || gatewayPayment?.currency || 'INR',
+          paidAt: reg.paidAt || (gatewayPayment?.created_at ? new Date(gatewayPayment.created_at * 1000) : reg.createdAt),
+          razorpayPaymentId: reg.razorpayPaymentId || pid,
+          razorpayOrderId: reg.razorpayOrderId || gatewayPayment?.order_id || '-',
+          method: gatewayPayment?.method || reg.rawPaymentData?.razorpayCompleteResponse?.method || '-',
+          teamSize: reg.teamSize || (reg.participants ? reg.participants.length : 1),
+          participants: reg.participants || [],
+          leadParticipant: reg.participants && reg.participants.length > 0 ? reg.participants[0] : null,
+          registration: reg,
+          gatewayPayment: gatewayPayment || null
+        });
+      } else if (gatewayPayment) {
+        summary.gatewayOnly++;
+        const amt = Math.round((gatewayPayment.amount || 0) / 100);
+        summary.totalAmount += amt;
+
+        results.push({
+          inputPaymentId: pid,
+          foundInDb: false,
+          foundOnGateway: true,
+          status: gatewayPayment.status === 'captured' ? 'GATEWAY_CAPTURED' : 'GATEWAY_FOUND',
+          paymentStatus: gatewayPayment.status?.toUpperCase() || 'GATEWAY_ONLY',
+          verified: false,
+          teamId: '-',
+          eventName: gatewayPayment.description || '-',
+          description: description,
+          amount: amt,
+          currency: gatewayPayment.currency || 'INR',
+          paidAt: gatewayPayment.created_at ? new Date(gatewayPayment.created_at * 1000) : null,
+          razorpayPaymentId: gatewayPayment.id || pid,
+          razorpayOrderId: gatewayPayment.order_id || '-',
+          method: gatewayPayment.method || '-',
+          teamSize: 1,
+          participants: [{
+            name: gatewayPayment.notes?.name || gatewayPayment.email || 'Razorpay Payer',
+            email: gatewayPayment.email || '',
+            mobile: gatewayPayment.contact || '',
+            college: '-',
+            roll: '-',
+          }],
+          leadParticipant: {
+            name: gatewayPayment.notes?.name || gatewayPayment.email || 'Razorpay Payer',
+            email: gatewayPayment.email || '',
+            mobile: gatewayPayment.contact || ''
+          },
+          gatewayPayment
+        });
+      } else {
+        summary.notFound++;
+        results.push({
+          inputPaymentId: pid,
+          foundInDb: false,
+          foundOnGateway: false,
+          status: 'NOT_FOUND',
+          paymentStatus: 'NOT_FOUND',
+          verified: false,
+          teamId: '-',
+          eventName: '-',
+          description: '-',
+          amount: 0,
+          currency: 'INR',
+          paidAt: null,
+          razorpayPaymentId: pid,
+          razorpayOrderId: '-',
+          method: '-',
+          teamSize: 0,
+          participants: [],
+          error: 'Payment ID not found in database or gateway'
+        });
+      }
+    }
+
+    return res.json({
+      ok: true,
+      summary,
+      results
+    });
+  } catch (err) {
+    console.error('verifyBatchPaymentIds error:', err);
+    return res.status(500).json({ error: 'Failed to verify payment IDs batch', details: err.message });
+  }
+};
+
+
 

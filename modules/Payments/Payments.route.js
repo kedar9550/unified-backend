@@ -62,6 +62,7 @@ router.put('/registrations/:id/winner', paymentsController.updateWinnerStatus);
 // Bulk Excel Payment Update
 const excelUpload = multer({ storage: multer.memoryStorage() });
 router.post('/registrations/bulk-update-excel', excelUpload.single('file'), paymentsController.bulkUpdateByExcel);
+router.post('/registrations/verify-payment-ids', excelUpload.single('file'), paymentsController.verifyBatchPaymentIds);
 
 // Participant Photo Upload
 router.post('/registrations/photo', upload.single('photo'), paymentsController.uploadPhoto);
