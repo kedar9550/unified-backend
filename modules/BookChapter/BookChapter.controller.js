@@ -125,6 +125,22 @@ exports.createBookChapter = async (req, res) => {
             }
         }
 
+        // 4. Restrict max 2 chapters per book (ISBN) for a user
+        if (data.isbnNumber) {
+            const chaptersCount = await BookChapter.countDocuments({
+                facultyId: finalFacultyId,
+                isbnNumber: data.isbnNumber,
+                status: { $nin: ['Rejected', 'Rejected by R&D'] }
+            });
+            
+            if (chaptersCount >= 2) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A faculty member can submit a maximum of two chapters from the same book."
+                });
+            }
+        }
+
         const bookChapter = new BookChapter({
             ...data,
             chapterTitle: trimmedChapterTitle,
@@ -133,6 +149,7 @@ exports.createBookChapter = async (req, res) => {
             appraisalClaimant,
             status: finalStatus,
             incentiveClaimant: computedIncentiveClaimant,
+            estimatedIncentiveAmount: data.estimatedIncentiveAmount ? Number(data.estimatedIncentiveAmount) : 0,
             approvedAmount: (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
             appraisalEligible: data.appraisalEligible || (data.isDirectEntry === 'true' ? 'Yes' : null),
             entryType: finalEntryType
@@ -143,6 +160,7 @@ exports.createBookChapter = async (req, res) => {
             if (req.files.authorAffiliation) bookChapter.authorAffiliation = `/uploads/book-chapters/${req.files.authorAffiliation[0].filename}`;
             if (req.files.index) bookChapter.index = `/uploads/book-chapters/${req.files.index[0].filename}`;
             if (req.files.softCopy) bookChapter.softCopy = `/uploads/book-chapters/${req.files.softCopy[0].filename}`;
+            if (req.files.totalBookChapter) bookChapter.totalBookChapter = `/uploads/book-chapters/${req.files.totalBookChapter[0].filename}`;
         }
 
         await bookChapter.save();
@@ -249,6 +267,23 @@ exports.updateBookChapter = async (req, res) => {
             }
         }
 
+        // Validate ISBN count
+        if (data.isbnNumber) {
+            const chaptersCount = await BookChapter.countDocuments({
+                _id: { $ne: id },
+                facultyId: bookChapter.facultyId,
+                isbnNumber: data.isbnNumber,
+                status: { $nin: ['Rejected', 'Rejected by R&D'] }
+            });
+            
+            if (chaptersCount >= 2) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A faculty member can submit a maximum of two chapters from the same book."
+                });
+            }
+        }
+
         // Date Validation
         if (data.year || data.month) {
             const year = data.year || bookChapter.year;
@@ -327,6 +362,10 @@ exports.updateBookChapter = async (req, res) => {
                 deleteOldFile(bookChapter.softCopy);
                 bookChapter.softCopy = `/uploads/book-chapters/${req.files.softCopy[0].filename}`;
             }
+            if (req.files.totalBookChapter) {
+                deleteOldFile(bookChapter.totalBookChapter);
+                bookChapter.totalBookChapter = `/uploads/book-chapters/${req.files.totalBookChapter[0].filename}`;
+            }
         }
 
         if (data.deleteCoverPage === 'true' && (!req.files || !req.files.coverPage)) {
@@ -344,6 +383,10 @@ exports.updateBookChapter = async (req, res) => {
         if (data.deleteSoftCopy === 'true' && (!req.files || !req.files.softCopy)) {
             deleteOldFile(bookChapter.softCopy);
             bookChapter.softCopy = null;
+        }
+        if (data.deleteTotalBookChapter === 'true' && (!req.files || !req.files.totalBookChapter)) {
+            deleteOldFile(bookChapter.totalBookChapter);
+            bookChapter.totalBookChapter = null;
         }
 
         await bookChapter.save();
