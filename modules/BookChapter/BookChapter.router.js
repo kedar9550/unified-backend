@@ -50,7 +50,8 @@ router.post('/', protect, upload.fields([
     { name: 'coverPage', maxCount: 1 },
     { name: 'authorAffiliation', maxCount: 1 },
     { name: 'index', maxCount: 1 },
-    { name: 'softCopy', maxCount: 1 }
+    { name: 'softCopy', maxCount: 1 },
+    { name: 'totalBookChapter', maxCount: 1 }
 ]), bookChapterController.createBookChapter);
 
 router.get('/', protect, bookChapterController.getMyBookChapters);
@@ -61,7 +62,8 @@ router.put('/:id', protect, upload.fields([
     { name: 'coverPage', maxCount: 1 },
     { name: 'authorAffiliation', maxCount: 1 },
     { name: 'index', maxCount: 1 },
-    { name: 'softCopy', maxCount: 1 }
+    { name: 'softCopy', maxCount: 1 },
+    { name: 'totalBookChapter', maxCount: 1 }
 ]), bookChapterController.updateBookChapter);
 
 // HOD: View pending and Action
