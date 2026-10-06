@@ -86,11 +86,11 @@ async function processCSV() {
                             let affiliation = 'Aditya University';
                             
                             try {
-                                const axios = require('axios');
-                                const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/staffdata/${coAuthorEmpId}`);
-                                if (response.data && response.data.length > 0 && response.data[0].employeename) {
-                                    empName = response.data[0].employeename;
-                                    affiliation = response.data[0].college || 'Aditya University';
+                                const { fetchStaffFromEcap } = require('../../utils/ecapService');
+                                const staffData = await fetchStaffFromEcap(coAuthorEmpId);
+                                if (staffData && (staffData.employeename || staffData.EmployeeName)) {
+                                    empName = staffData.employeename || staffData.EmployeeName;
+                                    affiliation = staffData.college || 'Aditya University';
                                 }
                             } catch (apiErr) {
                                 console.log(`API lookup failed for ${coAuthorEmpId}`);
@@ -106,8 +106,8 @@ async function processCSV() {
 
                     // 4. Prepare Conference Object
                     let rawScope = (row['level'] || 'National').trim();
-                    if (rawScope.toLowerCase() === 'international') rawScope = 'International';
-                    else if (rawScope.toLowerCase() === 'national') rawScope = 'National';
+                    if (rawScope.toLowerCase() === 'abroad') rawScope = 'Abroad';
+                    else if (rawScope.toLowerCase() === 'india') rawScope = 'India';
 
                     const conferenceData = {
                         facultyId: faculty._id,
@@ -116,12 +116,12 @@ async function processCSV() {
                         title: row['title'] || 'Unknown Title',
                         doi: row['doi'] || 'N/A',
                         conferenceName: row['conferenceName'] || 'Unknown Conference',
-                        scope: rawScope,
+                        location: rawScope,
                         year: row['yearOfPublication'] || yearStr.split('-')[0],
                         month: row['month'] || 'JAN',
                         issnIsbn: row['issnIsbn'] || '',
                         publisher: row['publisher'] || '',
-                        indexing: row['indexing'] || '',
+                        scopusIndexed: row['indexing'] || '',
                         totalAuthors: Number(row['totalAuthors']) || 1,
                         userAuthorPosition: Number(row['facultyAuthorPosition']) || 1,
                         coAuthors: coAuthors,

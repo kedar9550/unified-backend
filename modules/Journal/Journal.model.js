@@ -6,8 +6,8 @@ const CoAuthorSchema = new mongoose.Schema({
     employeeId: { type: String, default: null },
     authorPosition: { type: Number, default: null },
     studentId: { type: String, default: null },
+    studentQualification: { type: String, default: null },
     CoAuthorType: { type: String, default: 'faculty' },
-
 }, { _id: false });
 
 const JournalSchema = new mongoose.Schema({
@@ -26,15 +26,16 @@ const JournalSchema = new mongoose.Schema({
     college: { type: String },
     panNumber: { type: String },
     doi: { type: String, required: true, trim: true, unique: true, sparse: true },
+    isNoDoi: { type: String, enum: ['Yes', 'No'], default: 'No' },
     issn: { type: String },
     eissn: { type: String },
     isScopus: { type: String, enum: ['Yes', 'No'], required: true },
-
-    publicationScope: { type: String, required: true },
+    isWos: { type: String, enum: ['Yes', 'No'], default: 'No' },
     totalAuthors: { type: Number, required: true },
     userAuthorPosition: { type: Number, required: true },
     journalQuartile: { type: String, required: true },
-    journalType: { type: String },
+    journalType: { type: String, enum: ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI', 'None'], default: 'None' },
+    journalCategory: { type: String },
     paperTitle: { type: String, required: true, unique: true },
     coAuthors: [CoAuthorSchema],
     journalName: { type: String, required: true },
@@ -51,8 +52,10 @@ const JournalSchema = new mongoose.Schema({
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
     completeJournalName: { type: String },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
+    estimatedIncentiveAmount: { type: Number, default: 0 },
 
     isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
+    correspondingAuthor: { type: String, enum: ['Yes', 'No'], default: 'No' },
 
     // Files
     publishedPaper: { type: String, required: true },
@@ -61,8 +64,8 @@ const JournalSchema = new mongoose.Schema({
 
     status: {
         type: String,
-        enum: ['Pending at R&D', 'Approved', 'Rejected by R&D'],
-        default: 'Pending at R&D'
+        enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'],
+        default: 'Pending'
     },
     hodComment: { type: String },
     rndComment: { type: String },

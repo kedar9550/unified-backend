@@ -36,7 +36,7 @@ const loginUser = async (institutionId, password, appName) => {
         .populate('role')
         .populate('departments', 'name code type')
         .populate('schools', 'name code hod');
-    
+
     // Map them out nicely
     const roles = userAppRoles.map(uar => ({
         role: uar.role.key || uar.role.name,
@@ -45,7 +45,7 @@ const loginUser = async (institutionId, password, appName) => {
         app: uar.app,
         departments: uar.departments || [],
         schools: uar.schools || [],
-        permissions: [] 
+        permissions: []
     }));
 
     if (!roles || roles.length === 0) {
@@ -72,8 +72,8 @@ const normalizeUser = (user, userType) => {
         institutionId: userType === 'Employee' ? user.institutionId : user.rollNo,
         email: userType === 'Employee' ? user.email : user.contactInfo?.emailId,
         phone: userType === 'Employee' ? user.phone : user.contactInfo?.mobileNumber,
-        department: userType === 'Employee' 
-            ? (user.department?.name || (user.department ? user.department.toString() : "Not Assigned")) 
+        department: userType === 'Employee'
+            ? (user.department?.name || (user.department ? user.department.toString() : "Not Assigned"))
             : (user.academicInfo?.department?.name || (user.academicInfo?.department ? user.academicInfo?.department.toString() : "Not Assigned")),
         designation: userType === 'Employee' ? user.designation : 'Student',
         userType: userType,
@@ -82,13 +82,29 @@ const normalizeUser = (user, userType) => {
         wosId: userType === 'Employee' ? user.wosId : "",
         orcidId: userType === 'Employee' ? user.orcidId : "",
         googleScholarId: userType === 'Employee' ? user.googleScholarId : "",
+        linkedInId: userType === 'Employee' ? user.linkedInId : "",
+        publonsId: userType === 'Employee' ? user.publonsId : "",
+        vidwanId: userType === 'Employee' ? user.vidwanId : "",
         panNumber: userType === 'Employee' ? user.panNumber : "",
         college: userType === 'Employee' ? user.college : "",
         qualifications: userType === 'Employee' ? (user.qualifications || []) : [],
+        coursesTaught: userType === 'Employee' ? (user.coursesTaught || []) : [],
+        researchInterests: userType === 'Employee'
+            ? (Array.isArray(user.researchInterests)
+                ? user.researchInterests.map(r => typeof r === 'object' ? r.interest : r).filter(Boolean).join(", ")
+                : (user.researchInterests || ""))
+            : "",
+        honorsAndAwards: userType === 'Employee'
+            ? (Array.isArray(user.honorsAndAwards)
+                ? user.honorsAndAwards
+                : (typeof user.honorsAndAwards === 'string' && user.honorsAndAwards.trim() !== ''
+                    ? [{ title: user.honorsAndAwards }]
+                    : []))
+            : [],
         doctorate: userType === 'Employee' ? (user.doctorate || "no") : "no",
         leadership: userType === 'Employee' ? (user.leadership || "no") : "no",
-        coreDepartment: userType === 'Employee' 
-            ? (user.coreDepartment?.name || (user.coreDepartment ? user.coreDepartment.toString() : "Not Assigned")) 
+        coreDepartment: userType === 'Employee'
+            ? (user.coreDepartment?.name || (user.coreDepartment ? user.coreDepartment.toString() : "Not Assigned"))
             : "",
         dateOfJoining: userType === 'Employee' ? (user.dateOfJoining || "") : "",
     };

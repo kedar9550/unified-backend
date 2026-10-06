@@ -74,9 +74,20 @@ exports.createConference = async (req, res) => {
     try {
         const data = req.body;
 
+        // Clean up empty string fields to prevent enum validation errors
+        Object.keys(data).forEach(key => {
+            if (data[key] === '') {
+                delete data[key];
+            }
+        });
+
         // 1. Mandatory Fields Validation
-        if (!data.title || !data.conferenceName || !data.scope || !data.indexing || !data.applyingSeedGrant || !data.applyIncentive) {
+        if (!data.title || !data.conferenceName || !data.location || !data.conferenceType || !data.scopusIndexed || !data.applyingSeedGrant || !data.applyIncentive) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
+        }
+
+        if (data.location === 'Abroad' && !data.presentationMode) {
+            return res.status(400).json({ success: false, message: "Presentation Mode is required when Location is Abroad." });
         }
 
         // 2. Duplicate Validation (Flexible whitespace regex for Title + DOI check)
@@ -131,7 +142,9 @@ exports.createConference = async (req, res) => {
 
         const files = req.files || {};
         const certificate = files.certificate ? `/uploads/conferences/${files.certificate[0].filename}` : null;
-        const proceedings = files.proceedings ? `/uploads/conferences/${files.proceedings[0].filename}` : null;
+        const firstPage = files.firstPage ? `/uploads/conferences/${files.firstPage[0].filename}` : null;
+        const completeDocument = files.completeDocument ? `/uploads/conferences/${files.completeDocument[0].filename}` : null;
+        const flightTicket = files.flightTicket ? `/uploads/conferences/${files.flightTicket[0].filename}` : null;
 
         // Parse co-authors
         let parsedCoAuthors = [];
@@ -157,7 +170,7 @@ exports.createConference = async (req, res) => {
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -219,12 +232,15 @@ exports.createConference = async (req, res) => {
             totalAuthors: totalAuths,
             coAuthors: resolvedAuthors,
             certificate,
-            proceedings,
+            firstPage,
+            completeDocument,
+            flightTicket,
             appraisalClaimant,
             status: finalStatus,
             incentiveClaimant: computedIncentiveClaimant,
             approvedAmount: (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
             appraisalEligible: data.appraisalEligible || (data.isDirectEntry === 'true' ? 'Yes' : null),
+            sdgs: data.sdgs || null,
             entryType: finalEntryType
         });
 
@@ -287,9 +303,22 @@ exports.updateConference = async (req, res) => {
         const { id } = req.params;
         const data = req.body;
 
+        // Clean up empty string fields to prevent enum validation errors
+        Object.keys(data).forEach(key => {
+            if (data[key] === '') {
+                delete data[key];
+            }
+        });
+
         const conference = await Conference.findById(id);
         if (!conference) {
             return res.status(404).json({ success: false, message: "Conference not found." });
+        }
+
+        const location = data.location || conference.location;
+        const presentationMode = data.presentationMode || conference.presentationMode;
+        if (location === 'Abroad' && !presentationMode) {
+            return res.status(400).json({ success: false, message: "Presentation Mode is required when Location is Abroad." });
         }
 
         // Verify ownership
@@ -386,7 +415,7 @@ exports.updateConference = async (req, res) => {
         conference.scopusSubtype = scopusSubtype;
         conference.appraisalClaimant = appraisalClaimant;
         conference.incentiveClaimant = computedIncentiveClaimant;
-        conference.status = 'Pending at R&D'; // Resubmit
+        conference.status = 'Pending'; // Resubmit
         conference.hodComment = '';
         conference.rndComment = '';
 
@@ -409,9 +438,17 @@ exports.updateConference = async (req, res) => {
                 deleteOldFile(conference.certificate);
                 conference.certificate = `/uploads/conferences/${req.files.certificate[0].filename}`;
             }
-            if (req.files.proceedings) {
-                deleteOldFile(conference.proceedings);
-                conference.proceedings = `/uploads/conferences/${req.files.proceedings[0].filename}`;
+            if (req.files.firstPage) {
+                deleteOldFile(conference.firstPage);
+                conference.firstPage = `/uploads/conferences/${req.files.firstPage[0].filename}`;
+            }
+            if (req.files.completeDocument) {
+                deleteOldFile(conference.completeDocument);
+                conference.completeDocument = `/uploads/conferences/${req.files.completeDocument[0].filename}`;
+            }
+            if (req.files.flightTicket) {
+                deleteOldFile(conference.flightTicket);
+                conference.flightTicket = `/uploads/conferences/${req.files.flightTicket[0].filename}`;
             }
         }
 
@@ -420,9 +457,17 @@ exports.updateConference = async (req, res) => {
             deleteOldFile(conference.certificate);
             conference.certificate = null;
         }
-        if (data.deleteProceedings === 'true' && !req.files?.proceedings) {
-            deleteOldFile(conference.proceedings);
-            conference.proceedings = null;
+        if (data.deleteFirstPage === 'true' && !req.files?.firstPage) {
+            deleteOldFile(conference.firstPage);
+            conference.firstPage = null;
+        }
+        if (data.deleteCompleteDocument === 'true' && !req.files?.completeDocument) {
+            deleteOldFile(conference.completeDocument);
+            conference.completeDocument = null;
+        }
+        if (data.deleteFlightTicket === 'true' && !req.files?.flightTicket) {
+            deleteOldFile(conference.flightTicket);
+            conference.flightTicket = null;
         }
 
         await conference.save();
@@ -509,7 +554,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const conference = await Conference.findByIdAndUpdate(id, {
             status,
             hodComment: comment

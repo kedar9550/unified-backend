@@ -2,6 +2,31 @@ const Journal = require('./Journal.model');
 const Employee = require('../employee/employee.model');
 const escapeRegex = require('../../utils/escapeRegex');
 const { isFutureYearMonth } = require('../../utils/validationHelper');
+const { calculateJournalIncentive } = require('../../utils/journalIncentiveCalculator');
+
+const ALLOWED_JOURNAL_TYPES = ['SCIE', 'SCI', 'ESCI', 'SSCI', 'AHCI'];
+const WOS_PRIORITY = ['SCIE', 'SCI', 'SSCI', 'AHCI', 'ESCI'];
+
+const resolveWoSTypeAndStatus = (input) => {
+    if (!input) return { journalType: 'None', isWos: 'No' };
+    const str = String(input).toUpperCase().trim();
+    if (ALLOWED_JOURNAL_TYPES.includes(str)) {
+        return { journalType: str, isWos: 'Yes' };
+    }
+    if (str === 'NONE' || str === '' || str === 'NO' || str === 'NULL' || str === 'UNDEFINED') {
+        return { journalType: 'None', isWos: 'No' };
+    }
+    // If composite string (e.g. "SCIE/ESCI", "SCIE, ESCI"), extract matching types and resolve by priority
+    const foundTypes = new Set();
+    ALLOWED_JOURNAL_TYPES.forEach(t => {
+        if (str.includes(t)) foundTypes.add(t);
+    });
+    if (foundTypes.size > 0) {
+        const best = WOS_PRIORITY.find(t => foundTypes.has(t)) || 'None';
+        return { journalType: best, isWos: best !== 'None' ? 'Yes' : 'No' };
+    }
+    return { journalType: 'None', isWos: 'No' };
+};
 
 // @desc    Submit new journal publication
 // @route   POST /api/research/journal
@@ -10,15 +35,21 @@ exports.createJournal = async (req, res) => {
     try {
         const data = req.body;
 
+        const isNoDoi = (data.isNoDoi === 'Yes' || data.isNoDoi === true || data.isNoDoi === 'true') ? 'Yes' : 'No';
+        let cleanedDoi = (data.doi || '').trim();
+
+        if (isNoDoi === 'Yes' && !cleanedDoi) {
+            cleanedDoi = `NODOI-AUS-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`;
+        }
+
         // Validation
-        if (!data.doi || !data.doi.trim()) {
+        if (!cleanedDoi) {
             return res.status(400).json({ success: false, message: "DOI is mandatory." });
         }
         if (!data.paperTitle || !data.paperTitle.trim()) {
             return res.status(400).json({ success: false, message: "Paper Title is mandatory." });
         }
 
-        const cleanedDoi = data.doi.trim();
         const trimmedTitle = data.paperTitle.trim();
 
         // Check if there is any submission with the same DOI or Title
@@ -101,13 +132,30 @@ exports.createJournal = async (req, res) => {
 
         const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;
 
+        // Resolve Journal Category (journalCategory)
+        let resolvedJournalCategory = (data.journalCategory || '').trim();
+        if (resolvedJournalCategory === 'OTHERS' || !resolvedJournalCategory) {
+            if (data.journalName) {
+                const JournalMaster = require('../JournalMaster/JournalMaster.model');
+                const match = await JournalMaster.findOne({
+                    journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                });
+                if (match && match.type) {
+                    resolvedJournalCategory = match.type;
+                } else {
+                    resolvedJournalCategory = 'OTHERS';
+                }
+            } else {
+                resolvedJournalCategory = 'OTHERS';
+            }
+        }
 
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalAppraisalEligible = 'No'; // default
         let finalEntryType = 'Self';
 
@@ -151,8 +199,34 @@ exports.createJournal = async (req, res) => {
             computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? targetFaculty.institutionId : null;
         }
 
+        const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(data.journalType);
+
+        // Calculate Estimated Incentive Amount
+        let estimatedIncentiveAmount = 0;
+        if (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive({
+                ...data,
+                journalType: cleanJournalType,
+                isWos,
+                journalCategory: resolvedJournalCategory,
+                jcrImpactFactor,
+                numberOfReferencesBelongingToAGEC,
+                coAuthors: resolvedAuthors
+            });
+
+            if (!incentiveCalc.success) {
+                return res.status(400).json({ success: false, message: incentiveCalc.message });
+            }
+            estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+        }
+
         const journal = new Journal({
             ...data,
+            doi: cleanedDoi,
+            isNoDoi,
+            journalType: cleanJournalType,
+            isWos,
+            journalCategory: resolvedJournalCategory,
             facultyId: finalFacultyId,
             coAuthors: resolvedAuthors,
             numberOfReferencesBelongingToAGEC,
@@ -161,7 +235,9 @@ exports.createJournal = async (req, res) => {
             status: finalStatus,
             appraisalEligible: finalAppraisalEligible,
             incentiveClaimant: computedIncentiveClaimant,
-            entryType: finalEntryType
+            entryType: finalEntryType,
+            correspondingAuthor: data.correspondingAuthor || 'No',
+            estimatedIncentiveAmount
         });
 
         if (req.files) {
@@ -332,6 +408,7 @@ exports.updateJournal = async (req, res) => {
 
         // Fetch JCR Impact Factor if journalName changed
         let jcrImpactFactor = journal.jcrImpactFactor;
+        const currentJournalName = data.journalName !== undefined ? data.journalName : journal.journalName;
         if (data.journalName) {
             const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
             const searchName = data.journalName.trim().toUpperCase();
@@ -341,6 +418,21 @@ exports.updateJournal = async (req, res) => {
             jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : (data.jcrImpactFactor !== undefined ? data.jcrImpactFactor : journal.jcrImpactFactor);
         }
 
+        // Resolve Journal Category (journalCategory)
+        let resolvedJournalCategory = data.journalCategory !== undefined ? (data.journalCategory || '').trim() : journal.journalCategory;
+        if (resolvedJournalCategory === 'OTHERS' && currentJournalName) {
+            const JournalMaster = require('../JournalMaster/JournalMaster.model');
+            const searchName = currentJournalName.trim().toUpperCase();
+            const match = await JournalMaster.findOne({
+                journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+            });
+            if (match && match.type) {
+                resolvedJournalCategory = match.type;
+            } else {
+                resolvedJournalCategory = 'OTHERS';
+            }
+        }
+
         const applicant = await Employee.findById(req.user.userId).select('institutionId');
         const applicantEmpId = applicant ? applicant.institutionId : null;
         const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : journal.applyIncentive;
@@ -348,17 +440,47 @@ exports.updateJournal = async (req, res) => {
 
         // Update fields
         Object.keys(data).forEach(key => {
-            if (key !== 'coAuthors' && key !== 'status' && key !== 'facultyId' && data[key] !== undefined) {
+            if (key !== 'coAuthors' && key !== 'status' && key !== 'facultyId' && key !== 'journalCategory' && key !== 'journalType' && key !== 'isWos' && data[key] !== undefined) {
                 journal[key] = data[key];
             }
         });
 
+        const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(data.journalType !== undefined ? data.journalType : journal.journalType);
+        journal.journalType = cleanJournalType;
+        journal.isWos = isWos;
+
+        journal.journalCategory = resolvedJournalCategory;
         journal.coAuthors = resolvedAuthors;
         journal.numberOfReferencesBelongingToAGEC = numberOfReferencesBelongingToAGEC;
         journal.appraisalClaimant = appraisalClaimant;
         journal.jcrImpactFactor = jcrImpactFactor;
         journal.incentiveClaimant = computedIncentiveClaimant;
-        journal.status = 'Pending at R&D'; // Resubmit
+        if (data.correspondingAuthor !== undefined) {
+            journal.correspondingAuthor = data.correspondingAuthor;
+        }
+
+        // Calculate Estimated Incentive on update
+        if (applyIncentive === 'Yes' || applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive({
+                ...journal.toObject(),
+                ...data,
+                journalType: cleanJournalType,
+                isWos,
+                journalCategory: resolvedJournalCategory,
+                jcrImpactFactor,
+                numberOfReferencesBelongingToAGEC,
+                coAuthors: resolvedAuthors,
+                applyIncentive
+            });
+            if (!incentiveCalc.success) {
+                return res.status(400).json({ success: false, message: incentiveCalc.message });
+            }
+            journal.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+        } else {
+            journal.estimatedIncentiveAmount = 0;
+        }
+
+        journal.status = 'Pending'; // Resubmit
         
         // Reset comments since it is a new submission effectively
         journal.hodComment = '';
@@ -495,7 +617,7 @@ exports.getPendingAtHOD = async (req, res) => {
 
         const journals = await Journal.find({
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
 
         res.json({ success: true, data: journals });
@@ -512,7 +634,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment, hIndex, jcrImpactFactor, impactFactor } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const updates = {
             status,
             hodComment: comment
@@ -572,7 +694,34 @@ exports.rndAction = async (req, res) => {
         if (finalJcrImpactFactor !== undefined) journal.jcrImpactFactor = finalJcrImpactFactor;
         if (req.body.citations !== undefined) journal.citations = req.body.citations;
         if (req.body.journalQuartile !== undefined) journal.journalQuartile = req.body.journalQuartile;
-        if (req.body.journalType !== undefined) journal.journalType = req.body.journalType;
+        if (req.body.journalType !== undefined) {
+            const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(req.body.journalType);
+            journal.journalType = cleanJournalType;
+            journal.isWos = isWos;
+        }
+        if (req.body.journalCategory !== undefined) {
+            let jCat = (req.body.journalCategory || '').trim();
+            if (jCat === 'OTHERS' && journal.journalName) {
+                const JournalMaster = require('../JournalMaster/JournalMaster.model');
+                const searchName = journal.journalName.trim().toUpperCase();
+                const match = await JournalMaster.findOne({
+                    journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                });
+                if (match && match.type) {
+                    jCat = match.type;
+                } else {
+                    jCat = 'OTHERS';
+                }
+            }
+            journal.journalCategory = jCat;
+        }
+        if (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive(journal.toObject());
+            if (incentiveCalc.success) {
+                journal.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+            }
+        }
+
         if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
             journal.appraisalEligible = req.body.appraisalEligible;
         }
@@ -685,10 +834,14 @@ exports.getClarivateJournalType = async (req, res) => {
             }
         });
 
+        const resolvedType = WOS_PRIORITY.find(t => types.has(t)) || 'None';
+        const isWos = resolvedType !== 'None' ? 'Yes' : 'No';
+
         return res.json({
             success: true,
-            inWoS: types.size > 0,
-            journalType: types.size > 0 ? [...types].join(' / ') : null,
+            inWoS: isWos === 'Yes',
+            isWos: isWos,
+            journalType: resolvedType,
             totalRecords: response.data?.totalRecords || 0
         });
 
@@ -706,7 +859,7 @@ exports.getClarivateJournalType = async (req, res) => {
 exports.updateJournalMetrics = async (req, res) => {
     try {
         const { id } = req.params;
-        const { hIndex, jcrImpactFactor, impactFactor, citations, journalQuartile, journalType, issn, eissn } = req.body;
+        const { hIndex, jcrImpactFactor, impactFactor, citations, journalQuartile, journalType, journalCategory, issn, eissn } = req.body;
 
         const updates = {};
         if (hIndex !== undefined) updates.hIndex = hIndex;
@@ -714,7 +867,30 @@ exports.updateJournalMetrics = async (req, res) => {
         if (finalJcrImpactFactor !== undefined) updates.jcrImpactFactor = finalJcrImpactFactor;
         if (citations !== undefined) updates.citations = citations;
         if (journalQuartile !== undefined) updates.journalQuartile = journalQuartile;
-        if (journalType !== undefined) updates.journalType = journalType;
+        if (journalType !== undefined) {
+            const { journalType: cleanJournalType, isWos } = resolveWoSTypeAndStatus(journalType);
+            updates.journalType = cleanJournalType;
+            updates.isWos = isWos;
+        }
+        if (journalCategory !== undefined) {
+            let jCat = (journalCategory || '').trim();
+            if (jCat === 'OTHERS') {
+                const existing = await Journal.findById(id).select('journalName');
+                if (existing && existing.journalName) {
+                    const JournalMaster = require('../JournalMaster/JournalMaster.model');
+                    const searchName = existing.journalName.trim().toUpperCase();
+                    const match = await JournalMaster.findOne({
+                        journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                    });
+                    if (match && match.type) {
+                        jCat = match.type;
+                    } else {
+                        jCat = 'OTHERS';
+                    }
+                }
+            }
+            updates.journalCategory = jCat;
+        }
         if (issn !== undefined) updates.issn = issn;
         if (eissn !== undefined) updates.eissn = eissn;
 
@@ -733,9 +909,30 @@ exports.updateJournalMetrics = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Journal not found' });
         }
 
+        if (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') {
+            const incentiveCalc = calculateJournalIncentive(journal.toObject());
+            if (incentiveCalc.success) {
+                journal.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
+                await journal.save();
+            }
+        }
+
         res.json({ success: true, data: journal });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Calculate Estimated Incentive dynamically
+// @route   POST /api/research/journal/calculate-incentive
+// @access  Private
+exports.getEstimatedIncentive = async (req, res) => {
+    try {
+        const result = calculateJournalIncentive(req.body);
+        return res.json(result);
+    } catch (err) {
+        console.error("Error calculating incentive:", err);
+        return res.status(500).json({ success: false, message: err.message });
     }
 };
 
@@ -764,6 +961,7 @@ exports.fetchDoiDetails = async (req, res) => {
             issn: "",
             eissn: "",
             isScopus: "No",
+            isWos: "No",
             journalQuartile: "None",
             journalType: "None",
             citations: ""
@@ -1022,9 +1220,13 @@ exports.fetchDoiDetails = async (req, res) => {
                     });
 
                     if (types.size > 0) {
-                        metadata.journalType = [...types].join(' / ');
+                        const resolved = WOS_PRIORITY.find(t => types.has(t)) || 'None';
+                        metadata.journalType = resolved;
+                        metadata.isWos = resolved !== 'None' ? 'Yes' : 'No';
                         return true;
                     }
+                    metadata.journalType = 'None';
+                    metadata.isWos = 'No';
                     return false;
                 };
 
@@ -1032,10 +1234,34 @@ exports.fetchDoiDetails = async (req, res) => {
                 if (!wosDataFetched && metadata.eissn) {
                     wosDataFetched = await fetchWoSType(metadata.eissn).catch(() => false);
                 }
-
             } catch (err) {
                 console.error("Clarivate Proxy Error in fetchDoiDetails:", err.message);
             }
+        }
+
+        // Step 4: Lookup JCR Impact Factor from JournalImpactFactor collection
+        if (metadata.journalName) {
+            try {
+                const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
+                const searchName = metadata.journalName.trim();
+                const jifRecord = await JournalImpactFactor.findOne({
+                    journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                });
+                if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
+                    metadata.jcrImpactFactor = String(jifRecord.jif);
+                } else {
+                    metadata.jcrImpactFactor = "0";
+                }
+            } catch (jifErr) {
+                console.error("JIF lookup error in fetchDoiDetails:", jifErr);
+                metadata.jcrImpactFactor = "0";
+            }
+        } else {
+            metadata.jcrImpactFactor = "0";
+        }
+
+        if (!metadata.hIndex) {
+            metadata.hIndex = "0";
         }
 
         return res.json({
@@ -1049,3 +1275,36 @@ exports.fetchDoiDetails = async (req, res) => {
     }
 };
 
+exports.fetchDetailsByName = async (req, res) => {
+    try {
+        const { journalName } = req.body;
+        if (!journalName) return res.status(400).json({ success: false, message: 'Journal name is required' });
+        
+        const metadata = { journalName, journalCategory: 'OTHERS', jcrImpactFactor: '0' };
+        const JournalMaster = require('../JournalMaster/JournalMaster.model');
+        const escapeRegex = require('../../utils/escapeRegex');
+        const searchName = journalName.trim().toUpperCase();
+        
+        const match = await JournalMaster.findOne({
+            journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+        });
+        
+        if (match && match.type) {
+            metadata.journalCategory = match.type;
+        }
+        
+        const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
+        const jifRecord = await JournalImpactFactor.findOne({
+            journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+        });
+        
+        if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
+            metadata.jcrImpactFactor = String(jifRecord.jif);
+        }
+        
+        return res.json({ success: true, data: metadata });
+    } catch (err) {
+        console.error("fetchDetailsByName Error:", err);
+        return res.status(500).json({ success: false, message: "Internal server error while fetching details by name." });
+    }
+};

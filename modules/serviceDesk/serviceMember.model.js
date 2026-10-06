@@ -28,7 +28,12 @@ const serviceMemberSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
-  }
+  },
+
+  blocks: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceModuleBlock"
+  }]
 
 }, { timestamps: true });
 

@@ -14,6 +14,18 @@ const ticketSchema = new mongoose.Schema({
     trim: true
   },
 
+  subcategory: {
+    type: String,
+    trim: true,
+    default: ""
+  },
+
+  customSubcategory: {
+    type: String,
+    trim: true,
+    default: ""
+  },
+
   description: {
     type: String,
     required: true
@@ -25,10 +37,46 @@ const ticketSchema = new mongoose.Schema({
     required: true
   },
 
+  block: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceModuleBlock",
+    default: null
+  },
+
+  // Creator identification
+  creatorType: {
+    type: String,
+    enum: ["EMPLOYEE", "STUDENT"],
+    default: "EMPLOYEE",
+    required: true
+  },
+
+  creatorModel: {
+    type: String,
+    enum: ["Employee", "ServiceDeskStudent"],
+    default: "Employee",
+    required: true
+  },
+
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Employee",
+    refPath: "creatorModel",
     required: true
+  },
+
+  student: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "ServiceDeskStudent",
+    default: null
+  },
+
+  studentDetails: {
+    rollno: { type: String, trim: true },
+    studentname: { type: String, trim: true },
+    coursename: { type: String, trim: true },
+    branch: { type: String, trim: true },
+    mobilenumber: { type: String, trim: true },
+    gender: { type: String, trim: true }
   },
 
   // Admin can assign the SAME ticket to MULTIPLE Service Emps.
@@ -64,6 +112,28 @@ const ticketSchema = new mongoose.Schema({
     }
   }],
 
+  // For services where directEmployeeInvolvement is false, Admin assigns manual field workers (no login)
+  assignedWorkers: [{
+    worker: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ServiceWorker",
+      required: true
+    },
+    assignedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Employee",
+      required: true
+    },
+    note: {
+      type: String,
+      default: ""
+    },
+    assignedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
   attachments: [{
     fileName: String,      // original name shown to user
     storedName: String,    // actual name saved on disk
@@ -81,8 +151,8 @@ const ticketSchema = new mongoose.Schema({
 
   priority: {
     type: String,
-    enum: ["LOW", "MEDIUM", "HIGH"],
-    default: "MEDIUM"
+    enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW"],
+    required: true
   },
 
   dueDate: {
@@ -124,6 +194,25 @@ const ticketSchema = new mongoose.Schema({
 
 ticketSchema.index({ service: 1, status: 1 });
 ticketSchema.index({ createdBy: 1 });
+ticketSchema.index({ student: 1 });
+ticketSchema.index({ "studentDetails.rollno": 1 });
 ticketSchema.index({ "assignedTo.employee": 1 });
 
-module.exports = mongoose.model("Ticket", ticketSchema);
+const Ticket = mongoose.model("Ticket", ticketSchema);
+
+// One-time non-blocking migration for legacy student tickets
+setImmediate(async () => {
+  try {
+    const res = await Ticket.updateMany(
+      { creatorType: "STUDENT", createdBy: null, student: { $ne: null } },
+      [{ $set: { createdBy: "$student", creatorModel: "ServiceDeskStudent" } }]
+    );
+    if (res.modifiedCount > 0) {
+      console.log(`[Ticket Migration] Backfilled createdBy for ${res.modifiedCount} student ticket(s).`);
+    }
+  } catch (err) {
+    // Non-critical auto-migration
+  }
+});
+
+module.exports = Ticket;

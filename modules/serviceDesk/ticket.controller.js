@@ -5,6 +5,7 @@ const Ticket = require("./ticket.model");
 const Comment = require("./comment.model");
 const Activity = require("./activity.model");
 const ServiceMember = require("./serviceMember.model");
+const ServiceWorker = require("./serviceWorker.model");
 const Service = require("./service.model");
 const Employee = require("../employee/employee.model");
 const { hasTicketAccess } = require("./ticket.access");
@@ -60,6 +61,19 @@ const purgeTicketData = async (ticket) => {
   // Chat history is retained as per user request, only new chat is disabled
 };
 
+// SLA definitions (in hours)
+const SLA_HOURS = {
+  CRITICAL: 2,
+  HIGH: 4,
+  MEDIUM: 24,
+  LOW: 72
+};
+
+const calculateDueDate = (priority, fromDate = new Date()) => {
+  const hours = SLA_HOURS[priority?.toUpperCase()] || 24;
+  return new Date(fromDate.getTime() + hours * 60 * 60 * 1000);
+};
+
 // Recalculates the ticket-level `status` from the per-employee rows in
 // assignedTo[]. Only called after an emp updates their own row — admin
 // rejection (whole ticket) and feedback-close are handled separately.
@@ -85,8 +99,21 @@ const recalculateTicketStatus = (ticket) => {
   }
 };
 
-const notifyServiceAdmins = async (serviceId, { excludeEmployeeId, ...notif }) => {
-  const admins = await ServiceMember.find({ service: serviceId, roleType: "SERVICE_ADMIN", isActive: true }).lean();
+const notifyServiceAdmins = async (serviceId, { excludeEmployeeId, blockId, ...notif }) => {
+  let filter = { service: serviceId, roleType: "SERVICE_ADMIN", isActive: true };
+  if (blockId) {
+    const blockAdmins = await ServiceMember.find({
+      service: serviceId,
+      roleType: "SERVICE_ADMIN",
+      isActive: true,
+      blocks: blockId
+    }).lean();
+    if (blockAdmins.length > 0) {
+      filter = { _id: { $in: blockAdmins.map(a => a._id) } };
+    }
+  }
+
+  const admins = await ServiceMember.find(filter).lean();
   for (const admin of admins) {
     if (excludeEmployeeId && admin.employee.toString() === excludeEmployeeId.toString()) continue;
     
@@ -112,11 +139,27 @@ const notifyServiceAdmins = async (serviceId, { excludeEmployeeId, ...notif }) =
 // @access Any employee
 exports.createTicket = async (req, res, next) => {
   try {
-    const { title, description, service, priority } = req.body;
+    const { title, subcategory, customSubcategory, description, service, priority, block } = req.body;
 
-    if (!title || !description || !service) {
+    const effectiveSubcategory = (subcategory || "").trim();
+    const effectiveCustom = (customSubcategory || "").trim();
+
+    let computedTitle = (title || "").trim();
+    if (effectiveSubcategory) {
+      if (effectiveSubcategory === "Others") {
+        computedTitle = effectiveCustom || "Other Issue";
+      } else {
+        computedTitle = effectiveSubcategory;
+      }
+    }
+
+    if (!computedTitle) {
+      computedTitle = "Service Request";
+    }
+
+    if (!description || !service) {
       res.status(400);
-      return next(new Error("title, description and service are required"));
+      return next(new Error("Service and description are required"));
     }
 
     const serviceDoc = await Service.findById(service);
@@ -124,6 +167,19 @@ exports.createTicket = async (req, res, next) => {
       res.status(404);
       return next(new Error("Selected service is not available"));
     }
+
+    if (!serviceDoc.isGlobalService && !block) {
+      res.status(400);
+      return next(new Error("Block selection is required for this service"));
+    }
+
+    if (!priority || !SLA_HOURS[priority.toUpperCase()]) {
+      res.status(400);
+      return next(new Error("Priority selection is required"));
+    }
+
+    const normalizedPriority = priority.toUpperCase();
+    const dueDate = calculateDueDate(normalizedPriority, new Date());
 
     const attachments = (req.files || []).map(file => ({
       fileName: file.originalname,
@@ -135,10 +191,16 @@ exports.createTicket = async (req, res, next) => {
 
     const ticket = await Ticket.create({
       ticketNumber: req.ticketNumber,
-      title,
+      title: computedTitle,
+      subcategory: effectiveSubcategory,
+      customSubcategory: effectiveCustom,
       description,
       service,
-      priority: priority || "MEDIUM",
+      block: block || null,
+      creatorType: "EMPLOYEE",
+      creatorModel: "Employee",
+      priority: normalizedPriority,
+      dueDate,
       createdBy: req.user.userId,
       attachments
     });
@@ -152,9 +214,10 @@ exports.createTicket = async (req, res, next) => {
     const creator = await Employee.findById(req.user.userId).select("name").lean();
 
     await notifyServiceAdmins(service, {
+      blockId: block || null,
       type: "ACTION_REQUIRED",
       title: "New Service Ticket Raised",
-      message: `A new support ticket has been created by ${creator ? creator.name : "a user"} for the ${serviceDoc.name} service.\nTicket ID: ${ticket.ticketNumber}\nPlease review and assign the ticket to an appropriate service employee.`,
+      message: `A new support ticket has been created by ${creator ? creator.name : "a user"} for the ${serviceDoc.name} service.\nTicket ID: ${ticket.ticketNumber}\nPlease review and process the ticket.`,
       link: `/service-desk/ticket/${ticket._id}`,
       metadata: { ticketId: ticket._id, serviceId: service }
     });
@@ -170,7 +233,8 @@ exports.createTicket = async (req, res, next) => {
 exports.getMyTickets = async (req, res, next) => {
   try {
     const tickets = await Ticket.find({ createdBy: req.user.userId })
-      .populate("service", "name")
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode blockType genderTag")
       .sort({ createdAt: -1 })
       .lean();
     res.json({ success: true, data: tickets });
@@ -193,7 +257,8 @@ exports.getAssignedTickets = async (req, res, next) => {
     }
 
     const tickets = await Ticket.find(filter)
-      .populate("service", "name")
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode blockType genderTag")
       .populate("createdBy", "name institutionId email")
       .sort({ createdAt: -1 })
       .lean();
@@ -209,9 +274,9 @@ exports.getAssignedTickets = async (req, res, next) => {
 exports.getServiceTickets = async (req, res, next) => {
   try {
     const { serviceId } = req.params;
-    const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
+    const isGlobalAdmin = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
 
-    if (!isPrime) {
+    if (!isGlobalAdmin && serviceId !== "ALL") {
       const isAdmin = await ServiceMember.exists({
         service: serviceId, employee: req.user.userId, roleType: "SERVICE_ADMIN", isActive: true
       });
@@ -221,7 +286,7 @@ exports.getServiceTickets = async (req, res, next) => {
       }
     }
 
-    const filter = { service: serviceId };
+    const filter = (serviceId === "ALL") ? {} : { service: serviceId };
     if (req.query.status) filter.status = req.query.status;
 
     if (req.query.tab === 'rejected') {
@@ -230,8 +295,12 @@ exports.getServiceTickets = async (req, res, next) => {
       filter.status = { $ne: "REJECTED" };
     }
     const tickets = await Ticket.find(filter)
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode blockType genderTag")
       .populate("createdBy", "name institutionId email")
       .populate("assignedTo.employee", "name institutionId email")
+      .populate("assignedWorkers.worker", "name phone designation status")
+      .populate("assignedWorkers.assignedBy", "name")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -246,10 +315,13 @@ exports.getServiceTickets = async (req, res, next) => {
 exports.getTicketById = async (req, res, next) => {
   try {
     const ticket = await Ticket.findById(req.params.id)
-      .populate("service", "name")
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode blockType genderTag")
       .populate("createdBy", "name institutionId email profileImage")
       .populate("assignedTo.employee", "name institutionId email profileImage")
       .populate("assignedTo.assignedBy", "name")
+      .populate("assignedWorkers.worker", "name phone designation status")
+      .populate("assignedWorkers.assignedBy", "name")
       .lean();
 
     if (!ticket) {
@@ -309,8 +381,12 @@ exports.assignTicket = async (req, res, next) => {
       return next(new Error("One or more selected employees are not Service Emps for this service"));
     }
 
-    if (priority) ticket.priority = priority;
-    if (dueDate) ticket.dueDate = dueDate;
+    if (priority && SLA_HOURS[priority.toUpperCase()]) {
+      ticket.priority = priority.toUpperCase();
+    }
+    if (dueDate) {
+      ticket.dueDate = new Date(dueDate);
+    }
 
     // Merge: keep existing rows for employees already assigned (don't
     // reset their progress), BUT if they had previously REJECTED it,
@@ -365,22 +441,127 @@ exports.assignTicket = async (req, res, next) => {
       }
 
       // Notify the ticket creator about the assignment
-      const assignedEmps = await Employee.find({ _id: { $in: allNotifiedIds } }).select("name").lean();
-      const empNames = assignedEmps.map(e => e.name).join(", ");
-      
+      if (ticket.createdBy) {
+        const assignedEmps = await Employee.find({ _id: { $in: allNotifiedIds } }).select("name").lean();
+        const empNames = assignedEmps.map(e => e.name).join(", ");
+        
+        await NotificationService.sendNotification({
+          recipientId: ticket.createdBy,
+          senderId: req.user.userId,
+          module: MODULE,
+          type: "INFO",
+          title: "Ticket Assigned",
+          message: `Your ticket ${ticket.ticketNumber} has been assigned to a service representative and is now under progress.\nAssigned To: ${empNames}`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: { ticketId: ticket._id }
+        });
+      }
+    }
+
+    res.json({ success: true, message: "Ticket assigned successfully", data: ticket });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Assign manual field worker(s) to a ticket (when directEmployeeInvolvement is false)
+// @route  POST /api/service-desk/tickets/:id/assign-workers
+// @access SERVICE_ADMIN of the ticket's service
+exports.assignWorkers = async (req, res, next) => {
+  try {
+    const { workerIds, priority, dueDate, note } = req.body;
+
+    if (!Array.isArray(workerIds) || workerIds.length === 0) {
+      res.status(400);
+      return next(new Error("Select at least one technician / worker"));
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      res.status(404);
+      return next(new Error("Ticket not found"));
+    }
+
+    if (ticket.status === "CLOSED" || ticket.status === "REJECTED") {
+      res.status(400);
+      return next(new Error(`Ticket is ${ticket.status} and cannot be assigned`));
+    }
+
+    // Validate that workers belong to this service and are ACTIVE
+    const validWorkers = await ServiceWorker.find({
+      _id: { $in: workerIds },
+      service: ticket.service,
+      status: "ACTIVE"
+    }).lean();
+
+    if (validWorkers.length !== workerIds.length) {
+      res.status(400);
+      return next(new Error("One or more selected workers are invalid or inactive"));
+    }
+
+    if (priority && SLA_HOURS[priority.toUpperCase()]) {
+      ticket.priority = priority.toUpperCase();
+    }
+    if (dueDate) {
+      ticket.dueDate = new Date(dueDate);
+    }
+
+    // Replace or set assigned workers
+    const newAssignedWorkers = workerIds.map(wId => ({
+      worker: wId,
+      assignedBy: req.user.userId,
+      assignedAt: new Date(),
+      note: note || ""
+    }));
+
+    ticket.assignedWorkers = newAssignedWorkers;
+
+    // If ticket was OPEN, transition to IN_PROGRESS
+    if (ticket.status === "OPEN") {
+      ticket.status = "IN_PROGRESS";
+    }
+
+    await ticket.save();
+
+    await Activity.create({
+      ticket: ticket._id,
+      action: "WORKERS_ASSIGNED",
+      performedBy: req.user.userId,
+      metadata: { 
+        workerNames: validWorkers.map(w => w.name).join(", "),
+        workerIds: workerIds
+      }
+    });
+
+    // Notify ticket creator about the assignment
+    if (ticket.createdBy) {
+      const workerNames = validWorkers.map(w => w.name).join(", ");
       await NotificationService.sendNotification({
         recipientId: ticket.createdBy,
         senderId: req.user.userId,
         module: MODULE,
         type: "INFO",
-        title: "Ticket Assigned",
-        message: `Your ticket ${ticket.ticketNumber} has been assigned to a service representative and is now under progress.\nAssigned To: ${empNames}`,
+        title: "Technician Assigned",
+        message: `Your ticket ${ticket.ticketNumber} has been assigned to technician(s): ${workerNames}.\nWork is in progress.`,
         link: `/service-desk/ticket/${ticket._id}`,
         metadata: { ticketId: ticket._id }
-      });
+      }).catch(err => console.error("Notification error:", err));
     }
 
-    res.json({ success: true, message: "Ticket assigned successfully", data: ticket });
+    const populated = await Ticket.findById(ticket._id)
+      .populate("service", "name isGlobalService directEmployeeInvolvement")
+      .populate("block", "blockName blockCode blockType genderTag")
+      .populate("createdBy", "name institutionId email profileImage")
+      .populate("assignedTo.employee", "name institutionId email profileImage")
+      .populate("assignedWorkers.worker", "name phone designation status")
+      .populate("assignedWorkers.assignedBy", "name")
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Technicians assigned successfully",
+      data: populated
+    });
   } catch (error) {
     next(error);
   }
@@ -411,18 +592,141 @@ exports.adminRejectTicket = async (req, res, next) => {
       metadata: { reason: reason || "" }
     });
 
-    await NotificationService.sendNotification({
-      recipientId: ticket.createdBy,
-      senderId: req.user.userId,
-      module: MODULE,
-      type: "REJECTED",
-      title: "Ticket Rejected",
-      message: `Ticket ${ticket.ticketNumber} was rejected. ${reason ? "Reason: " + reason : ""}`,
-      link: `/service-desk/ticket/${ticket._id}`,
-      metadata: { ticketId: ticket._id }
-    });
+    if (ticket.createdBy) {
+      await NotificationService.sendNotification({
+        recipientId: ticket.createdBy,
+        senderId: req.user.userId,
+        module: MODULE,
+        type: "REJECTED",
+        title: "Ticket Rejected",
+        message: `Ticket ${ticket.ticketNumber} was rejected. ${reason ? "Reason: " + reason : ""}`,
+        link: `/service-desk/ticket/${ticket._id}`,
+        metadata: { ticketId: ticket._id }
+      });
+    }
 
     res.json({ success: true, message: "Ticket rejected", data: ticket });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Admin directly updates ticket status (when directEmployeeInvolvement is false or handled directly)
+// @route  PUT /api/service-desk/tickets/:id/admin-status
+// @access SERVICE_ADMIN of the ticket's service
+exports.adminUpdateTicketStatus = async (req, res, next) => {
+  try {
+    const { status, note } = req.body;
+    if (!["IN_PROGRESS", "RESOLVED", "REJECTED"].includes(status)) {
+      res.status(400);
+      return next(new Error("Invalid status. Allowed: IN_PROGRESS, RESOLVED, REJECTED"));
+    }
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      res.status(404);
+      return next(new Error("Ticket not found"));
+    }
+
+    if (ticket.status === "CLOSED") {
+      res.status(400);
+      return next(new Error("Ticket is closed and cannot be updated"));
+    }
+
+    ticket.status = status;
+    if (status === "REJECTED") {
+      ticket.rejectionReason = note || "";
+      await purgeTicketData(ticket);
+    }
+
+    await ticket.save();
+
+    await Activity.create({
+      ticket: ticket._id,
+      action: status === "RESOLVED" ? "TICKET_RESOLVED" : (status === "REJECTED" ? "TICKET_REJECTED" : "TICKET_IN_PROGRESS"),
+      performedBy: req.user.userId,
+      metadata: { note: note || "", directAdminAction: true }
+    });
+
+    const notifTypes = {
+      IN_PROGRESS: "INFO",
+      RESOLVED: "ACTION_REQUIRED",
+      REJECTED: "REJECTED"
+    };
+
+    const notifMessages = {
+      IN_PROGRESS: `Your ticket ${ticket.ticketNumber} is now in progress with the service admin.`,
+      RESOLVED: `Your ticket ${ticket.ticketNumber} has been resolved by the service admin. Please confirm and provide feedback.`,
+      REJECTED: `Your ticket ${ticket.ticketNumber} was rejected by the service admin. ${note ? "Reason: " + note : ""}`
+    };
+
+    if (ticket.createdBy) {
+      await NotificationService.sendNotification({
+        recipientId: ticket.createdBy,
+        senderId: req.user.userId,
+        module: MODULE,
+        type: notifTypes[status] || "INFO",
+        title: `Ticket ${status.replace("_", " ")}`,
+        message: notifMessages[status],
+        link: `/service-desk/ticket/${ticket._id}`,
+        metadata: { ticketId: ticket._id }
+      });
+    }
+
+    res.json({ success: true, message: `Ticket status updated to ${status}`, data: ticket });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc   Admin updates ticket Priority and/or Due Date
+// @route  PUT /api/service-desk/tickets/:id/sla
+// @access SERVICE_ADMIN of the ticket's service
+exports.updateTicketSLA = async (req, res, next) => {
+  try {
+    const { priority, dueDate, reason } = req.body;
+
+    const ticket = await Ticket.findById(req.params.id);
+    if (!ticket) {
+      res.status(404);
+      return next(new Error("Ticket not found"));
+    }
+
+    if (ticket.status === "CLOSED" || ticket.status === "REJECTED") {
+      res.status(400);
+      return next(new Error(`Ticket is ${ticket.status} and cannot be updated`));
+    }
+
+    const previousPriority = ticket.priority;
+    const previousDueDate = ticket.dueDate;
+
+    if (priority && SLA_HOURS[priority.toUpperCase()]) {
+      ticket.priority = priority.toUpperCase();
+    }
+
+    if (dueDate) {
+      ticket.dueDate = new Date(dueDate);
+    } else if (priority && priority.toUpperCase() !== previousPriority) {
+      // If priority changed and no explicit dueDate was provided, recalculate from ticket.createdAt or now
+      ticket.dueDate = calculateDueDate(ticket.priority, ticket.createdAt || new Date());
+    }
+
+    await ticket.save();
+
+    await Activity.create({
+      ticket: ticket._id,
+      action: "SLA_UPDATED",
+      performedBy: req.user.userId,
+      metadata: {
+        previousPriority,
+        newPriority: ticket.priority,
+        previousDueDate,
+        newDueDate: ticket.dueDate,
+        reason: reason || ""
+      }
+    });
+
+    res.json({ success: true, message: "Ticket Priority and Due Date updated successfully", data: ticket });
   } catch (error) {
     next(error);
   }
@@ -486,19 +790,18 @@ exports.updateAssignmentStatus = async (req, res, next) => {
 
     if (ticket.status === "RESOLVED") {
       // 1. Notify User (Resolved)
-      await NotificationService.sendNotification({
-        recipientId: ticket.createdBy,
-        senderId: userId,
-        module: MODULE,
-        type: "SUCCESS",
-        title: "Ticket Resolved",
-        message: `Your ticket ${ticket.ticketNumber} has been marked as Resolved.\nPlease verify the resolution and submit your feedback regarding the support experience.`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
-      });
-      
-      // Feedback Requested specific link is skipped as it is now combined above or you can keep it separate.
-      // The user workflow combines them into one message. We will keep just the one message as requested.
+      if (ticket.createdBy) {
+        await NotificationService.sendNotification({
+          recipientId: ticket.createdBy,
+          senderId: userId,
+          module: MODULE,
+          type: "SUCCESS",
+          title: "Ticket Resolved",
+          message: `Your ticket ${ticket.ticketNumber} has been marked as Resolved.\nPlease verify the resolution and submit your feedback regarding the support experience.`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: { ticketId: ticket._id }
+        });
+      }
 
       // 2. Notify Service Admins (Resolved)
       await notifyServiceAdmins(ticket.service, {
@@ -512,16 +815,18 @@ exports.updateAssignmentStatus = async (req, res, next) => {
       });
     } else {
       // 1. Notify User (Status Updated)
-      await NotificationService.sendNotification({
-        recipientId: ticket.createdBy,
-        senderId: userId,
-        module: MODULE,
-        type: "INFO",
-        title: "Ticket Status Updated",
-        message: `The status of your ticket ${ticket.ticketNumber} has been updated to ${ticket.status}.${note ? '\nLatest Update:\n' + note : ''}`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id }
-      });
+      if (ticket.createdBy) {
+        await NotificationService.sendNotification({
+          recipientId: ticket.createdBy,
+          senderId: userId,
+          module: MODULE,
+          type: "INFO",
+          title: "Ticket Status Updated",
+          message: `The status of your ticket ${ticket.ticketNumber} has been updated to ${ticket.status}.${note ? '\nLatest Update:\n' + note : ''}`,
+          link: `/service-desk/ticket/${ticket._id}`,
+          metadata: { ticketId: ticket._id }
+        });
+      }
 
       // 2. Notify Service Admins (Status Updated)
       await notifyServiceAdmins(ticket.service, {
@@ -590,37 +895,66 @@ exports.addComment = async (req, res, next) => {
       console.error("Socket emit failed (chat still saved):", err.message);
     }
 
-    // Notify participants who are NOT currently the sender
-    const participantIds = new Set([ticket.createdBy.toString()]);
-    (ticket.assignedTo || []).forEach(a => participantIds.add(a.employee.toString()));
-    const admins = await ServiceMember.find({ service: ticket.service, roleType: "SERVICE_ADMIN", isActive: true }).lean();
-    admins.forEach(a => participantIds.add(a.employee.toString()));
-    participantIds.delete(req.user.userId.toString());
-
-    for (const recipientId of participantIds) {
-      let targetRole = undefined;
-      const isAssignee = (ticket.assignedTo || []).some(a => a.employee.toString() === recipientId.toString());
-      const isAdmin = admins.some(a => a.employee.toString() === recipientId.toString());
-
-      if (isAssignee) {
-        targetRole = "SERVICE_EMP";
-      } else if (isAdmin) {
-        targetRole = "SERVICE_ADMIN";
-      }
-
-      await NotificationService.sendNotification({
-        recipientId,
-        senderId: req.user.userId,
-        module: MODULE,
-        type: "INFO",
-        title: "New Message",
-        message: `New message on Ticket ${ticket.ticketNumber}`,
-        link: `/service-desk/ticket/${ticket._id}`,
-        metadata: { ticketId: ticket._id, targetRole }
-      });
-    }
-
+    // Send HTTP response immediately for instant UI feedback
     res.status(201).json({ success: true, data: populated });
+
+    // Asynchronously dispatch notifications in the background (non-blocking)
+    setImmediate(async () => {
+      try {
+        const participantIds = new Set();
+        if (ticket.createdBy) {
+          participantIds.add(ticket.createdBy.toString());
+        }
+        (ticket.assignedTo || []).forEach(a => {
+          const empId = (a.employee?._id || a.employee)?.toString();
+          if (empId) participantIds.add(empId);
+        });
+
+        const admins = await ServiceMember.find({ service: ticket.service, roleType: "SERVICE_ADMIN", isActive: true }).lean();
+        admins.forEach(a => {
+          const empId = (a.employee?._id || a.employee)?.toString();
+          if (empId) participantIds.add(empId);
+        });
+
+        if (req.user?.userId) {
+          participantIds.delete(req.user.userId.toString());
+        }
+
+        const notifPromises = [];
+        for (const recipientId of participantIds) {
+          let targetRole = undefined;
+          const isAssignee = (ticket.assignedTo || []).some(
+            a => (a.employee?._id || a.employee)?.toString() === recipientId
+          );
+          const isAdmin = admins.some(
+            a => (a.employee?._id || a.employee)?.toString() === recipientId
+          );
+
+          if (isAssignee) {
+            targetRole = "SERVICE_EMP";
+          } else if (isAdmin) {
+            targetRole = "SERVICE_ADMIN";
+          }
+
+          notifPromises.push(
+            NotificationService.sendNotification({
+              recipientId,
+              senderId: req.user.userId,
+              module: MODULE,
+              type: "INFO",
+              title: "New Message",
+              message: `New message on Ticket ${ticket.ticketNumber}`,
+              link: `/service-desk/ticket/${ticket._id}`,
+              metadata: { ticketId: ticket._id, targetRole }
+            }).catch(e => console.error("[Comment Notif] Single dispatch error:", e.message))
+          );
+        }
+
+        await Promise.allSettled(notifPromises);
+      } catch (bgNotifErr) {
+        console.error("[Comment Notif] Background notification error:", bgNotifErr.message);
+      }
+    });
   } catch (error) {
     next(error);
   }

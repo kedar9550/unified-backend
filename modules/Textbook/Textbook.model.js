@@ -94,7 +94,7 @@ const TextbookSchema = new mongoose.Schema({
     },
 
     edition: {
-        type: String,
+        type: Number,
         required: true
     },
     cost: {
@@ -115,6 +115,17 @@ const TextbookSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    numberOfPages: {
+        type: Number,
+        default: null
+    },
+    currencySymbol: {
+        type: String,
+        default: '₹'
+    },
+    estimatedIncentiveAmount: {
+        type: Number
+    },
     applyIncentive: {
         type: String,
         enum: ['Yes', 'No'],
@@ -123,15 +134,15 @@ const TextbookSchema = new mongoose.Schema({
 
     
     // Files
-    coverPage: { type: String, required: true },
-    authorAffiliation: { type: String, required: true },
-    index: { type: String, required: true },
+    coverPage: { type: String },
+    authorAffiliation: { type: String },
+    index: { type: String },
     
     // Workflow Status
     status: {
         type: String,
-        enum: ['Draft', 'Pending at R&D', 'Approved', 'Rejected by R&D'],
-        default: 'Pending at R&D'
+        enum: ['Draft', 'Pending', 'Pending at HOD', 'Pending at R&D', 'Approved', 'Rejected', 'Rejected by R&D', 'Rejected by HOD'],
+        default: 'Pending'
     },
     
     // Feedback

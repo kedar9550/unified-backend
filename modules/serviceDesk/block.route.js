@@ -1,0 +1,24 @@
+const express = require("express");
+const router = express.Router();
+const { protect, authorize } = require("../../middlewares/authMiddleware");
+const {
+  getBlocks,
+  getBlockById,
+  createBlock,
+  updateBlock,
+  deleteBlock
+} = require("./block.controller");
+
+// All routes require authentication
+router.use(protect);
+
+// Read blocks (any authenticated user)
+router.get("/", getBlocks);
+router.get("/:id", getBlockById);
+
+// Manage blocks (PRIME / CSR_ADMIN)
+router.post("/", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME", "CSR_ADMIN", "CSR ADMIN", "CSR"), createBlock);
+router.put("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME", "CSR_ADMIN", "CSR ADMIN", "CSR"), updateBlock);
+router.delete("/:id", authorize("UNIPRIME", "ADMIN", "SUPER_ADMIN", "PRIME", "CSR_ADMIN", "CSR ADMIN", "CSR"), deleteBlock);
+
+module.exports = router;

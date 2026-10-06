@@ -11,34 +11,28 @@ const ServiceMember = require("./serviceMember.model");
  */
 const hasTicketAccess = async (req, ticket) => {
   const userId = req.user.userId.toString();
-  console.log(`[hasTicketAccess] Checking access for user ${userId} on ticket ${ticket._id}`);
 
-  const isPrime = (req.user.roles || []).some(r => r.role?.toUpperCase() === "UNIPRIME");
-  console.log(`[hasTicketAccess] isPrime: ${isPrime}`);
-  if (isPrime) return true;
-
-  const creatorId = (ticket.createdBy?._id || ticket.createdBy)?.toString();
-  const isCreator = creatorId === userId;
-  console.log(`[hasTicketAccess] isCreator: ${isCreator} (Creator: ${creatorId}, User: ${userId})`);
-  if (isCreator) return true;
-
+  // 1. Fast in-memory check: Assigned employee
   const isAssigned = (ticket.assignedTo || []).some(
     a => (a.employee?._id || a.employee)?.toString() === userId
   );
-  console.log(`[hasTicketAccess] isAssigned: ${isAssigned}`);
   if (isAssigned) return true;
 
+  // 2. Fast in-memory check: Ticket creator
+  const creatorId = (ticket.createdBy?._id || ticket.createdBy)?.toString();
+  if (creatorId && creatorId === userId) return true;
+
+  // 3. Fast in-memory check: UNIPRIME / CSR_ADMIN role
+  const isPrime = (req.user.roles || []).some(r => ["UNIPRIME", "CSR_ADMIN", "CSR ADMIN", "CSR", "CSR_ADMINISTRATOR"].includes(r.role?.toUpperCase()));
+  if (isPrime) return true;
+
+  // 4. Fallback DB check: Service Admin
   const isServiceAdmin = await ServiceMember.exists({
     service: ticket.service?._id || ticket.service,
     employee: userId,
     roleType: "SERVICE_ADMIN",
     isActive: true
   });
-  console.log(`[hasTicketAccess] isServiceAdmin: ${!!isServiceAdmin} (Service: ${(ticket.service?._id || ticket.service)})`);
-
-  if (!isServiceAdmin) {
-    console.log(`[hasTicketAccess] Access DENIED for user ${userId} on ticket ${ticket._id}`);
-  }
 
   return !!isServiceAdmin;
 };

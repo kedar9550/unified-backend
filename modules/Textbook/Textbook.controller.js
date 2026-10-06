@@ -33,17 +33,18 @@ exports.createTextbook = async (req, res) => {
             }
         }
 
-        // 2. Mandatory Documents Validation
-        if (!req.files || !req.files.coverPage || !req.files.authorAffiliation || !req.files.index) {
-            return res.status(400).json({ success: false, message: "Cover Page, Author Affiliation, and Index documents are mandatory." });
-        }
+        // Documents are no longer mandatory
 
         const trimmedTitle = data.title ? data.title.trim() : '';
+        const trimmedPublisher = data.publisher ? data.publisher.trim() : '';
 
         const existingRecord = await Textbook.findOne({
             $or: [
                 { isbn: data.isbn },
-                ...(trimmedTitle ? [{ title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i') }] : [])
+                ...(trimmedTitle && trimmedPublisher ? [{ 
+                    title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+                    publisher: new RegExp(`^${escapeRegex(trimmedPublisher)}$`, 'i')
+                }] : [])
             ]
         });
 
@@ -53,7 +54,7 @@ exports.createTextbook = async (req, res) => {
                 success: false, 
                 message: isIsbnMatch
                     ? "A textbook with this ISBN already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
-                    : `A textbook with this Title ("${trimmedTitle}") already exists in the system.`
+                    : `A textbook with this Title ("${trimmedTitle}") and Publisher ("${trimmedPublisher}") already exists in the system.`
             });
         }
 
@@ -109,7 +110,7 @@ exports.createTextbook = async (req, res) => {
         let computedIncentiveClaimant = (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? applicantEmpId : null;
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -261,27 +262,46 @@ exports.updateTextbook = async (req, res) => {
             return res.status(404).json({ success: false, message: "Textbook not found." });
         }
 
-        if (textbook.facultyId.toString() !== req.user.userId) {
+        const isOwner = textbook.facultyId.toString() === req.user.userId;
+        const activeRole = req.headers['active-role'] || req.headers['Active-Role'];
+        const userRoles = req.user.roles || [];
+        const isResearchDean = activeRole === 'RESEARCH_DEAN' || userRoles.includes('RESEARCH_DEAN');
+
+        if (!isOwner && !isResearchDean) {
             return res.status(403).json({ success: false, message: "Not authorized to edit this textbook." });
         }
 
-        if (!textbook.status.includes('Rejected')) {
+        if (!isResearchDean && !textbook.status.includes('Rejected')) {
             return res.status(400).json({ success: false, message: "Only rejected textbooks can be edited and resubmitted." });
         }
 
         if (data.isbn) {
             data.isbn = data.isbn.trim().replace(/-/g, '');
-            const existingRecord = await Textbook.findOne({
-                _id: { $ne: id },
-                isbn: data.isbn
-            });
+        }
 
-            if (existingRecord) {
-                return res.status(400).json({
-                    success: false,
-                    message: "A textbook with this ISBN already exists."
-                });
-            }
+        const trimmedTitle = data.title ? data.title.trim() : (textbook.title || '');
+        const trimmedPublisher = data.publisher ? data.publisher.trim() : (textbook.publisher || '');
+        const isbnToCheck = data.isbn || textbook.isbn;
+
+        const existingRecord = await Textbook.findOne({
+            _id: { $ne: id },
+            $or: [
+                ...(isbnToCheck ? [{ isbn: isbnToCheck }] : []),
+                ...(trimmedTitle && trimmedPublisher ? [{ 
+                    title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i'),
+                    publisher: new RegExp(`^${escapeRegex(trimmedPublisher)}$`, 'i')
+                }] : [])
+            ]
+        });
+
+        if (existingRecord) {
+            const isIsbnMatch = existingRecord.isbn && isbnToCheck && existingRecord.isbn.toLowerCase() === isbnToCheck.toLowerCase();
+            return res.status(400).json({ 
+                success: false, 
+                message: isIsbnMatch
+                    ? "A textbook with this ISBN already exists."
+                    : `A textbook with this Title ("${trimmedTitle}") and Publisher ("${trimmedPublisher}") already exists in the system.`
+            });
         }
 
         if (data.year || data.month) {
@@ -521,26 +541,17 @@ exports.addEdition = async (req, res) => {
 };
 
 
-const { getHODDepartments } = require('../../utils/hodHelper');
-
 // @desc    Get textbooks pending at HOD
 // @route   GET /api/research/textbook/pending-hod
 // @access  Private (HOD)
 exports.getPendingAtHOD = async (req, res) => {
     try {
-        const Employee = require('../employee/employee.model');
-        const deptIds = await getHODDepartments(req.user);
-        
-        const facultyIds = await Employee.find({
-            $or: [
-                { coreDepartment: { $in: deptIds } },
-                { department: { $in: deptIds } }
-            ]
-        }).distinct('_id');
+        const { getFacultyIdsForApprover } = require('../hierarchy/reportingBoss.helper');
+        const facultyIds = await getFacultyIdsForApprover(req.user);
         
         const textbooks = await Textbook.find({ 
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
         
         res.json({ success: true, data: textbooks });
@@ -557,7 +568,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const textbook = await Textbook.findByIdAndUpdate(id, { 
             status, 
             hodComment: comment 

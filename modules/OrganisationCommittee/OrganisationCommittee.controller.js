@@ -66,14 +66,13 @@ exports.getCommitteeMembers = async (req, res, next) => {
             .sort({ orderNumber: 1, createdAt: -1 })
             .lean();
 
-        const axios = require('axios');
+        const { fetchStudentFromEcap } = require('../../utils/ecapService');
         
         for (let member of members) {
             if (member.role === 'Student Coordinator' && member.rollNo) {
                 try {
-                    const response = await axios.get(`https://info.aec.edu.in/adityaapi/api/studentdata/${member.rollNo.toUpperCase()}`);
-                    if (response.data && response.data.length > 0) {
-                        const studentData = response.data[0];
+                    const studentData = await fetchStudentFromEcap(member.rollNo);
+                    if (studentData) {
                         member.studentName = studentData.studentname;
                         member.mobileNumber = studentData.mobilenumber;
                         member.branch = studentData.branch;

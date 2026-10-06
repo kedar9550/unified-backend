@@ -98,7 +98,7 @@ exports.createProject = async (req, res) => {
             : [...new Set(claimantsList)];
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -306,7 +306,7 @@ exports.updateProject = async (req, res) => {
         project.appraisalClaimants = appraisalClaimants;
         project.applyIncentive = 'No';
         project.incentiveClaimant = null;
-        project.status = 'Pending at R&D'; // Resubmit
+        project.status = 'Pending'; // Resubmit
         project.hodComment = '';
         project.rndComment = '';
 
@@ -424,7 +424,7 @@ exports.getPendingAtHOD = async (req, res) => {
         
         const projects = await FundedProject.find({ 
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
         
         res.json({ success: true, data: projects });
@@ -441,7 +441,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const project = await FundedProject.findByIdAndUpdate(id, { 
             status, 
             hodComment: comment 

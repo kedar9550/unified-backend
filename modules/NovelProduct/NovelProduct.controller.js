@@ -66,7 +66,7 @@ exports.createNovelProduct = async (req, res) => {
             : [...new Set(claimantsList)];
 
         let finalFacultyId = req.user.userId;
-        let finalStatus = 'Pending at R&D';
+        let finalStatus = 'Pending';
         let finalEntryType = 'Self';
 
         if (data.isDirectEntry === 'true') {
@@ -277,7 +277,7 @@ exports.updateNovelProduct = async (req, res) => {
         product.appraisalClaimants = appraisalClaimants;
         product.applyIncentive = 'No';
         product.incentiveClaimant = null;
-        product.status = 'Pending at R&D'; // Resubmit
+        product.status = 'Pending'; // Resubmit
         product.hodComment = '';
         product.rndComment = '';
 
@@ -397,7 +397,7 @@ exports.getPendingAtHOD = async (req, res) => {
         
         const products = await NovelProduct.find({ 
             facultyId: { $in: facultyIds },
-            status: 'Pending at HOD'
+            status: 'Pending'
         }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
         
         res.json({ success: true, data: products });
@@ -414,7 +414,7 @@ exports.hodAction = async (req, res) => {
         const { id } = req.params;
         const { action, comment } = req.body;
 
-        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected by HOD';
+        const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
         const product = await NovelProduct.findByIdAndUpdate(id, { 
             status, 
             hodComment: comment 

@@ -30,7 +30,7 @@ exports.submitFeedback = async (req, res, next) => {
       return next(new Error("Ticket not found"));
     }
 
-    if (ticket.createdBy.toString() !== userId.toString()) {
+    if (ticket.createdBy && ticket.createdBy.toString() !== userId.toString()) {
       res.status(403);
       return next(new Error("Only the ticket creator can submit feedback"));
     }
@@ -166,7 +166,15 @@ exports.getAllFeedback = async (req, res, next) => {
 
     const feedbacks = await Feedback.find({ ticket: { $in: tickets } })
       .populate("submittedBy", "name institutionId email")
-      .populate({ path: "ticket", select: "ticketNumber title service", populate: { path: "service", select: "name" } })
+      .populate("submittedByStudent", "studentname rollno mobilenumber branch coursename")
+      .populate({
+        path: "ticket",
+        select: "ticketNumber title service studentDetails creatorType createdBy",
+        populate: [
+          { path: "service", select: "name" },
+          { path: "createdBy", select: "name institutionId email" }
+        ]
+      })
       .sort({ createdAt: -1 })
       .lean();
 
