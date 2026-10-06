@@ -60,6 +60,10 @@ app.use('/api/employees/login', authLimiter);
 
 // --- General Middlewares ---
 app.use(logger('dev'));
+
+// Razorpay Webhook Raw Body Parser (MUST be registered before express.json body parser)
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), require('./modules/CentralEvents/EventPayments/eventPayments.controller').handleRazorpayWebhook);
+
 // Conditionally apply body parser limits: 50mb for PDF generation, 10kb for everything else
 app.use((req, res, next) => {
     if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools') || req.path === '/api/payslips/send-email') {
@@ -116,6 +120,18 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', require('./modules/auth/auth.route'));
 app.use('/api/employees', require('./modules/employee/employee.route'));
+
+// Central Events Module Routes
+app.use('/api', require('./modules/CentralEvents/Events/events.route'));
+app.use('/api', require('./modules/CentralEvents/EventTypes/eventTypes.route'));
+app.use('/api', require('./modules/CentralEvents/EventCategories/eventCategories.route'));
+app.use('/api', require('./modules/CentralEvents/EventRegistrations/eventRegistrations.route'));
+app.use('/api', require('./modules/CentralEvents/EventPayments/eventPayments.route'));
+
+// Start Central Events Payment Reconcile Cron
+const { startPaymentReconcileCron } = require('./modules/CentralEvents/EventPayments/eventPayments.cron');
+startPaymentReconcileCron();
+
 app.use('/api/academic-years', require('./modules/academicYear/academicYear.route'));
 app.use('/api/faculty-subject-results', require('./modules/FacultySubjectResult/FacultySubjectResult.route'));
 app.use('/api/faculty-feedback-results', require('./modules/FacultyFeedbackResults/FacultyFeedbackResult.route'));

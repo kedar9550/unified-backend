@@ -612,6 +612,24 @@ const getEmployeeByEmpId = async (req, res) => {
             return res.status(404).json({ success: false, message: "Faculty not found" });
         }
 
+        let deptName = "";
+        if (emp.department && typeof emp.department === 'object' && (emp.department.name || emp.department.code)) {
+            deptName = emp.department.name || emp.department.code;
+        } else if (emp.department && String(emp.department).trim()) {
+            const d = await Department.findById(emp.department);
+            if (d) deptName = d.name || d.code;
+        }
+
+        let coreDeptName = "";
+        if (emp.coreDepartment && typeof emp.coreDepartment === 'object' && (emp.coreDepartment.name || emp.coreDepartment.code)) {
+            coreDeptName = emp.coreDepartment.name || emp.coreDepartment.code;
+        } else if (emp.coreDepartment && String(emp.coreDepartment).trim()) {
+            const cd = await Department.findById(emp.coreDepartment);
+            if (cd) coreDeptName = cd.name || cd.code;
+        }
+
+        const finalDept = deptName || coreDeptName || "";
+
         res.status(200).json({
             success: true,
             data: {
@@ -619,8 +637,8 @@ const getEmployeeByEmpId = async (req, res) => {
                 name: emp.name,
                 institutionId: emp.institutionId,
                 designation: emp.designation,
-                department: emp.department?.code || emp.department?.name || "",
-                coreDepartment: emp.coreDepartment?.code || emp.coreDepartment?.name || "",
+                department: finalDept,
+                coreDepartment: coreDeptName,
                 phone: emp.phone || "",
                 panNumber: emp.panNumber || "",
                 college: emp.college || "",
