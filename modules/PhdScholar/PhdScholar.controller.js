@@ -221,8 +221,8 @@ exports.createPhdApplication = async (req, res) => {
                         type: 'INFO',
                         title: 'New Research Submission',
                         message: `${emp.name || 'A faculty member'} has submitted a new Ph.D. Scholar application: ${application.studentName}`,
-                        link: `/research/approvals`, 
-                        metadata: { targetRole: "ReportingBoss" }
+                        link: `/hod/research-approvals`, 
+
                     });
                 }
             }
@@ -235,7 +235,7 @@ exports.createPhdApplication = async (req, res) => {
                     type: 'SUCCESS',
                     title: 'Ph.D. Scholar Application Added',
                     message: `R&D has directly added an approved Ph.D. Scholar application for you: ${application.studentName}`,
-                    link: `/faculty/research-metrics`
+                    link: `/research/phd-scholars`
                  });
             }
         } catch (notifErr) {
@@ -468,6 +468,46 @@ exports.hodAction = async (req, res) => {
             hodComment: comment 
         }, { new: true });
 
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = application.facultyId || application.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Phd Scholar ${action}d by HOD`,
+                    message: `Your Phd Scholar has been ${action.toLowerCase()}d by HOD.`,
+                    link: '/research/phd-scholars'
+                });
+            }
+
+            if (action === 'Approve') {
+                const Role = require('../../modules/role/role.model');
+                const UserAppRole = require('../../modules/userAppRole/userAppRole.model');
+                const rndRoles = await Role.find({ key: { $in: ['RESEARCH_DEAN', 'RESEARCH_COORDINATOR'] } });
+                const rndRoleIds = rndRoles.map(r => r._id);
+                const rndAdmins = await UserAppRole.find({ role: { $in: rndRoleIds } }).distinct('userId');
+                
+                for (const adminId of rndAdmins) {
+                    await NotificationService.sendNotification({
+                        recipientId: adminId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: `New Phd Scholar for R&D Approval`,
+                        message: `A Phd Scholar application is pending your approval.`,
+                        link: '/research-dean/approvals'
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: application });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -524,6 +564,26 @@ exports.rndAction = async (req, res) => {
                 },
                 { upsert: true, new: true }
             );
+        }
+
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = application.facultyId || application.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Phd Scholar ${action}d by R&D`,
+                    message: `Your Phd Scholar has been ${action.toLowerCase()}d by R&D.`,
+                    link: '/research/phd-scholars'
+                });
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
         }
 
         res.json({ success: true, data: application });

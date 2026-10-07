@@ -147,8 +147,8 @@ exports.createNovelProduct = async (req, res) => {
                         type: 'INFO',
                         title: 'New Research Submission',
                         message: `${emp.name || 'A faculty member'} has submitted a new Novel Product: ${product.productName}`,
-                        link: `/research/approvals`, 
-                        metadata: { targetRole: "ReportingBoss" }
+                        link: `/hod/research-approvals`, 
+
                     });
                 }
             }
@@ -161,7 +161,7 @@ exports.createNovelProduct = async (req, res) => {
                     type: 'SUCCESS',
                     title: 'Novel Product Added',
                     message: `R&D has directly added an approved Novel Product for you: ${product.productName}`,
-                    link: `/faculty/research-metrics`
+                    link: `/research/novel-products`
                  });
             }
         } catch (notifErr) {
@@ -420,6 +420,46 @@ exports.hodAction = async (req, res) => {
             hodComment: comment 
         }, { new: true });
 
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = product.facultyId || product.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Novel Product ${action}d by HOD`,
+                    message: `Your Novel Product has been ${action.toLowerCase()}d by HOD.`,
+                    link: '/research/novel-products'
+                });
+            }
+
+            if (action === 'Approve') {
+                const Role = require('../../modules/role/role.model');
+                const UserAppRole = require('../../modules/userAppRole/userAppRole.model');
+                const rndRoles = await Role.find({ key: { $in: ['RESEARCH_DEAN', 'RESEARCH_COORDINATOR'] } });
+                const rndRoleIds = rndRoles.map(r => r._id);
+                const rndAdmins = await UserAppRole.find({ role: { $in: rndRoleIds } }).distinct('userId');
+                
+                for (const adminId of rndAdmins) {
+                    await NotificationService.sendNotification({
+                        recipientId: adminId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: `New Novel Product for R&D Approval`,
+                        message: `A Novel Product application is pending your approval.`,
+                        link: '/research-dean/approvals'
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: product });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -465,6 +505,26 @@ exports.rndAction = async (req, res) => {
         }
 
         await product.save();
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = product.facultyId || product.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Novel Product ${action}d by R&D`,
+                    message: `Your Novel Product has been ${action.toLowerCase()}d by R&D.`,
+                    link: '/research/novel-products'
+                });
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: product });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

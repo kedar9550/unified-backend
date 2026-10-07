@@ -145,8 +145,8 @@ exports.createConsultancy = async (req, res) => {
                         type: 'INFO',
                         title: 'New Research Submission',
                         message: `${emp.name || 'A faculty member'} has submitted a new Consultancy: ${consultancy.title}`,
-                        link: `/research/approvals`, 
-                        metadata: { targetRole: "ReportingBoss" }
+                        link: `/hod/research-approvals`, 
+
                     });
                 }
             }
@@ -159,7 +159,7 @@ exports.createConsultancy = async (req, res) => {
                     type: 'SUCCESS',
                     title: 'Consultancy Added',
                     message: `R&D has directly added an approved Consultancy for you: ${consultancy.title}`,
-                    link: `/faculty/research-metrics`
+                    link: `/research/consultancy-publication`
                  });
             }
         } catch (notifErr) {
@@ -386,6 +386,46 @@ exports.hodAction = async (req, res) => {
             hodComment: comment 
         }, { new: true });
 
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = consultancy.facultyId || consultancy.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Consultancy ${action}d by HOD`,
+                    message: `Your Consultancy has been ${action.toLowerCase()}d by HOD.`,
+                    link: '/research/consultancy-publication'
+                });
+            }
+
+            if (action === 'Approve') {
+                const Role = require('../../modules/role/role.model');
+                const UserAppRole = require('../../modules/userAppRole/userAppRole.model');
+                const rndRoles = await Role.find({ key: { $in: ['RESEARCH_DEAN', 'RESEARCH_COORDINATOR'] } });
+                const rndRoleIds = rndRoles.map(r => r._id);
+                const rndAdmins = await UserAppRole.find({ role: { $in: rndRoleIds } }).distinct('userId');
+                
+                for (const adminId of rndAdmins) {
+                    await NotificationService.sendNotification({
+                        recipientId: adminId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: `New Consultancy for R&D Approval`,
+                        message: `A Consultancy application is pending your approval.`,
+                        link: '/research-dean/approvals'
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: consultancy });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -418,6 +458,26 @@ exports.rndAction = async (req, res) => {
         if (approvedAmount !== undefined) consultancy.approvedAmount = approvedAmount;
 
         await consultancy.save();
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = consultancy.facultyId || consultancy.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Consultancy ${action}d by R&D`,
+                    message: `Your Consultancy has been ${action.toLowerCase()}d by R&D.`,
+                    link: '/research/consultancy-publication'
+                });
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: consultancy });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
