@@ -78,6 +78,10 @@ const ConsultancySchema = new mongoose.Schema({
         type: String,
         enum: ['Self', 'Admin'],
         default: 'Self'
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
     }
 });
 

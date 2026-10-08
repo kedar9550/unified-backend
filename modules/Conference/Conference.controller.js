@@ -646,8 +646,11 @@ exports.rndAction = async (req, res) => {
             conference.appraisalClaimant = null;
         }
 
-        if (status === 'Approved' && (conference.applyIncentive === 'Yes' || conference.applyIncentive === 'yes') && conference.appraisalClaimant) {
-            conference.incentiveClaimant = conference.appraisalClaimant;
+        if (status === 'Approved' && (conference.applyIncentive === 'Yes' || conference.applyIncentive === 'yes')) {
+            const applicantEmp = await Employee.findById(conference.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                conference.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
 
         await conference.save();

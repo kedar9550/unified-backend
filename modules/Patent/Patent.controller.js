@@ -640,8 +640,11 @@ exports.rndAction = async (req, res) => {
             patent.appraisalClaimant = null;
         }
 
-        if (status === 'Approved' && (patent.applyIncentive === 'Yes' || patent.applyIncentive === 'yes') && patent.appraisalClaimant) {
-            patent.incentiveClaimant = patent.appraisalClaimant;
+        if (status === 'Approved' && (patent.applyIncentive === 'Yes' || patent.applyIncentive === 'yes')) {
+            const applicantEmp = await Employee.findById(patent.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                patent.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
 
         await patent.save();

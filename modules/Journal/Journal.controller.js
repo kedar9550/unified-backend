@@ -798,8 +798,11 @@ exports.rndAction = async (req, res) => {
             }
         }
 
-        if (status === 'Approved' && (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes') && journal.appraisalClaimant) {
-            journal.incentiveClaimant = journal.appraisalClaimant;
+        if (status === 'Approved' && (journal.applyIncentive === 'Yes' || journal.applyIncentive === 'yes')) {
+            const applicantEmp = await Employee.findById(journal.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                journal.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
 
         await journal.save();
