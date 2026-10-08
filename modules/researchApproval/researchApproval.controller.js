@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Employee = require('../employee/employee.model');
 const Textbook = require('../Textbook/Textbook.model');
 const BookChapter = require('../BookChapter/BookChapter.model');
@@ -503,12 +504,41 @@ exports.getResearchRequests = async (req, res) => {
 // @access  Private (Research Dean, Research Coordinator)
 exports.getResearchReports = async (req, res) => {
     try {
-        const { academicYear, type } = req.query;
+        const { academicYear, type, startDate, endDate } = req.query;
         
         const query = {}; 
         if (academicYear && academicYear !== 'All') {
             query.academicYear = academicYear;
         }
+
+        const getCreationDate = (item) => {
+            if (item.createdAt) return item.createdAt;
+            if (item.created) return item.created;
+            if (item._id) {
+                try {
+                    return new mongoose.Types.ObjectId(item._id).getTimestamp();
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        };
+
+        const formatAppliedAt = (item) => {
+            const dateVal = getCreationDate(item);
+            if (!dateVal) return 'N/A';
+            const d = new Date(dateVal);
+            if (isNaN(d.getTime())) return 'N/A';
+            return d.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'Asia/Kolkata'
+            });
+        };
 
         const formatAuthors = (authorsArray) => {
             if (!authorsArray || !Array.isArray(authorsArray)) return 'N/A';
@@ -540,8 +570,31 @@ exports.getResearchReports = async (req, res) => {
             shouldFetch('Consultancy') ? Consultancy.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([])
         ]);
 
+        const filterByDateRange = (list) => {
+            if (!startDate && !endDate) return list;
+            const start = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : null;
+            const end = endDate ? new Date(endDate).setHours(23, 59, 59, 999) : null;
+            return list.filter(item => {
+                const d = getCreationDate(item);
+                if (!d) return false;
+                const time = new Date(d).getTime();
+                if (start && time < start) return false;
+                if (end && time > end) return false;
+                return true;
+            });
+        };
+
+        const textbooksFiltered = filterByDateRange(textbooksRaw);
+        const chaptersFiltered = filterByDateRange(chaptersRaw);
+        const journalsFiltered = filterByDateRange(journalsRaw);
+        const conferencesFiltered = filterByDateRange(conferencesRaw);
+        const patentsFiltered = filterByDateRange(patentsRaw);
+        const projectsFiltered = filterByDateRange(projectsRaw);
+        const productsFiltered = filterByDateRange(productsRaw);
+        const consultanciesFiltered = filterByDateRange(consultanciesRaw);
+
         const reportData = {
-            textbooks: textbooksRaw.map(item => ({
+            textbooks: textbooksFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -549,14 +602,16 @@ exports.getResearchReports = async (req, res) => {
                 title: item.title,
                 publisher: item.publisher,
                 isbn: item.isbn ? `\t${item.isbn}` : 'N/A',
+                scopusIndexed: item.scopusIndexed || 'No',
                 year: item.academicYear?.year || item.yearOfPublication,
                 amount: item.approvedAmount || 0,
                 panNo: item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.authors)
+                coAuthorsText: formatAuthors(item.authors),
+                appliedAt: formatAppliedAt(item)
             })),
 
-            chapters: chaptersRaw.map(item => ({
+            chapters: chaptersFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -569,10 +624,11 @@ exports.getResearchReports = async (req, res) => {
                 amount: item.approvedAmount || 0,
                 panNo: item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coAuthors)
+                coAuthorsText: formatAuthors(item.coAuthors),
+                appliedAt: formatAppliedAt(item)
             })),
 
-            journals: journalsRaw.map(item => {
+            journals: journalsFiltered.map(item => {
                 let category = 'SCOPUS';
                 const quartile = (item.journalQuartile || '').toUpperCase().trim();
                 if (quartile === 'Q1') category = 'Q1';
@@ -611,25 +667,44 @@ exports.getResearchReports = async (req, res) => {
                     appraisalClaimant: item.appraisalClaimant || 'N/A',
                     category: category,
                     status: item.status || 'Pending at R&D',
-                    coAuthorsText: formatAuthors(item.coAuthors)
+                    coAuthorsText: formatAuthors(item.coAuthors),
+                    appliedAt: formatAppliedAt(item)
                 };
             }),
 
-            conferences: conferencesRaw.map(item => ({
+            conferences: conferencesFiltered.map(item => ({
                 sNo: '',
-                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
-                facultyName: item.facultyId?.name || 'N/A',
                 empId: item.facultyId?.institutionId || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                college: item.college || item.facultyId?.college || 'N/A',
+                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                doi: item.doi || 'N/A',
                 conferenceName: item.conferenceName || 'N/A',
                 paperTitle: item.title || 'N/A',
+                academicYear: item.academicYear?.year || 'N/A',
                 year: item.academicYear?.year || item.year || 'N/A',
+                month: item.month || 'N/A',
+                publishedYear: item.year || 'N/A',
+                location: item.location || 'India',
+                conferenceType: item.conferenceType || 'N/A',
+                scopusIndexed: item.scopusIndexed || 'No',
+                issnIsbn: item.issnIsbn || 'N/A',
+                publisher: item.publisher || 'N/A',
+                isStudentsInvolved: item.isStudentsInvolved || 'No',
+                applyingSeedGrant: item.applyingSeedGrant || 'No',
+                applyIncentive: item.applyIncentive || 'No',
                 amount: item.approvedAmount || 0,
-                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                approvedAmount: item.approvedAmount || 0,
+                appraisalEligible: item.appraisalEligible || 'N/A',
+                appraisalClaimant: item.appraisalClaimant || 'N/A',
+                sdgs: item.sdgs || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coAuthors)
+                coAuthorsText: formatAuthors(item.coAuthors),
+                appliedAt: formatAppliedAt(item)
             })),
 
-            patents: patentsRaw.map(item => ({
+            patents: patentsFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -640,10 +715,11 @@ exports.getResearchReports = async (req, res) => {
                 amount: item.approvedAmount || 0,
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coInventors)
+                coAuthorsText: formatAuthors(item.coInventors),
+                appliedAt: formatAppliedAt(item)
             })),
 
-            projects: projectsRaw.map(item => ({
+            projects: projectsFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -656,10 +732,11 @@ exports.getResearchReports = async (req, res) => {
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
                 projectStatus: item.projectStatus || 'N/A',
-                coAuthorsText: formatAuthors(item.coInvestigators)
+                coAuthorsText: formatAuthors(item.coInvestigators),
+                appliedAt: formatAppliedAt(item)
             })),
 
-            products: productsRaw.map(item => ({
+            products: productsFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -670,10 +747,11 @@ exports.getResearchReports = async (req, res) => {
                 year: item.academicYear?.year || item.year || 'N/A',
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coDevelopers)
+                coAuthorsText: formatAuthors(item.coDevelopers),
+                appliedAt: formatAppliedAt(item)
             })),
 
-            consultancy: consultanciesRaw.map(item => ({
+            consultancy: consultanciesFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -686,7 +764,8 @@ exports.getResearchReports = async (req, res) => {
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
                 projectStatus: item.projectStatus || 'N/A',
-                coAuthorsText: formatAuthors(item.coInvestigators)
+                coAuthorsText: formatAuthors(item.coInvestigators),
+                appliedAt: formatAppliedAt(item)
             }))
         };
 

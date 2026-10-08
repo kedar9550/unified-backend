@@ -600,8 +600,11 @@ exports.rndAction = async (req, res) => {
             chapter.appraisalClaimant = null;
         }
 
-        if (status === 'Approved' && (chapter.applyIncentive === 'Yes' || chapter.applyIncentive === 'yes') && chapter.appraisalClaimant) {
-            chapter.incentiveClaimant = chapter.appraisalClaimant;
+        if (status === 'Approved' && (chapter.applyIncentive === 'Yes' || chapter.applyIncentive === 'yes')) {
+            const applicantEmp = await Employee.findById(chapter.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                chapter.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
 
         await chapter.save();

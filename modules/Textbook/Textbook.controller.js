@@ -705,8 +705,11 @@ exports.rndAction = async (req, res) => {
             textbook.appraisalClaimant = null;
         }
 
-        if (status === 'Approved' && (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes') && textbook.appraisalClaimant) {
-            textbook.incentiveClaimant = textbook.appraisalClaimant;
+        if (status === 'Approved' && (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes')) {
+            const applicantEmp = await Employee.findById(textbook.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                textbook.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
 
         await textbook.save();
