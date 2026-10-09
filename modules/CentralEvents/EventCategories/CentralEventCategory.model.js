@@ -23,6 +23,15 @@ const centralEventCategorySchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  hasSubcategories: {
+    type: Boolean,
+    default: false
+  },
+  subcategories: [{
+    code: { type: String, uppercase: true, trim: true },
+    name: { type: String, trim: true },
+    isActive: { type: Boolean, default: true }
+  }],
   isActive: {
     type: Boolean,
     default: true

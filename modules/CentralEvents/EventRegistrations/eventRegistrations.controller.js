@@ -172,8 +172,13 @@ const getRegistrationById = async (req, res, next) => {
       return next(new Error('Registration not found'));
     }
 
-    // Ownership check (unless admin)
-    if (registration.userId.toString() !== req.user?.userId?.toString()) {
+    // Ownership check (unless user has GLOBAL_EVENT_ADMIN or SUPER_ADMIN role)
+    const isAdmin = req.user?.roles?.some(r => {
+      const roleStr = (typeof r === 'string' ? r : r.role?.key || r.role?.name || '').toUpperCase();
+      return ['GLOBAL_EVENT_ADMIN', 'SUPER_ADMIN'].includes(roleStr);
+    });
+
+    if (!isAdmin && registration.userId.toString() !== req.user?.userId?.toString()) {
       res.status(403);
       return next(new Error('Access denied: Unauthorized to view this registration'));
     }
@@ -206,8 +211,46 @@ const getMyRegistrations = async (req, res, next) => {
   }
 };
 
+/**
+ * GET /central-event-registrations/admin (GLOBAL_EVENT_ADMIN & SUPER_ADMIN only)
+ */
+const getAllRegistrationsAdmin = async (req, res, next) => {
+  try {
+    const { eventId, status, page = 1, limit = 50 } = req.query;
+    const filter = {};
+    if (eventId) filter.centralEventId = eventId;
+    if (status) filter.status = status;
+
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 50;
+    const skip = (pageNum - 1) * limitNum;
+
+    const total = await CentralEventRegistration.countDocuments(filter);
+    const registrations = await CentralEventRegistration.find(filter)
+      .populate('centralEventId', 'title slug code schedule fee status mode venue')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+
+    res.json({
+      success: true,
+      data: registrations,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum)
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   registerForCentralEvent,
   getRegistrationById,
-  getMyRegistrations
+  getMyRegistrations,
+  getAllRegistrationsAdmin
 };
