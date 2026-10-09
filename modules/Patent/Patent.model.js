@@ -57,6 +57,7 @@ const PatentSchema = new mongoose.Schema({
     year: { type: String },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
+    eligibleForTechTransfer: { type: String, enum: ['Yes', 'No'], default: 'No' },
     
     // Files
     eFilingReceipt: { type: String, required: true },
