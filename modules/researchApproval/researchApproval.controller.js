@@ -277,7 +277,7 @@ exports.getResearchRequests = async (req, res) => {
                     _id: item._id,
                     type: 'Patent',
                     faculty: fac,
-                    title: `${item.title} (Filing No: ${item.filingNo})`,
+                    title: item.title,
                     status: item.status,
                     createdAt: item.createdAt,
                     academicYear: item.academicYear,
