@@ -44,6 +44,7 @@ const BookChapterSchema = new mongoose.Schema({
     year: { type: String, required: true },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
+    numberOfPages: { type: Number, default: null },
 
     // Files
     coverPage: { type: String },
