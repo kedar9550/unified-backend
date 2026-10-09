@@ -125,6 +125,22 @@ exports.createBookChapter = async (req, res) => {
             }
         }
 
+        // 4. Restrict max 2 chapters per book (ISBN) for a user
+        if (data.isbnNumber) {
+            const chaptersCount = await BookChapter.countDocuments({
+                facultyId: finalFacultyId,
+                isbnNumber: data.isbnNumber,
+                status: { $nin: ['Rejected', 'Rejected by R&D'] }
+            });
+            
+            if (chaptersCount >= 2) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A faculty member can submit a maximum of two chapters from the same book."
+                });
+            }
+        }
+
         const bookChapter = new BookChapter({
             ...data,
             chapterTitle: trimmedChapterTitle,
@@ -133,6 +149,7 @@ exports.createBookChapter = async (req, res) => {
             appraisalClaimant,
             status: finalStatus,
             incentiveClaimant: computedIncentiveClaimant,
+            estimatedIncentiveAmount: data.estimatedIncentiveAmount ? Number(data.estimatedIncentiveAmount) : 0,
             approvedAmount: (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes') ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
             appraisalEligible: data.appraisalEligible || (data.isDirectEntry === 'true' ? 'Yes' : null),
             entryType: finalEntryType
@@ -143,6 +160,7 @@ exports.createBookChapter = async (req, res) => {
             if (req.files.authorAffiliation) bookChapter.authorAffiliation = `/uploads/book-chapters/${req.files.authorAffiliation[0].filename}`;
             if (req.files.index) bookChapter.index = `/uploads/book-chapters/${req.files.index[0].filename}`;
             if (req.files.softCopy) bookChapter.softCopy = `/uploads/book-chapters/${req.files.softCopy[0].filename}`;
+            if (req.files.totalBookChapter) bookChapter.totalBookChapter = `/uploads/book-chapters/${req.files.totalBookChapter[0].filename}`;
         }
 
         await bookChapter.save();
@@ -164,8 +182,8 @@ exports.createBookChapter = async (req, res) => {
                         type: 'INFO',
                         title: 'New Research Submission',
                         message: `${emp.name || 'A faculty member'} has submitted a new Book Chapter: ${bookChapter.chapterTitle}`,
-                        link: `/research/approvals`, 
-                        metadata: { targetRole: "ReportingBoss" }
+                        link: `/hod/research-approvals`, 
+
                     });
                 }
             }
@@ -178,7 +196,7 @@ exports.createBookChapter = async (req, res) => {
                     type: 'SUCCESS',
                     title: 'Book Chapter Publication Added',
                     message: `R&D has directly added an approved Book Chapter for you: ${bookChapter.chapterTitle}`,
-                    link: `/faculty/research-metrics`
+                    link: `/research/book-chapter-publication`
                  });
             }
         } catch (notifErr) {
@@ -245,6 +263,23 @@ exports.updateBookChapter = async (req, res) => {
                 return res.status(400).json({
                     success: false,
                     message: "A book chapter with this title already exists."
+                });
+            }
+        }
+
+        // Validate ISBN count
+        if (data.isbnNumber) {
+            const chaptersCount = await BookChapter.countDocuments({
+                _id: { $ne: id },
+                facultyId: bookChapter.facultyId,
+                isbnNumber: data.isbnNumber,
+                status: { $nin: ['Rejected', 'Rejected by R&D'] }
+            });
+            
+            if (chaptersCount >= 2) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A faculty member can submit a maximum of two chapters from the same book."
                 });
             }
         }
@@ -327,6 +362,10 @@ exports.updateBookChapter = async (req, res) => {
                 deleteOldFile(bookChapter.softCopy);
                 bookChapter.softCopy = `/uploads/book-chapters/${req.files.softCopy[0].filename}`;
             }
+            if (req.files.totalBookChapter) {
+                deleteOldFile(bookChapter.totalBookChapter);
+                bookChapter.totalBookChapter = `/uploads/book-chapters/${req.files.totalBookChapter[0].filename}`;
+            }
         }
 
         if (data.deleteCoverPage === 'true' && (!req.files || !req.files.coverPage)) {
@@ -344,6 +383,10 @@ exports.updateBookChapter = async (req, res) => {
         if (data.deleteSoftCopy === 'true' && (!req.files || !req.files.softCopy)) {
             deleteOldFile(bookChapter.softCopy);
             bookChapter.softCopy = null;
+        }
+        if (data.deleteTotalBookChapter === 'true' && (!req.files || !req.files.totalBookChapter)) {
+            deleteOldFile(bookChapter.totalBookChapter);
+            bookChapter.totalBookChapter = null;
         }
 
         await bookChapter.save();
@@ -458,6 +501,46 @@ exports.hodAction = async (req, res) => {
             hodComment: comment
         }, { new: true });
 
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = chapter.facultyId || chapter.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Book Chapter ${action}d by HOD`,
+                    message: `Your Book Chapter has been ${action.toLowerCase()}d by HOD.`,
+                    link: '/research/book-chapter-publication'
+                });
+            }
+
+            if (action === 'Approve') {
+                const Role = require('../../modules/role/role.model');
+                const UserAppRole = require('../../modules/userAppRole/userAppRole.model');
+                const rndRoles = await Role.find({ key: { $in: ['RESEARCH_DEAN', 'RESEARCH_COORDINATOR'] } });
+                const rndRoleIds = rndRoles.map(r => r._id);
+                const rndAdmins = await UserAppRole.find({ role: { $in: rndRoleIds } }).distinct('userId');
+                
+                for (const adminId of rndAdmins) {
+                    await NotificationService.sendNotification({
+                        recipientId: adminId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: `New Book Chapter for R&D Approval`,
+                        message: `A Book Chapter application is pending your approval.`,
+                        link: '/research-dean/approvals'
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: chapter });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -517,11 +600,34 @@ exports.rndAction = async (req, res) => {
             chapter.appraisalClaimant = null;
         }
 
-        if (status === 'Approved' && (chapter.applyIncentive === 'Yes' || chapter.applyIncentive === 'yes') && chapter.appraisalClaimant) {
-            chapter.incentiveClaimant = chapter.appraisalClaimant;
+        if (status === 'Approved' && (chapter.applyIncentive === 'Yes' || chapter.applyIncentive === 'yes')) {
+            const applicantEmp = await Employee.findById(chapter.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                chapter.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
 
         await chapter.save();
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = chapter.facultyId || chapter.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Book Chapter ${action}d by R&D`,
+                    message: `Your Book Chapter has been ${action.toLowerCase()}d by R&D.`,
+                    link: '/research/book-chapter-publication'
+                });
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: chapter });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

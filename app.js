@@ -124,9 +124,9 @@ app.use('/api/employees', require('./modules/employee/employee.route'));
 // Central Events Module Routes
 app.use('/api', require('./modules/CentralEvents/centralEvents.route'));
 
-// Start Central Events Payment Reconcile Cron
-const { startPaymentReconcileCron } = require('./modules/CentralEvents/EventPayments/eventPayments.cron');
-startPaymentReconcileCron();
+// Start Central Events Payment Reconcile Cron (Disabled)
+// const { startPaymentReconcileCron } = require('./modules/CentralEvents/EventPayments/eventPayments.cron');
+// startPaymentReconcileCron();
 
 app.use('/api/academic-years', require('./modules/academicYear/academicYear.route'));
 app.use('/api/faculty-subject-results', require('./modules/FacultySubjectResult/FacultySubjectResult.route'));

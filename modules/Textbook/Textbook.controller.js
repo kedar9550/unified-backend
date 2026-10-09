@@ -216,8 +216,8 @@ exports.createTextbook = async (req, res) => {
                         type: 'INFO',
                         title: 'New Research Submission',
                         message: `${emp.name || 'A faculty member'} has submitted a new Textbook: ${textbook.title}`,
-                        link: `/research/approvals`, 
-                        metadata: { targetRole: "ReportingBoss" }
+                        link: `/hod/research-approvals`, 
+
                     });
                 }
             }
@@ -230,7 +230,7 @@ exports.createTextbook = async (req, res) => {
                     type: 'SUCCESS',
                     title: 'Textbook Publication Added',
                     message: `R&D has directly added an approved Textbook for you: ${textbook.title}`,
-                    link: `/faculty/research-metrics`
+                    link: `/research/textbook-publication`
                  });
             }
         } catch (notifErr) {
@@ -327,12 +327,12 @@ exports.updateTextbook = async (req, res) => {
                 parsedAuthors = data.authors;
             }
 
-            const loggedInUser = await Employee.findById(req.user.userId);
+            const applicantUser = await Employee.findById(textbook.facultyId);
             finalAuthors = [];
             
             for (const author of parsedAuthors) {
                 const isUser = Number(author.authorPosition) === Number(data.userAuthorPosition || textbook.userAuthorPosition);
-                const empId = isUser ? loggedInUser.institutionId : (author.employeeId || author.empId || null);
+                const empId = isUser ? applicantUser.institutionId : (author.employeeId || author.empId || null);
                 const isAUS = isUser || author.affiliationType === 'Aditya University';
 
                 if (!isUser && isAUS) {
@@ -341,7 +341,7 @@ exports.updateTextbook = async (req, res) => {
 
                 finalAuthors.push({
                     authorPosition: author.authorPosition,
-                    authorName: isUser ? loggedInUser.name : author.authorName,
+                    authorName: isUser ? applicantUser.name : author.authorName,
                     affiliationType: isUser ? 'Aditya University' : (author.affiliationType || 'Others'),
                     employeeId: isAUS && empId ? String(empId).trim() : null,
                     affiliationName: isUser ? 'Aditya University' : (author.affiliationName || ''),
@@ -359,9 +359,9 @@ exports.updateTextbook = async (req, res) => {
         }
 
         const { getDefaultClaimant } = require('../../utils/claimantHelper');
-        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
+        const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, textbook.facultyId, data.appraisalEligible || null);
 
-        const applicant = await Employee.findById(req.user.userId).select('institutionId');
+        const applicant = await Employee.findById(textbook.facultyId).select('institutionId');
         const applyIncentive = data.applyIncentive !== undefined ? data.applyIncentive : textbook.applyIncentive;
         const computedIncentiveClaimant = (applyIncentive === 'Yes' || applyIncentive === 'yes') ? applicant.institutionId : null;
 
@@ -434,7 +434,14 @@ exports.updateTextbook = async (req, res) => {
             } catch (e) {}
         }
 
-        res.json({ success: true, data: textbook });
+        const populatedTextbook = await Textbook.findById(textbook._id)
+            .populate({
+                path: 'facultyId',
+                select: 'name designation coreDepartment institutionId phone contactNumber college profileImage email',
+                populate: { path: 'coreDepartment', select: 'name' }
+            });
+
+        res.json({ success: true, data: populatedTextbook });
     } catch (err) {
         console.error("Update Textbook Error:", err);
         res.status(500).json({ success: false, message: err.message });
@@ -574,6 +581,46 @@ exports.hodAction = async (req, res) => {
             hodComment: comment 
         }, { new: true });
 
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = textbook.facultyId || textbook.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Textbook ${action}d by HOD`,
+                    message: `Your Textbook has been ${action.toLowerCase()}d by HOD.`,
+                    link: '/research/textbook-publication'
+                });
+            }
+
+            if (action === 'Approve') {
+                const Role = require('../../modules/role/role.model');
+                const UserAppRole = require('../../modules/userAppRole/userAppRole.model');
+                const rndRoles = await Role.find({ key: { $in: ['RESEARCH_DEAN', 'RESEARCH_COORDINATOR'] } });
+                const rndRoleIds = rndRoles.map(r => r._id);
+                const rndAdmins = await UserAppRole.find({ role: { $in: rndRoleIds } }).distinct('userId');
+                
+                for (const adminId of rndAdmins) {
+                    await NotificationService.sendNotification({
+                        recipientId: adminId,
+                        senderId: req.user.userId,
+                        module: 'Research',
+                        type: 'INFO',
+                        title: `New Textbook for R&D Approval`,
+                        message: `A Textbook application is pending your approval.`,
+                        link: '/research-dean/approvals'
+                    });
+                }
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: textbook });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -658,11 +705,34 @@ exports.rndAction = async (req, res) => {
             textbook.appraisalClaimant = null;
         }
 
-        if (status === 'Approved' && (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes') && textbook.appraisalClaimant) {
-            textbook.incentiveClaimant = textbook.appraisalClaimant;
+        if (status === 'Approved' && (textbook.applyIncentive === 'Yes' || textbook.applyIncentive === 'yes')) {
+            const applicantEmp = await Employee.findById(textbook.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                textbook.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
 
         await textbook.save();
+        
+        try {
+            const NotificationService = require('../../modules/notification/notification.service');
+            const targetFacultyId = textbook.facultyId || textbook.facultyId?._id;
+            
+            if (targetFacultyId) {
+                await NotificationService.sendNotification({
+                    recipientId: targetFacultyId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
+                    title: `Textbook ${action}d by R&D`,
+                    message: `Your Textbook has been ${action.toLowerCase()}d by R&D.`,
+                    link: '/research/textbook-publication'
+                });
+            }
+        } catch (notifErr) {
+            console.error("Failed to send notification:", notifErr);
+        }
+
         res.json({ success: true, data: textbook });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

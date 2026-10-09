@@ -29,6 +29,7 @@ const BookChapterSchema = new mongoose.Schema({
     chapterTitle: { type: String, required: true, unique: true },
     doi: { type: String, unique: true, sparse: true },
     scopusIndexed: { type: String, enum: ['Yes', 'No', 'Not Available'], default: 'Not Available' },
+    servingAsEditor: { type: String, enum: ['Yes', 'No'] },
     isbnNumber: { type: String },
     yearOfPublication: { type: String, required: true },
 
@@ -49,6 +50,7 @@ const BookChapterSchema = new mongoose.Schema({
     authorAffiliation: { type: String, required: true },
     index: { type: String },
     softCopy: { type: String },
+    totalBookChapter: { type: String, required: true },
 
     status: {
         type: String,
@@ -58,6 +60,7 @@ const BookChapterSchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
+    estimatedIncentiveAmount: { type: Number, default: 0 },
 
     appraisalClaimant: {
         type: String,

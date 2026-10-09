@@ -107,6 +107,11 @@ const TextbookSchema = new mongoose.Schema({
         enum: ['Yes', 'No'],
         default: 'No'
     },
+    scopusIndexed: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'No'
+    },
     month: {
         type: String,
         required: true

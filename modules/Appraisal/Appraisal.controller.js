@@ -2817,7 +2817,10 @@ exports.resolveClaim = async (req, res) => {
 
         record.appraisalClaimant = employee.institutionId;
         if (record.status === 'Approved' && (record.applyIncentive === 'Yes' || record.applyIncentive === 'yes')) {
-            record.incentiveClaimant = employee.institutionId;
+            const applicantEmp = await Employee.findById(record.facultyId).select('institutionId');
+            if (applicantEmp && applicantEmp.institutionId) {
+                record.incentiveClaimant = applicantEmp.institutionId;
+            }
         }
         await record.save();
 

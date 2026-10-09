@@ -23,25 +23,46 @@ const PatentSchema = new mongoose.Schema({
     panNumber: { type: String },
     
     title: { type: String, required: true, unique: true },
+    facultyRole: { type: String, enum: ['Applicant', 'Inventor / Co-Inventor'], default: 'Applicant' },
     applicantName: { type: String, required: true },
+    applicantAffiliation: { type: String },
     patentName: { type: String, required: true },
     area: { type: String, required: true },
-    filingNo: { type: String, required: true, unique: true },
+    applicationNo: { type: String, required: true, unique: true },
     dateOfFiling: { type: Date, required: true },
     patentFiledCountry: { type: String, required: true, default: 'India' },
     patentFiledInInstitution: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
+    isUtilityType: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
     isInstitutionRecord: { type: String, enum: ['Yes', 'No'], default: 'No' },
-    patentStatus: { type: String, required: true }, // 'Filed', 'Published', etc.
+    patentStatus: { type: String, enum: ['Published', 'Granted'], required: true },
+    
+    published: {
+        publishedstatus: { type: String, enum: ['yes', 'no'], default: 'no' },
+        publishedexpectedamount: { type: Number },
+        publishedinsentiveamount: { type: Number },
+        publisheddate: { type: Date },
+        publishedinsentiveappllieddate: { type: Date }
+    },
+
+    granted: {
+        grantedstatus: { type: String, enum: ['yes', 'no'], default: 'no' },
+        grantedexpectedamount: { type: Number },
+        grantedinsentiveamount: { type: Number },
+        granteddate: { type: Date },
+        grantedinsentiveappllieddate: { type: Date }
+    },
     coInventors: [CoInventorSchema],
     isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
     month: { type: String },
     year: { type: String },
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
+    eligibleForTechTransfer: { type: String, enum: ['Yes', 'No'], default: 'No' },
     
     // Files
     eFilingReceipt: { type: String, required: true },
     form1: { type: String, required: true },
+    grantedCertificate: { type: String },
     
     status: {
         type: String,

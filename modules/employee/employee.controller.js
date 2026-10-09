@@ -1194,7 +1194,7 @@ const adminUpdateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
         const { email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId, qualifications, dateOfJoining } = req.body;
-        console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId, qualifications, dateOfJoining });
+        // console.log("Admin Update Request:", { id, email, coreDepartment, name, department, designation, leadership, isActive, defaultRoleId, qualifications, dateOfJoining });
 
         const employee = await Employee.findById(id);
         if (!employee) {

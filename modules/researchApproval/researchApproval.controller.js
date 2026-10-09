@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Employee = require('../employee/employee.model');
 const Textbook = require('../Textbook/Textbook.model');
 const BookChapter = require('../BookChapter/BookChapter.model');
@@ -503,24 +504,41 @@ exports.getResearchRequests = async (req, res) => {
 // @access  Private (Research Dean, Research Coordinator)
 exports.getResearchReports = async (req, res) => {
     try {
-        const { academicYear, type } = req.query;
+        const { academicYear, type, startDate, endDate } = req.query;
         
-        let reportData = {
-            journals: [],
-            textbooks: [],
-            chapters: [],
-            conferences: [],
-            patents: [],
-            products: [],
-            projects: [],
-            consultancy: []
-        };
-
         const query = {}; 
-        
         if (academicYear && academicYear !== 'All') {
             query.academicYear = academicYear;
         }
+
+        const getCreationDate = (item) => {
+            if (item.createdAt) return item.createdAt;
+            if (item.created) return item.created;
+            if (item._id) {
+                try {
+                    return new mongoose.Types.ObjectId(item._id).getTimestamp();
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        };
+
+        const formatAppliedAt = (item) => {
+            const dateVal = getCreationDate(item);
+            if (!dateVal) return 'N/A';
+            const d = new Date(dateVal);
+            if (isNaN(d.getTime())) return 'N/A';
+            return d.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true,
+                timeZone: 'Asia/Kolkata'
+            });
+        };
 
         const formatAuthors = (authorsArray) => {
             if (!authorsArray || !Array.isArray(authorsArray)) return 'N/A';
@@ -532,45 +550,68 @@ exports.getResearchReports = async (req, res) => {
             }).join('; ');
         };
 
-        // 1. Fetch Textbooks
-        if (!type || type === 'All' || type === 'Text Book') {
-            const textbooks = await Textbook.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-            
-            reportData.textbooks = textbooks.map(item => ({
+        const shouldFetch = (cat) => !type || type === 'All' || type === cat;
+
+        const populateOptions = {
+            path: 'facultyId',
+            select: 'name institutionId department coreDepartment panNumber college',
+            populate: { path: 'coreDepartment', select: 'name' }
+        };
+
+        // Parallelize database queries across all requested categories
+        const [textbooksRaw, chaptersRaw, journalsRaw, conferencesRaw, patentsRaw, projectsRaw, productsRaw, consultanciesRaw] = await Promise.all([
+            shouldFetch('Text Book') ? Textbook.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Book Chapter') ? BookChapter.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Journal') ? Journal.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Conference') ? Conference.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Patent') ? Patent.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Funded Project') ? FundedProject.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Novel Product') ? NovelProduct.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Consultancy') ? Consultancy.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([])
+        ]);
+
+        const filterByDateRange = (list) => {
+            if (!startDate && !endDate) return list;
+            const start = startDate ? new Date(startDate).setHours(0, 0, 0, 0) : null;
+            const end = endDate ? new Date(endDate).setHours(23, 59, 59, 999) : null;
+            return list.filter(item => {
+                const d = getCreationDate(item);
+                if (!d) return false;
+                const time = new Date(d).getTime();
+                if (start && time < start) return false;
+                if (end && time > end) return false;
+                return true;
+            });
+        };
+
+        const textbooksFiltered = filterByDateRange(textbooksRaw);
+        const chaptersFiltered = filterByDateRange(chaptersRaw);
+        const journalsFiltered = filterByDateRange(journalsRaw);
+        const conferencesFiltered = filterByDateRange(conferencesRaw);
+        const patentsFiltered = filterByDateRange(patentsRaw);
+        const projectsFiltered = filterByDateRange(projectsRaw);
+        const productsFiltered = filterByDateRange(productsRaw);
+        const consultanciesFiltered = filterByDateRange(consultanciesRaw);
+
+        const reportData = {
+            textbooks: textbooksFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
                 empId: item.facultyId?.institutionId || 'N/A',
                 title: item.title,
                 publisher: item.publisher,
-                isbn: item.isbn ? `\t${item.isbn}` : 'N/A', // Force string in Excel with tab
+                isbn: item.isbn ? `\t${item.isbn}` : 'N/A',
+                scopusIndexed: item.scopusIndexed || 'No',
                 year: item.academicYear?.year || item.yearOfPublication,
                 amount: item.approvedAmount || 0,
                 panNo: item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.authors)
-            }));
-        }
+                coAuthorsText: formatAuthors(item.authors),
+                appliedAt: formatAppliedAt(item)
+            })),
 
-        // 2. Fetch Book Chapters
-        if (!type || type === 'All' || type === 'Book Chapter') {
-            const chapters = await BookChapter.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-
-            reportData.chapters = chapters.map(item => ({
+            chapters: chaptersFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -583,87 +624,87 @@ exports.getResearchReports = async (req, res) => {
                 amount: item.approvedAmount || 0,
                 panNo: item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coAuthors)
-            }));
-        }
+                coAuthorsText: formatAuthors(item.coAuthors),
+                appliedAt: formatAppliedAt(item)
+            })),
 
-        // 3. Fetch Journals
-        if (!type || type === 'All' || type === 'Journal') {
-            const journals = await Journal.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-
-            reportData.journals = journals.map(item => {
-                // Determine category for frontend mapping: Q1, Q2, or SCOPUS
+            journals: journalsFiltered.map(item => {
                 let category = 'SCOPUS';
                 const quartile = (item.journalQuartile || '').toUpperCase().trim();
-                
-                if (quartile === 'Q1') {
-                    category = 'Q1';
-                } else if (quartile === 'Q2') {
-                    category = 'Q2';
-                }
+                if (quartile === 'Q1') category = 'Q1';
+                else if (quartile === 'Q2') category = 'Q2';
 
                 return {
                     sNo: '',
-                    dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
-                    facultyName: item.facultyId?.name || 'N/A',
                     empId: item.facultyId?.institutionId || 'N/A',
+                    facultyName: item.facultyId?.name || 'N/A',
+                    college: item.college || item.facultyId?.college || 'N/A',
+                    panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                    dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                    isNoDoi: item.isNoDoi || 'No',
+                    doi: item.doi || 'N/A',
                     journalName: item.journalName || 'N/A',
                     paperTitle: item.paperTitle || 'N/A',
                     year: item.academicYear?.year || item.publishedYear || 'N/A',
+                    issn: item.issn || 'N/A',
+                    eissn: item.eissn || 'N/A',
+                    isScopus: item.isScopus || 'No',
+                    isWos: item.isWos || 'No',
+                    journalQuartile: item.journalQuartile || 'N/A',
+                    journalType: item.journalType || 'None',
+                    journalCategory: item.journalCategory || 'N/A',
+                    vol: item.vol || 'N/A',
+                    issue: item.issue || 'N/A',
+                    hIndex: item.hIndex || 'N/A',
+                    jcrImpactFactor: item.jcrImpactFactor || 'N/A',
+                    citations: item.citations || 'N/A',
+                    sdgs: item.sdgs || 'N/A',
+                    correspondingAuthor: item.correspondingAuthor || 'No',
+                    applyIncentive: item.applyIncentive || 'No',
                     amount: item.approvedAmount || 0,
-                    panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                    approvedAmount: item.approvedAmount || 0,
+                    appraisalEligible: item.appraisalEligible || 'N/A',
+                    appraisalClaimant: item.appraisalClaimant || 'N/A',
                     category: category,
                     status: item.status || 'Pending at R&D',
-                    coAuthorsText: formatAuthors(item.coAuthors)
+                    coAuthorsText: formatAuthors(item.coAuthors),
+                    appliedAt: formatAppliedAt(item)
                 };
-            });
-        }
+            }),
 
-        // 4. Fetch Conferences
-        if (!type || type === 'All' || type === 'Conference') {
-            const conferences = await Conference.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-
-            reportData.conferences = conferences.map(item => ({
+            conferences: conferencesFiltered.map(item => ({
                 sNo: '',
-                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
-                facultyName: item.facultyId?.name || 'N/A',
                 empId: item.facultyId?.institutionId || 'N/A',
+                facultyName: item.facultyId?.name || 'N/A',
+                college: item.college || item.facultyId?.college || 'N/A',
+                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                doi: item.doi || 'N/A',
                 conferenceName: item.conferenceName || 'N/A',
                 paperTitle: item.title || 'N/A',
+                academicYear: item.academicYear?.year || 'N/A',
                 year: item.academicYear?.year || item.year || 'N/A',
+                month: item.month || 'N/A',
+                publishedYear: item.year || 'N/A',
+                location: item.location || 'India',
+                conferenceType: item.conferenceType || 'N/A',
+                scopusIndexed: item.scopusIndexed || 'No',
+                issnIsbn: item.issnIsbn || 'N/A',
+                publisher: item.publisher || 'N/A',
+                isStudentsInvolved: item.isStudentsInvolved || 'No',
+                applyingSeedGrant: item.applyingSeedGrant || 'No',
+                applyIncentive: item.applyIncentive || 'No',
                 amount: item.approvedAmount || 0,
-                panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
+                approvedAmount: item.approvedAmount || 0,
+                appraisalEligible: item.appraisalEligible || 'N/A',
+                appraisalClaimant: item.appraisalClaimant || 'N/A',
+                sdgs: item.sdgs || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coAuthors)
-            }));
-        }
+                coAuthorsText: formatAuthors(item.coAuthors),
+                appliedAt: formatAppliedAt(item)
+            })),
 
-        // 5. Fetch Patents
-        if (!type || type === 'All' || type === 'Patent') {
-            const patents = await Patent.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-
-            reportData.patents = patents.map(item => ({
+            patents: patentsFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -674,22 +715,11 @@ exports.getResearchReports = async (req, res) => {
                 amount: item.approvedAmount || 0,
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coInventors)
-            }));
-        }
+                coAuthorsText: formatAuthors(item.coInventors),
+                appliedAt: formatAppliedAt(item)
+            })),
 
-        // 6. Fetch Funded Projects
-        if (!type || type === 'All' || type === 'Funded Project') {
-            const projects = await FundedProject.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-
-            reportData.projects = projects.map(item => ({
+            projects: projectsFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -702,22 +732,11 @@ exports.getResearchReports = async (req, res) => {
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
                 projectStatus: item.projectStatus || 'N/A',
-                coAuthorsText: formatAuthors(item.coInvestigators)
-            }));
-        }
+                coAuthorsText: formatAuthors(item.coInvestigators),
+                appliedAt: formatAppliedAt(item)
+            })),
 
-        // 7. Fetch Novel Products
-        if (!type || type === 'All' || type === 'Novel Product') {
-            const products = await NovelProduct.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-
-            reportData.products = products.map(item => ({
+            products: productsFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -728,22 +747,11 @@ exports.getResearchReports = async (req, res) => {
                 year: item.academicYear?.year || item.year || 'N/A',
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
-                coAuthorsText: formatAuthors(item.coDevelopers)
-            }));
-        }
+                coAuthorsText: formatAuthors(item.coDevelopers),
+                appliedAt: formatAppliedAt(item)
+            })),
 
-        // 8. Fetch Consultancy
-        if (!type || type === 'All' || type === 'Consultancy') {
-            const consultancies = await Consultancy.find(query)
-                .populate({
-                    path: 'facultyId',
-                    select: 'name institutionId department coreDepartment panNumber',
-                    populate: { path: 'coreDepartment', select: 'name' }
-                })
-                .populate('academicYear', 'year')
-                .lean();
-
-            reportData.consultancy = consultancies.map(item => ({
+            consultancy: consultanciesFiltered.map(item => ({
                 sNo: '',
                 dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
                 facultyName: item.facultyId?.name || 'N/A',
@@ -756,9 +764,10 @@ exports.getResearchReports = async (req, res) => {
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
                 status: item.status || 'Pending at R&D',
                 projectStatus: item.projectStatus || 'N/A',
-                coAuthorsText: formatAuthors(item.coInvestigators)
-            }));
-        }
+                coAuthorsText: formatAuthors(item.coInvestigators),
+                appliedAt: formatAppliedAt(item)
+            }))
+        };
 
         res.json({ success: true, data: reportData });
 
