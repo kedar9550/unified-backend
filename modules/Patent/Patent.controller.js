@@ -16,11 +16,11 @@ exports.createPatent = async (req, res) => {
         }
 
         if (data.status === 'Published') {
-            if (!data.dateOfFiling || !data.dateOfPublished) {
+            if (!data.dateOfFiling || !data.publisheddate) {
                 return res.status(400).json({ success: false, message: "Date of Filing and Publication Date are required for Published patents." });
             }
         } else if (data.status === 'Granted') {
-            if (!data.dateOfPublished || !data.dateOfGranted) {
+            if (!data.publisheddate || !data.granteddate) {
                 return res.status(400).json({ success: false, message: "Publication Date and Grant Date are required for Granted patents." });
             }
         } else {
@@ -30,7 +30,7 @@ exports.createPatent = async (req, res) => {
         }
 
         // Validation for documents
-        if (!req.files || !req.files.eFilingReceipt || !req.files.form1) {
+        if (!req.files || !req.files.cbr || !req.files.form1) {
             return res.status(400).json({ success: false, message: "All documents are mandatory." });
         }
         if (data.status === 'Granted' && (!req.files || !req.files.grantedCertificate)) {
@@ -38,7 +38,7 @@ exports.createPatent = async (req, res) => {
         }
 
         // Check file sizes individually (500KB limit)
-        const filesToCheck = ['eFilingReceipt', 'form1', 'grantedCertificate'];
+        const filesToCheck = ['cbr', 'form1', 'grantedCertificate'];
         for (const field of filesToCheck) {
             if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
@@ -67,10 +67,10 @@ exports.createPatent = async (req, res) => {
         if (data.dateOfFiling && isFutureDate(data.dateOfFiling)) {
             return res.status(400).json({ success: false, message: "Date of Filing cannot be in the future." });
         }
-        if (data.dateOfPublished && isFutureDate(data.dateOfPublished)) {
+        if (data.publisheddate && isFutureDate(data.publisheddate)) {
             return res.status(400).json({ success: false, message: "Publication Date cannot be in the future." });
         }
-        if (data.dateOfGranted && isFutureDate(data.dateOfGranted)) {
+        if (data.granteddate && isFutureDate(data.granteddate)) {
             return res.status(400).json({ success: false, message: "Grant Date cannot be in the future." });
         }
 
@@ -176,7 +176,7 @@ exports.createPatent = async (req, res) => {
         });
 
         if (req.files) {
-            if (req.files.eFilingReceipt) patent.eFilingReceipt = `/uploads/patents/${req.files.eFilingReceipt[0].filename}`;
+            if (req.files.cbr) patent.cbr = `/uploads/patents/${req.files.cbr[0].filename}`;
             if (req.files.form1) patent.form1 = `/uploads/patents/${req.files.form1[0].filename}`;
             if (req.files.grantedCertificate) patent.grantedCertificate = `/uploads/patents/${req.files.grantedCertificate[0].filename}`;
         }
@@ -225,7 +225,8 @@ exports.createPatent = async (req, res) => {
         console.error("Create Patent Error:", err);
         if (err.code === 11000) {
             const field = Object.keys(err.keyValue)[0];
-            const message = `A patent with this ${field === 'title' ? 'TITLE OF THE PATENT' : 'PATENT APPLICATION NO'} already exists.`;
+            const value = err.keyValue[field];
+            const message = `Duplicate entry: A patent with ${field} '${value}' already exists.`;
             return res.status(400).json({ success: false, message });
         }
         res.status(500).json({ success: false, message: err.message });
@@ -255,7 +256,7 @@ exports.updatePatent = async (req, res) => {
         }
 
         // Validate file sizes
-        const filesToCheck = ['eFilingReceipt', 'form1', 'grantedCertificate'];
+        const filesToCheck = ['cbr', 'form1', 'grantedCertificate'];
         if (req.files) {
             for (const field of filesToCheck) {
                 if (req.files[field] && req.files[field][0].size > 500 * 1024) {
@@ -393,9 +394,9 @@ exports.updatePatent = async (req, res) => {
         };
 
         if (req.files) {
-            if (req.files.eFilingReceipt) {
-                deleteOldFile(patent.eFilingReceipt);
-                patent.eFilingReceipt = `/uploads/patents/${req.files.eFilingReceipt[0].filename}`;
+            if (req.files.cbr) {
+                deleteOldFile(patent.cbr);
+                patent.cbr = `/uploads/patents/${req.files.cbr[0].filename}`;
             }
             if (req.files.form1) {
                 deleteOldFile(patent.form1);
@@ -407,9 +408,9 @@ exports.updatePatent = async (req, res) => {
             }
         }
 
-        if (data.deleteEFilingReceipt === 'true' && (!req.files || !req.files.eFilingReceipt)) {
-            deleteOldFile(patent.eFilingReceipt);
-            patent.eFilingReceipt = null;
+        if (data.deleteCbr === 'true' && (!req.files || !req.files.cbr)) {
+            deleteOldFile(patent.cbr);
+            patent.cbr = null;
         }
         if (data.deleteForm1 === 'true' && (!req.files || !req.files.form1)) {
             deleteOldFile(patent.form1);
@@ -425,6 +426,77 @@ exports.updatePatent = async (req, res) => {
         res.json({ success: true, data: patent });
     } catch (err) {
         console.error("Update Patent Error:", err);
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Update patent status to Granted
+// @route   PATCH /api/research/patent/:id/update-status
+// @access  Private (Faculty)
+exports.updatePatentStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const data = req.body;
+
+        const patent = await Patent.findById(id);
+        if (!patent) {
+            return res.status(404).json({ success: false, message: "Patent not found." });
+        }
+
+        if (patent.facultyId.toString() !== req.user.userId && data.isDirectEntry !== 'true') {
+            return res.status(403).json({ success: false, message: "Not authorized." });
+        }
+
+        if (patent.patentStatus === 'Granted') {
+            return res.status(400).json({ success: false, message: "Patent is already granted." });
+        }
+
+        if (!data.granteddate) {
+            return res.status(400).json({ success: false, message: "Granted date is required." });
+        }
+
+        if (!req.files || !req.files.grantedCertificate) {
+            return res.status(400).json({ success: false, message: "Granted certificate is required." });
+        }
+
+        if (req.files.grantedCertificate[0].size > 200 * 1024) {
+            return res.status(400).json({ success: false, message: "Granted certificate is too large. Maximum allowed size is 200KB." });
+        }
+
+        const grantedInfo = {
+            ...patent.granted,
+            grantedstatus: 'yes',
+            granteddate: data.granteddate,
+            grantedexpectedamount: patent.granted?.grantedexpectedamount || 15000,
+            grantedinsentiveappllieddate: (patent.applyIncentive === 'Yes' || patent.applyIncentive === 'yes') ? new Date() : undefined
+        };
+
+        const fs = require('fs');
+        const path = require('path');
+        if (patent.grantedCertificate) {
+            try {
+                const cleanPath = patent.grantedCertificate.replace(/^\//, '');
+                const fullPath = path.join(__dirname, '../..', cleanPath);
+                if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
+            } catch (e) {}
+        }
+        const grantedCertificatePath = `/uploads/patents/${req.files.grantedCertificate[0].filename}`;
+
+        const updatedPatent = await Patent.findByIdAndUpdate(id, {
+            $set: {
+                patentStatus: 'Granted',
+                status: 'Pending',
+                hodComment: '',
+                rndComment: '',
+                eligibleForTechTransfer: data.eligibleForTechTransfer || 'No',
+                granted: grantedInfo,
+                grantedCertificate: grantedCertificatePath
+            }
+        }, { new: true }).populate('facultyId', 'name employeeId college').populate('academicYear', 'year');
+
+        res.json({ success: true, data: updatedPatent });
+    } catch (err) {
+        console.error("Update Patent Status Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };

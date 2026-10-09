@@ -2616,7 +2616,7 @@ exports.getUnresolvedClaims = async (req, res) => {
                     _id: p._id,
                     type: 'Patent',
                     title: p.title,
-                    info: `Patent Name: ${p.patentName} (Filing No: ${p.filingNo})`,
+                    info: `Patent Name: ${p.patentName}`,
                     applicant: p.facultyId,
                     isApplicant: p.facultyId._id.toString() === facultyId.toString(),
                     eligibleClaimants: uniqueClaimants

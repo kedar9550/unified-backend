@@ -60,7 +60,7 @@ const PatentSchema = new mongoose.Schema({
     eligibleForTechTransfer: { type: String, enum: ['Yes', 'No'], default: 'No' },
     
     // Files
-    eFilingReceipt: { type: String, required: true },
+    cbr: { type: String, required: true },
     form1: { type: String, required: true },
     grantedCertificate: { type: String },
     

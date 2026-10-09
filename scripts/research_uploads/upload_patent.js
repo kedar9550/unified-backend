@@ -146,7 +146,7 @@ async function processCSV() {
                         // Default fields
                         applyIncentive: 'No',
                         applyingSeedGrant: 'No',
-                        eFilingReceipt: 'placeholder.pdf',
+                        cbr: 'placeholder.pdf',
                         form1: 'placeholder.pdf',
                         status: 'Approved',
                         appraisalClaimants: appraisalClaimants

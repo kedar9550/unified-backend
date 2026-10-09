@@ -47,7 +47,7 @@ const upload = multer({
 
 // Faculty: Submit and View own
 router.post('/', protect, upload.fields([
-    { name: 'eFilingReceipt', maxCount: 1 },
+    { name: 'cbr', maxCount: 1 },
     { name: 'form1', maxCount: 1 }
 ]), patentController.createPatent);
 
@@ -56,9 +56,14 @@ router.get('/:id', protect, patentController.getPatentById);
 
 // Faculty: Update/Resubmit rejected patent
 router.put('/:id', protect, upload.fields([
-    { name: 'eFilingReceipt', maxCount: 1 },
+    { name: 'cbr', maxCount: 1 },
     { name: 'form1', maxCount: 1 }
 ]), patentController.updatePatent);
+
+// Faculty: Update patent status to granted
+router.patch('/:id/update-status', protect, upload.fields([
+    { name: 'grantedCertificate', maxCount: 1 }
+]), patentController.updatePatentStatus);
 
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize(...primaryEvaluatorRoles), patentController.getPendingAtHOD);
