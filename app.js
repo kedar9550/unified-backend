@@ -122,11 +122,7 @@ app.use('/api/auth', require('./modules/auth/auth.route'));
 app.use('/api/employees', require('./modules/employee/employee.route'));
 
 // Central Events Module Routes
-app.use('/api', require('./modules/CentralEvents/Events/events.route'));
-app.use('/api', require('./modules/CentralEvents/EventTypes/eventTypes.route'));
-app.use('/api', require('./modules/CentralEvents/EventCategories/eventCategories.route'));
-app.use('/api', require('./modules/CentralEvents/EventRegistrations/eventRegistrations.route'));
-app.use('/api', require('./modules/CentralEvents/EventPayments/eventPayments.route'));
+app.use('/api', require('./modules/CentralEvents/centralEvents.route'));
 
 // Start Central Events Payment Reconcile Cron
 const { startPaymentReconcileCron } = require('./modules/CentralEvents/EventPayments/eventPayments.cron');

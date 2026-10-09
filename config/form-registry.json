@@ -1,0 +1,3808 @@
+{
+ "_about": "Field registry exported from the HTML prototype. Single source of truth for UI and API validation. calc ops: +a,b sum | -a,b a minus b | *a,b product | %a,b a/b*100 | #rows,col sum of a column across rows. Fields with section:'extra' are stored under the `extra` object.",
+ "version": 1,
+ "forms": [
+  {
+   "code": "1.1",
+   "name": "Program-wise intake and admitted students",
+   "group": "Form 1 – Admissions",
+   "collection": "admission_intake",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "program",
+     "label": "Program name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Department / Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "level",
+     "label": "Level",
+     "type": "select",
+     "required": false,
+     "options": [
+      "UG",
+      "PG",
+      "PhD"
+     ]
+    },
+    {
+     "key": "duration",
+     "label": "Duration of the program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "intake",
+     "label": "Sanctioned intake",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "male",
+     "label": "Students admitted (male)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "female",
+     "label": "Students admitted (female)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "total",
+     "label": "Total students admitted",
+     "type": "text",
+     "required": false,
+     "readOnly": true,
+     "calc": "+male,female"
+    },
+    {
+     "key": "enroll_pct",
+     "label": "Enrollment %",
+     "type": "text",
+     "required": false,
+     "readOnly": true,
+     "calc": "%total,intake"
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "1.2",
+   "name": "Category-wise earmarked seats",
+   "group": "Form 1 – Admissions",
+   "collection": "seat_earmarked",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "program",
+     "label": "Program name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "general",
+     "label": "General",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "sc",
+     "label": "SC",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "st",
+     "label": "ST",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "obc",
+     "label": "OBC",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "total",
+     "label": "Total",
+     "type": "text",
+     "required": false,
+     "readOnly": true,
+     "calc": "+general,sc,st,obc"
+    },
+    {
+     "key": "ews",
+     "label": "EWS",
+     "type": "number",
+     "required": false,
+     "min": 0
+    }
+   ]
+  },
+  {
+   "code": "1.3",
+   "name": "Category-wise admitted seats",
+   "group": "Form 1 – Admissions",
+   "collection": "seat_admitted",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "program",
+     "label": "Program name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "oc_m",
+     "label": "OC male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "oc_f",
+     "label": "OC female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bca_m",
+     "label": "BC-A male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bca_f",
+     "label": "BC-A female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bcb_m",
+     "label": "BC-B male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bcb_f",
+     "label": "BC-B female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bcc_m",
+     "label": "BC-C male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bcc_f",
+     "label": "BC-C female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bcd_m",
+     "label": "BC-D male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bcd_f",
+     "label": "BC-D female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bce_m",
+     "label": "BC-E male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "bce_f",
+     "label": "BC-E female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "sc_m",
+     "label": "SC male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "sc_f",
+     "label": "SC female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "st_m",
+     "label": "ST male",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "st_f",
+     "label": "ST female",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "total_m",
+     "label": "Total male",
+     "type": "text",
+     "required": false,
+     "readOnly": true,
+     "calc": "+oc_m,bca_m,bcb_m,bcc_m,bcd_m,bce_m,sc_m,st_m"
+    },
+    {
+     "key": "total_f",
+     "label": "Total female",
+     "type": "text",
+     "required": false,
+     "readOnly": true,
+     "calc": "+oc_f,bca_f,bcb_f,bcc_f,bcd_f,bce_f,sc_f,st_f"
+    }
+   ]
+  },
+  {
+   "code": "1.4",
+   "name": "Rank-wise analysis of convener quota",
+   "group": "Form 1 – Admissions",
+   "collection": "rank_analysis",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "program",
+     "label": "Program name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "opening_rank",
+     "label": "Opening rank",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "closing_rank",
+     "label": "Closing rank",
+     "type": "number",
+     "required": false,
+     "min": 0
+    }
+   ]
+  },
+  {
+   "code": "2.5",
+   "name": "Value added courses",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "contact_hours",
+     "label": "No. of contact hours",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.6",
+   "name": "Workshops organized",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "contact_hours",
+     "label": "No. of contact hours",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.7",
+   "name": "Guest lectures organized",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "2.8",
+   "name": "Professional body activities",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "professional_body",
+     "label": "Professional body associated",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.9",
+   "name": "Capacity development activities",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "category",
+     "label": "Category",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Soft skills",
+      "Life skills",
+      "Language and communication skills",
+      "Other"
+     ],
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.10",
+   "name": "Industrial visits",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ],
+     "section": "extra"
+    },
+    {
+     "key": "class_section",
+     "label": "Class / section",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    },
+    {
+     "key": "industry",
+     "label": "Name of the industry visited",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    },
+    {
+     "key": "place",
+     "label": "Place of visit",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.11",
+   "name": "Alumni interaction",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "alumni_details",
+     "label": "Alumni details",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    },
+    {
+     "key": "total_students",
+     "label": "Total students in the class",
+     "type": "number",
+     "required": false,
+     "min": 1,
+     "section": "extra"
+    },
+    {
+     "key": "percentage",
+     "label": "Participation %",
+     "type": "text",
+     "required": false,
+     "readOnly": true,
+     "calc": "%participants,total_students",
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.14",
+   "name": "FDP / PDP organized",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "fdp_pdp",
+     "label": "Type",
+     "type": "select",
+     "required": false,
+     "options": [
+      "FDP",
+      "PDP"
+     ],
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.19",
+   "name": "MoU activities (Industry / R&D / Premier institutes)",
+   "group": "Form 2 – Departmental events organized",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person / instructor / coordinator",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of students / participants",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "external_org",
+     "label": "External organization / institute",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    },
+    {
+     "key": "mou_valid_till",
+     "label": "MoU valid till (year)",
+     "type": "number",
+     "required": false,
+     "min": 2000,
+     "max": 2100,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.13",
+   "name": "Professional body membership",
+   "group": "Form 2 – Faculty participation outside / memberships",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "professional_body",
+     "label": "Professional body membership",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    },
+    {
+     "key": "valid_till",
+     "label": "Valid till",
+     "type": "date",
+     "required": false,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.15",
+   "name": "FDP / STTP attended outside",
+   "group": "Form 2 – Faculty participation outside / memberships",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "duration_days",
+     "label": "Duration (days)",
+     "type": "number",
+     "required": false,
+     "min": 1,
+     "section": "extra"
+    },
+    {
+     "key": "organized_by",
+     "label": "Organised by",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.16",
+   "name": "Online courses (MOOCs) completed",
+   "group": "Form 2 – Faculty participation outside / memberships",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "offered_by",
+     "label": "Offered by",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    },
+    {
+     "key": "month_year",
+     "label": "Month & year",
+     "type": "month",
+     "required": false,
+     "section": "extra"
+    },
+    {
+     "key": "score",
+     "label": "Score / grade / percentage",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.17",
+   "name": "Resource person / guest lecturer / session chair outside",
+   "group": "Form 2 – Faculty participation outside / memberships",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "role",
+     "label": "Role",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Resource person",
+      "Guest lecturer",
+      "Session chair"
+     ],
+     "section": "extra"
+    },
+    {
+     "key": "organizing_institute",
+     "label": "Organizing institute",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.18",
+   "name": "Workshops attended",
+   "group": "Form 2 – Faculty participation outside / memberships",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Title / name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "organizing_institute",
+     "label": "Organizing institute",
+     "type": "text",
+     "required": false,
+     "section": "extra"
+    }
+   ]
+  },
+  {
+   "code": "2.20",
+   "name": "Faculty awards",
+   "group": "Form 2 – Awards",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fixedValues": {
+    "recipient_type": "Faculty"
+   },
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "recipient_type",
+     "label": "Recipient type",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Faculty",
+      "Student"
+     ]
+    },
+    {
+     "key": "recipient_name",
+     "label": "Name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "designation_or_roll",
+     "label": "Designation (faculty) / Roll no (student)",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Award / recognition title",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "level",
+     "label": "Level",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Institution",
+      "District",
+      "State",
+      "National",
+      "International"
+     ]
+    },
+    {
+     "key": "awarding_body",
+     "label": "Awarding body / organization",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Date received",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "2.21",
+   "name": "Student awards (co-curricular & extra-curricular)",
+   "group": "Form 2 – Awards",
+   "collection": "academic_activities",
+   "storage": "common fields top-level, type-specific fields inside `extra` object",
+   "fixedValues": {
+    "recipient_type": "Student"
+   },
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "recipient_type",
+     "label": "Recipient type",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Faculty",
+      "Student"
+     ]
+    },
+    {
+     "key": "recipient_name",
+     "label": "Name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "designation_or_roll",
+     "label": "Designation (faculty) / Roll no (student)",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Award / recognition title",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "level",
+     "label": "Level",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Institution",
+      "District",
+      "State",
+      "National",
+      "International"
+     ]
+    },
+    {
+     "key": "awarding_body",
+     "label": "Awarding body / organization",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Date received",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "2.1",
+   "name": "Student list",
+   "group": "Form 2 – Student and faculty records",
+   "collection": "students",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "gender",
+     "label": "Gender",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Male",
+      "Female",
+      "Other"
+     ]
+    },
+    {
+     "key": "social_category",
+     "label": "Social category",
+     "type": "select",
+     "required": false,
+     "options": [
+      "General",
+      "SC",
+      "ST",
+      "OBC"
+     ]
+    },
+    {
+     "key": "country",
+     "label": "Country of origin",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "state",
+     "label": "State",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "district",
+     "label": "District",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "degree",
+     "label": "Degree",
+     "type": "select",
+     "required": false,
+     "options": [
+      "UG",
+      "PG",
+      "Ph.D."
+     ]
+    },
+    {
+     "key": "enrolment_type",
+     "label": "Enrolment type",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Regular",
+      "Part-time"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "2.2",
+   "name": "Mentor-mentee allocation",
+   "group": "Form 2 – Student and faculty records",
+   "collection": "mentor_allocations",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "year",
+     "label": "Year",
+     "type": "select",
+     "required": false,
+     "options": [
+      "1",
+      "2",
+      "3",
+      "4"
+     ]
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "mentor_name",
+     "label": "Name of the mentor",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "mentee_name",
+     "label": "Name of the mentee",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "2.3",
+   "name": "Feedback on teaching-learning process",
+   "group": "Form 2 – Student and faculty records",
+   "collection": "tlp_feedback",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "course_name",
+     "label": "Course name",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "class_section",
+     "label": "Class / section",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "feedback_percent",
+     "label": "% of feedback",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100
+    }
+   ]
+  },
+  {
+   "code": "2.4",
+   "name": "Result analysis",
+   "group": "Form 2 – Student and faculty records",
+   "collection": "result_analysis",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "level",
+     "label": "Level",
+     "type": "select",
+     "required": false,
+     "options": [
+      "UG",
+      "PG"
+     ],
+     "rerenderOnChange": true
+    },
+    {
+     "key": "year_of_study",
+     "label": "Year of study",
+     "type": "select",
+     "required": false,
+     "options": [
+      "1st year",
+      "2nd year",
+      "3rd year",
+      "Final year"
+     ]
+    },
+    {
+     "key": "batch",
+     "label": "Batch",
+     "type": "text",
+     "required": false,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "pass_sem1",
+     "label": "I Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100
+    },
+    {
+     "key": "pass_sem2",
+     "label": "II Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100
+    },
+    {
+     "key": "pass_sem3",
+     "label": "III Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100
+    },
+    {
+     "key": "pass_sem4",
+     "label": "IV Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100
+    },
+    {
+     "key": "pass_sem5",
+     "label": "V Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100,
+     "showIf": {
+      "field": "level",
+      "equals": "UG"
+     }
+    },
+    {
+     "key": "pass_sem6",
+     "label": "VI Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100,
+     "showIf": {
+      "field": "level",
+      "equals": "UG"
+     }
+    },
+    {
+     "key": "pass_sem7",
+     "label": "VII Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100,
+     "showIf": {
+      "field": "level",
+      "equals": "UG"
+     }
+    },
+    {
+     "key": "pass_sem8",
+     "label": "VIII Sem pass %",
+     "type": "number",
+     "required": false,
+     "min": 0,
+     "max": 100,
+     "showIf": {
+      "field": "level",
+      "equals": "UG"
+     }
+    }
+   ]
+  },
+  {
+   "code": "2.12",
+   "name": "Student publications",
+   "group": "Form 2 – Student and faculty records",
+   "collection": "student_publications",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "student_names",
+     "label": "Name of the student(s)",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_numbers",
+     "label": "Roll number(s)",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "paper_title",
+     "label": "Title of the paper",
+     "type": "text",
+     "required": true,
+     "fullWidth": true
+    },
+    {
+     "key": "journal_conference",
+     "label": "Journal / conference name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "publication_year",
+     "label": "Year of publication",
+     "type": "number",
+     "required": false,
+     "min": 1990,
+     "max": 2100
+    },
+    {
+     "key": "vol_issue_page",
+     "label": "Vol, issue, page no",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "doi",
+     "label": "DOI",
+     "type": "text",
+     "required": false
+    }
+   ]
+  },
+  {
+   "code": "2.22",
+   "name": "Eligible research supervisors",
+   "group": "Form 2 – Student and faculty records",
+   "collection": "research_supervisors",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "emp_id",
+     "label": "Emp ID",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "supervisor_name",
+     "label": "Name of the research supervisor",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "designation",
+     "label": "Designation",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "scholars",
+     "label": "Research scholars",
+     "type": "rows",
+     "required": false,
+     "addLabel": "Add scholar",
+     "columns": [
+      {
+       "key": "name",
+       "label": "Name of the scholar",
+       "type": "text"
+      },
+      {
+       "key": "year",
+       "label": "Year of admission",
+       "type": "number"
+      },
+      {
+       "key": "university",
+       "label": "University",
+       "type": "text"
+      },
+      {
+       "key": "title",
+       "label": "Title of the Ph.D work",
+       "type": "text"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "3.1",
+   "name": "Seed money (internal grants)",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "seed_money",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Name of the department",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "pi_copi",
+     "label": "Name of the PI & Co-PI(s) with department",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Title of the project",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "interdisciplinary",
+     "label": "Interdisciplinary",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Yes",
+      "No"
+     ]
+    },
+    {
+     "key": "major_equipment",
+     "label": "List of major equipment",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "equipment_cost",
+     "label": "Cost of the equipment (₹)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "project_cost",
+     "label": "Total cost of the project (₹)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    }
+   ]
+  },
+  {
+   "code": "3.2",
+   "name": "Research facilities / advanced labs",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "research_facilities",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "lab",
+     "label": "Name of the lab",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "equipment",
+     "label": "Equipment with specifications",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "features",
+     "label": "Features of the equipment",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "cost",
+     "label": "Cost of the equipment (₹)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    }
+   ]
+  },
+  {
+   "code": "3.3",
+   "name": "Research grants applied / sanctioned (external)",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "research_grants",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "pi",
+     "label": "Name of the PI",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "co_pi",
+     "label": "Co-PI(s) with department",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Title of the research grant",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "funding_agency",
+     "label": "Funding agency with scheme",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Applied",
+      "Granted"
+     ]
+    },
+    {
+     "key": "submission_date",
+     "label": "Date of submission",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "ack_no",
+     "label": "Acknowledgement no.",
+     "type": "text",
+     "required": false
+    }
+   ]
+  },
+  {
+   "code": "3.4",
+   "name": "Research guides and scholars",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "research_guides",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "department",
+     "label": "Name of the department",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "emp_id",
+     "label": "Emp ID",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "guide_name",
+     "label": "Name of the research guide",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "designation",
+     "label": "Designation",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "scholars",
+     "label": "Research scholars",
+     "type": "rows",
+     "required": false,
+     "addLabel": "Add scholar",
+     "columns": [
+      {
+       "key": "name",
+       "label": "Name of the scholar",
+       "type": "text"
+      },
+      {
+       "key": "year",
+       "label": "Year of admission",
+       "type": "number"
+      },
+      {
+       "key": "university",
+       "label": "University",
+       "type": "text"
+      },
+      {
+       "key": "title",
+       "label": "Title of the Ph.D work",
+       "type": "text"
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "code": "3.5",
+   "name": "Research workshops organized (IPR / RM)",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "research_workshops",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "title",
+     "label": "Title of the workshop",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "resource_person",
+     "label": "Resource person with affiliation",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "participants",
+     "label": "No. of participants attended",
+     "type": "number",
+     "required": false,
+     "min": 0
+    }
+   ]
+  },
+  {
+   "code": "3.6",
+   "name": "Research publications – journal articles",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "research_publications",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "article",
+     "label": "Research article in IEEE format",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "3.7",
+   "name": "Research publications – conference proceedings",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "research_publications",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "article",
+     "label": "Conference proceedings in IEEE format",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "3.8",
+   "name": "Text books and book chapters",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "books_chapters",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "authors",
+     "label": "Authors",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "title",
+     "label": "Title of the book / book chapter",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "publisher",
+     "label": "Publisher",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "isbn",
+     "label": "ISBN no.",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "scopus_indexed",
+     "label": "Scopus indexed",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Yes",
+      "No"
+     ]
+    }
+   ]
+  },
+  {
+   "code": "3.9",
+   "name": "Facilities for consultancy",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "consultancy_facilities",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "facility",
+     "label": "Name of the facility / equipment",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "details",
+     "label": "Details of the facility / equipment",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "3.10",
+   "name": "Consultancy projects undertaken",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "consultancy_projects",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title of the consultancy project",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "organization",
+     "label": "Name of the organization",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "amount",
+     "label": "Consultancy amount (₹)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    }
+   ]
+  },
+  {
+   "code": "3.11",
+   "name": "Consultancy training for faculty",
+   "group": "Form 3 – Research & Consultancy",
+   "collection": "consultancy_training",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "faculty_name",
+     "label": "Name of the faculty",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "title",
+     "label": "Title of the consultancy training",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "outcomes",
+     "label": "Outcomes of the training",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "4.1",
+   "name": "Students appeared for examinations",
+   "group": "Form 4 – Examinations",
+   "collection": "exam_appearances",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "month_year",
+     "label": "Month and year",
+     "type": "month",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "exam_date",
+     "label": "Date of appearing for examinations",
+     "type": "date",
+     "required": false
+    }
+   ]
+  },
+  {
+   "code": "4.2",
+   "name": "Students graduated",
+   "group": "Form 4 – Examinations",
+   "collection": "graduates",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "month_year",
+     "label": "Month and year of passing",
+     "type": "month",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    }
+   ]
+  },
+  {
+   "code": "5.1",
+   "name": "Student participation in professional events",
+   "group": "Form 5 – Student Affairs",
+   "collection": "student_event_participation",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "event_name",
+     "label": "Name of the professional event",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "nature",
+     "label": "Nature of the event",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Conference",
+      "Hackathon",
+      "Workshop",
+      "Other"
+     ]
+    },
+    {
+     "key": "within_state",
+     "label": "Place within the state",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Yes",
+      "No"
+     ]
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "host_institution",
+     "label": "Host institution details",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "recognition",
+     "label": "Recognition / prizes won",
+     "type": "text",
+     "required": false
+    }
+   ]
+  },
+  {
+   "code": "5.2",
+   "name": "Extra-curricular events (sports)",
+   "group": "Form 5 – Student Affairs",
+   "collection": "student_event_participation",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "event_name",
+     "label": "Name of the event",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "host_institution",
+     "label": "Host institution details",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "recognition",
+     "label": "Recognition / prizes won",
+     "type": "text",
+     "required": false
+    }
+   ]
+  },
+  {
+   "code": "5.3",
+   "name": "Extra-curricular events (cultural)",
+   "group": "Form 5 – Student Affairs",
+   "collection": "student_event_participation",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "event_name",
+     "label": "Name of the event",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "host_institution",
+     "label": "Host institution details",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "recognition",
+     "label": "Recognition / prizes won",
+     "type": "text",
+     "required": false
+    }
+   ]
+  },
+  {
+   "code": "5.4",
+   "name": "Extension and outreach activities",
+   "group": "Form 5 – Student Affairs",
+   "collection": "extension_activities",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "date",
+     "label": "Date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "activity",
+     "label": "Name of the activity",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "unit",
+     "label": "Organizing unit",
+     "type": "select",
+     "required": false,
+     "options": [
+      "NSS",
+      "NCC",
+      "Eco-Club",
+      "YRCU",
+      "Leo Club",
+      "Other"
+     ]
+    },
+    {
+     "key": "venue",
+     "label": "Venue / location",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "description",
+     "label": "Brief description of activity",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "5.5",
+   "name": "Student clubs",
+   "group": "Form 5 – Student Affairs",
+   "collection": "club_activities",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "club",
+     "label": "Name of the club",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "activity",
+     "label": "Name of the activity",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "description",
+     "label": "Brief description of activity",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "department",
+     "label": "Department",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "5.6",
+   "name": "Student grievance redressal",
+   "group": "Form 5 – Student Affairs",
+   "collection": "student_grievances",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "complaint_date",
+     "label": "Date of complaint",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Department / Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "year_of_study",
+     "label": "Year of study",
+     "type": "select",
+     "required": false,
+     "options": [
+      "1st year",
+      "2nd year",
+      "3rd year",
+      "Final year"
+     ]
+    },
+    {
+     "key": "nature",
+     "label": "Nature of grievance",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Academic",
+      "Administrative",
+      "Disciplinary",
+      "Harassment",
+      "Other"
+     ]
+    },
+    {
+     "key": "details",
+     "label": "Details of grievance",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "action_taken",
+     "label": "Action taken / resolution provided",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "resolution_date",
+     "label": "Date of resolution",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "status",
+     "label": "Status",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Resolved",
+      "Pending"
+     ]
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.1",
+   "name": "Internships data",
+   "group": "Form 6 – Career Development",
+   "collection": "internships",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "year_of_study",
+     "label": "Year of study",
+     "type": "select",
+     "required": false,
+     "options": [
+      "1st year",
+      "2nd year",
+      "3rd year",
+      "Final year"
+     ]
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "organization",
+     "label": "Organization offering internship",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "from_month",
+     "label": "Internship from (month & year)",
+     "type": "month",
+     "required": false
+    },
+    {
+     "key": "to_month",
+     "label": "Internship to (month & year)",
+     "type": "month",
+     "required": false
+    },
+    {
+     "key": "preplacement_offer",
+     "label": "Preplacement offer",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Yes",
+      "No"
+     ]
+    },
+    {
+     "key": "stipend",
+     "label": "Stipend (₹/month)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "mentor",
+     "label": "Mentor / guide name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.2",
+   "name": "Entrepreneurship events organized",
+   "group": "Form 6 – Career Development",
+   "collection": "entrepreneurship_events",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "event_name",
+     "label": "Event name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "event_type",
+     "label": "Event type",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Workshop",
+      "Bootcamp",
+      "Other"
+     ]
+    },
+    {
+     "key": "organized_by",
+     "label": "Organized by",
+     "type": "select",
+     "required": false,
+     "options": [
+      "EDC",
+      "IIC",
+      "Department"
+     ]
+    },
+    {
+     "key": "resource_persons",
+     "label": "Resource persons / speakers",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "outcome",
+     "label": "Outcome / highlights",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.3",
+   "name": "Placements",
+   "group": "Form 6 – Career Development",
+   "collection": "placements",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "year_of_study",
+     "label": "Year of study",
+     "type": "select",
+     "required": false,
+     "options": [
+      "1st year",
+      "2nd year",
+      "3rd year",
+      "Final year"
+     ]
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "company",
+     "label": "Company name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "core_company",
+     "label": "Core company",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Yes",
+      "No"
+     ]
+    },
+    {
+     "key": "international",
+     "label": "International placement",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Yes",
+      "No"
+     ]
+    },
+    {
+     "key": "country",
+     "label": "Country (if international)",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "job_role",
+     "label": "Job role / position",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "package_lpa",
+     "label": "Package offered (₹ LPA)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "offer_date",
+     "label": "Date of offer",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.4",
+   "name": "Higher studies",
+   "group": "Form 6 – Career Development",
+   "collection": "higher_studies",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "hs_program",
+     "label": "Higher studies program enrolled",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "university",
+     "label": "University / institute",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "country",
+     "label": "Country",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "admission_year",
+     "label": "Year of admission",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.5",
+   "name": "Competitive examinations qualified",
+   "group": "Form 6 – Career Development",
+   "collection": "competitive_exams",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "year_of_study",
+     "label": "Year of study",
+     "type": "select",
+     "required": false,
+     "options": [
+      "1st year",
+      "2nd year",
+      "3rd year",
+      "Final year"
+     ]
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "exam_name",
+     "label": "Examination name",
+     "type": "select",
+     "required": false,
+     "options": [
+      "GATE",
+      "GRE",
+      "TOEFL",
+      "Other"
+     ]
+    },
+    {
+     "key": "score_rank",
+     "label": "Score / rank",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "year_qualified",
+     "label": "Year qualified",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.6",
+   "name": "Skill development programs organized",
+   "group": "Form 6 – Career Development",
+   "collection": "skill_programs",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "program_name",
+     "label": "Name of the program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "organized_by",
+     "label": "Organized by",
+     "type": "select",
+     "required": false,
+     "options": [
+      "APSSDC",
+      "APITA",
+      "APSCHE",
+      "Other"
+     ]
+    },
+    {
+     "key": "resource_persons",
+     "label": "Resource persons / speakers",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "outcome",
+     "label": "Outcome / highlights",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "start_date",
+     "label": "Start date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "end_date",
+     "label": "End date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "student_name",
+     "label": "Name of the student",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "roll_number",
+     "label": "Roll number",
+     "type": "text",
+     "required": true
+    },
+    {
+     "key": "program",
+     "label": "Program",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "branch",
+     "label": "Branch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "semester",
+     "label": "Semester",
+     "type": "select",
+     "required": false,
+     "options": [
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII"
+     ]
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.7",
+   "name": "Alumni association activities",
+   "group": "Form 6 – Career Development",
+   "collection": "alumni_activities",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "academic_year",
+     "label": "Academic year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "date",
+     "label": "Date",
+     "type": "date",
+     "required": false
+    },
+    {
+     "key": "activity",
+     "label": "Event / activity name",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "organized_by",
+     "label": "Organized by",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "place",
+     "label": "Place",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "venue",
+     "label": "Venue",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "alumni_participated",
+     "label": "No. of alumni participated",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "purpose",
+     "label": "Purpose / highlights",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  },
+  {
+   "code": "6.8",
+   "name": "Alumni fund",
+   "group": "Form 6 – Career Development",
+   "collection": "alumni_fund",
+   "storage": "flat document",
+   "fields": [
+    {
+     "key": "financial_year",
+     "label": "Financial year",
+     "type": "text",
+     "required": true,
+     "placeholder": "2025-26"
+    },
+    {
+     "key": "amount",
+     "label": "Amount collected (₹)",
+     "type": "number",
+     "required": false,
+     "min": 0
+    },
+    {
+     "key": "mode",
+     "label": "Mode of collection",
+     "type": "select",
+     "required": false,
+     "options": [
+      "Online",
+      "Offline"
+     ]
+    },
+    {
+     "key": "alumni_name",
+     "label": "Name of the alumni contributed",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "regn_no",
+     "label": "Regn. number",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "batch",
+     "label": "Batch",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "purpose",
+     "label": "Purpose of fund usage",
+     "type": "text",
+     "required": false
+    },
+    {
+     "key": "remarks",
+     "label": "Remarks",
+     "type": "textarea",
+     "required": false,
+     "fullWidth": true
+    }
+   ]
+  }
+ ]
+}

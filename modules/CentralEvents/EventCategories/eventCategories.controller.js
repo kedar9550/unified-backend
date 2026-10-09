@@ -59,7 +59,7 @@ const getAllCentralEventCategoriesAdmin = async (req, res, next) => {
  */
 const createCentralEventCategory = async (req, res, next) => {
   try {
-    const { typeId, typeCode, code, name, sortOrder, isActive, coordinator, coordinators, banner } = req.body;
+    const { typeId, typeCode, code, name, hasSubcategories, subcategories, sortOrder, isActive, coordinator, coordinators, banner } = req.body;
     if ((!typeId && !typeCode) || !code || !name) {
       res.status(400);
       return next(new Error('Event type, Code, and Name are required'));
@@ -84,6 +84,8 @@ const createCentralEventCategory = async (req, res, next) => {
       typeCode: typeObj.code,
       code: code.toUpperCase().trim(),
       name: name.trim(),
+      hasSubcategories: !!hasSubcategories,
+      subcategories: Array.isArray(subcategories) ? subcategories : [],
       sortOrder: sortOrder || 0,
       isActive: isActive !== undefined ? isActive : true,
       coordinator: coordsList[0] || coordinator || null,
@@ -110,7 +112,7 @@ const createCentralEventCategory = async (req, res, next) => {
 const updateCentralEventCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { code, name, sortOrder, isActive, coordinator, coordinators, banner } = req.body;
+    const { code, name, hasSubcategories, subcategories, sortOrder, isActive, coordinator, coordinators, banner } = req.body;
 
     const category = await CentralEventCategory.findById(id);
     if (!category) {
@@ -120,6 +122,8 @@ const updateCentralEventCategory = async (req, res, next) => {
 
     if (code) category.code = code.toUpperCase().trim();
     if (name) category.name = name.trim();
+    if (hasSubcategories !== undefined) category.hasSubcategories = !!hasSubcategories;
+    if (subcategories !== undefined) category.subcategories = Array.isArray(subcategories) ? subcategories : [];
     if (sortOrder !== undefined) category.sortOrder = sortOrder;
     if (isActive !== undefined) category.isActive = isActive;
     if (coordinators !== undefined) {
