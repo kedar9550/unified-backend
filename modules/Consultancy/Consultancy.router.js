@@ -1,7 +1,38 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { protect, authorize } = require('../../middlewares/authMiddleware');
 const consultancyController = require('./Consultancy.controller');
+
+// Multer setup
+const uploadDir = path.join(__dirname, '../../uploads/consultancy');
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+        const unique = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+        cb(null, `${file.fieldname}-${unique}${path.extname(file.originalname)}`);
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const allowed = ['.pdf'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (allowed.includes(ext)) return cb(null, true);
+        cb(new Error('Only PDF files are allowed.'));
+    }
+});
+
+const cpUpload = upload.fields([
+    { name: 'sanctionLetter', maxCount: 1 },
+    { name: 'mou', maxCount: 1 }
+]);
 
 const primaryEvaluatorRoles = [
     "DEPARTMENT_HOD", "HOD", "SCHOOL_DEAN", 
@@ -17,7 +48,7 @@ const primaryEvaluatorRoles = [
 ];
 
 // Faculty: Submit and View own
-router.post('/', protect, consultancyController.createConsultancy);
+router.post('/', protect, cpUpload, consultancyController.createConsultancy);
 router.get('/', protect, consultancyController.getMyConsultancies);
 
 // HOD: Action (must be before /:id)
@@ -30,6 +61,6 @@ router.put('/rnd-action/:id', protect, authorize('RESEARCH_DEAN', 'RESEARCH_COOR
 router.get('/:id', protect, consultancyController.getConsultancyById);
 
 // Faculty: Update/Resubmit rejected consultancy
-router.put('/:id', protect, consultancyController.updateConsultancy);
+router.put('/:id', protect, cpUpload, consultancyController.updateConsultancy);
 
 module.exports = router;

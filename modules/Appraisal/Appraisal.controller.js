@@ -1395,23 +1395,18 @@ exports.initiateOrGetAppraisal = async (req, res) => {
                 claimStatus = "auto_eligible";
             }
 
-            if (c.applyingSeedGrant !== "Yes" && c.fundingAdityaUniversity !== "Yes" && isClaimantEligible(c, faculty.institutionId)) {
-                const statusKey = c.projectStatus ? c.projectStatus.toLowerCase() : 'sanctioned';
-                if (statusKey === 'sanctioned') {
-                    const amountInLakhs = Number(((parseFloat(String(c.amount || '0').replace(/,/g, '')) || 0) / 100000).toFixed(2));
-                    pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
-                } else {
-                    pts = config.research.projectProposalPoints.shortlisted || 5;
-                }
+            if (isClaimantEligible(c, faculty.institutionId)) {
+                const amountInLakhs = Number(((parseFloat(String(c.amount || '0').replace(/,/g, '')) || 0) / 100000).toFixed(2));
+                pts = amountInLakhs * (config.research.projectProposalPoints.sanctionedPerLakh || 5);
             }
 
             projectItems.push({
                 projectId: c._id,
                 projectType: 'Consultancy',
                 title: c.title,
-                agency: c.fundingAgency,
+                agency: c.fundingIndustry,
                 amountInLakhs: Number(((parseFloat(String(c.amount || '0').replace(/,/g, '')) || 0) / 100000).toFixed(2)),
-                status: c.projectStatus || 'Sanctioned',
+                status: 'Sanctioned',
                 isMultiAUSAuthor,
                 claimStatus,
                 claimedBy,
