@@ -29,7 +29,7 @@ const PatentSchema = new mongoose.Schema({
     patentName: { type: String, required: true },
     area: { type: String, required: true },
     applicationNo: { type: String, required: true, unique: true },
-    dateOfFiling: { type: Date, required: true },
+    dateOfFiling: { type: Date },
     patentFiledCountry: { type: String, required: true, default: 'India' },
     patentFiledInInstitution: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
     isUtilityType: { type: String, enum: ['Yes', 'No'], default: 'Yes' },

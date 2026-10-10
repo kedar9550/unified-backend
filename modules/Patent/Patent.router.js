@@ -48,7 +48,8 @@ const upload = multer({
 // Faculty: Submit and View own
 router.post('/', protect, upload.fields([
     { name: 'cbr', maxCount: 1 },
-    { name: 'form1', maxCount: 1 }
+    { name: 'form1', maxCount: 1 },
+    { name: 'grantedCertificate', maxCount: 1 }
 ]), patentController.createPatent);
 
 router.get('/', protect, patentController.getMyPatents);
@@ -57,7 +58,8 @@ router.get('/:id', protect, patentController.getPatentById);
 // Faculty: Update/Resubmit rejected patent
 router.put('/:id', protect, upload.fields([
     { name: 'cbr', maxCount: 1 },
-    { name: 'form1', maxCount: 1 }
+    { name: 'form1', maxCount: 1 },
+    { name: 'grantedCertificate', maxCount: 1 }
 ]), patentController.updatePatent);
 
 // Faculty: Update patent status to granted
