@@ -21,6 +21,11 @@ const centralEventTypeSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  levelGroup: {
+    type: String,
+    enum: ['GLOBAL', 'INSTITUTE'],
+    default: 'GLOBAL'
+  },
   allowedLevels: [{
     type: String,
     enum: ['STUDENT', 'FACULTY']

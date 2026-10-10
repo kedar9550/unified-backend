@@ -42,7 +42,7 @@ const getAllCentralEventTypesAdmin = async (req, res, next) => {
  */
 const createCentralEventType = async (req, res, next) => {
   try {
-    const { code, name, hasCategories, hasLevels, allowedLevels, sortOrder, isActive, banner } = req.body;
+    const { code, name, hasCategories, hasLevels, levelGroup, allowedLevels, sortOrder, isActive, banner } = req.body;
     if (!code || !name) {
       res.status(400);
       return next(new Error('Code and Name are required'));
@@ -53,6 +53,7 @@ const createCentralEventType = async (req, res, next) => {
       name: name.trim(),
       hasCategories: !!hasCategories,
       hasLevels: !!hasLevels,
+      levelGroup: levelGroup || 'GLOBAL',
       allowedLevels: allowedLevels || [],
       sortOrder: sortOrder || 0,
       isActive: isActive !== undefined ? isActive : true,
@@ -78,13 +79,14 @@ const createCentralEventType = async (req, res, next) => {
 const updateCentralEventType = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { code, name, hasCategories, hasLevels, allowedLevels, sortOrder, isActive, banner } = req.body;
+    const { code, name, hasCategories, hasLevels, levelGroup, allowedLevels, sortOrder, isActive, banner } = req.body;
 
     const updates = {};
     if (code) updates.code = code.toUpperCase().trim();
     if (name) updates.name = name.trim();
     if (hasCategories !== undefined) updates.hasCategories = !!hasCategories;
     if (hasLevels !== undefined) updates.hasLevels = !!hasLevels;
+    if (levelGroup) updates.levelGroup = levelGroup;
     if (allowedLevels) updates.allowedLevels = allowedLevels;
     if (sortOrder !== undefined) updates.sortOrder = sortOrder;
     if (isActive !== undefined) updates.isActive = isActive;
