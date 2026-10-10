@@ -27,13 +27,14 @@ const ConsultancySchema = new mongoose.Schema({
     panNumber: { type: String },
 
     title: { type: String, required: true, unique: true },
-    fundingAgency: { type: String },
-    fundingAdityaUniversity: { type: String, enum: ['Yes', 'No'] },
+    typeOfConsultancy: { type: String, enum: ['testing', 'design'] },
+    fundingIndustry: { type: String },
     amount: { type: String },
+    receivedAmount: { type: String },
+    receivedAmountDate: { type: Date },
     duration: { type: String },
     month: { type: String },
     year: { type: String },
-    applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
     organization: { type: String }, // Legacy field fallback
     investigatorType: { type: String, enum: ['Principal Investigator (PI)', 'Co-Principal Investigator (Co-PI)'] },
     principalInvestigator: {
@@ -43,11 +44,6 @@ const ConsultancySchema = new mongoose.Schema({
     coPrincipalInvestigator: {
         type: String,
         enum: ['Yes', 'No']
-    },
-    projectStatus: {
-        type: String,
-        enum: ['Shortlisted', 'Sanctioned'],
-        default: 'Sanctioned'
     },
     coInvestigators: [CoInvestigatorSchema],
     applyIncentive: {
@@ -66,6 +62,8 @@ const ConsultancySchema = new mongoose.Schema({
         enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'],
         default: 'Pending'
     },
+    sanctionLetter: { type: String, default: null },
+    mou: { type: String, default: null },
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
@@ -86,11 +84,8 @@ const ConsultancySchema = new mongoose.Schema({
 });
 
 ConsultancySchema.pre('save', function () {
-    if (!this.fundingAgency && this.organization) {
-        this.fundingAgency = this.organization;
-    }
-    if (!this.fundingAdityaUniversity) {
-        this.fundingAdityaUniversity = 'No';
+    if (!this.fundingIndustry && this.organization) {
+        this.fundingIndustry = this.organization;
     }
 });
 

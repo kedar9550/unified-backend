@@ -160,6 +160,9 @@ async function processCSV() {
                     const duration = row['duration'] ? row['duration'].trim() : '';
                     const fundingAgency = row['fundingAgency'] ? row['fundingAgency'].trim() : 'Unknown';
                     const title = row['title'] ? row['title'].trim() : 'Untitled';
+                    const typeOfConsultancy = row['typeOfConsultancy'] ? row['typeOfConsultancy'].trim().toLowerCase() : '';
+                    const receivedAmount = row['receivedAmount'] ? row['receivedAmount'].trim() : '';
+                    const receivedAmountDate = row['receivedAmountDate'] ? new Date(row['receivedAmountDate'].trim()) : null;
                     
                     let projStatus = row['projectStatus'] ? row['projectStatus'].trim() : 'Sanctioned';
                     // Capitalize first letter if needed
@@ -208,17 +211,17 @@ async function processCSV() {
                             academicYear: academicYear._id,
                             panNumber: row['panNumber'] || '',
                             title: title,
-                            fundingAgency: fundingAgency,
-                            fundingAdityaUniversity: isAdityaFunding,
+                            typeOfConsultancy: typeOfConsultancy || 'testing', // default
+                            fundingIndustry: fundingAgency,
                             amount: amount,
+                            receivedAmount: receivedAmount,
+                            receivedAmountDate: isNaN(receivedAmountDate) ? null : receivedAmountDate,
                             duration: duration,
                             month: row['month'] ? row['month'].trim() : '',
                             year: row['year'] ? row['year'].trim() : '',
-                            applyingSeedGrant: 'No', // Provide default
                             investigatorType: investigatorType,
                             principalInvestigator: principalInvestigator,
                             coPrincipalInvestigator: coPrincipalInvestigator,
-                            projectStatus: projStatus,
                             coInvestigators: coInvestigators,
                             appraisalClaimants: appraisalClaimants,
                             status: 'Approved'

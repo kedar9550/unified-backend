@@ -11,7 +11,7 @@ exports.createConsultancy = async (req, res) => {
         const data = req.body;
         
         // 1. Mandatory Fields Validation
-        if (!data.title || !data.fundingAgency || !data.fundingAdityaUniversity || !data.amount || !data.applyingSeedGrant) {
+        if (!data.title || !data.typeOfConsultancy || !data.fundingIndustry || !data.amount) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
@@ -39,6 +39,13 @@ exports.createConsultancy = async (req, res) => {
             const numDuration = Number(data.duration);
             if (isNaN(numDuration) || numDuration <= 0) {
                 return res.status(400).json({ success: false, message: "Duration must be a positive numeric value." });
+            }
+        }
+
+        if (data.receivedAmount) {
+            const numRecAmount = Number(data.receivedAmount);
+            if (isNaN(numRecAmount) || numRecAmount < 0) {
+                return res.status(400).json({ success: false, message: "Received Amount must be a positive numeric value." });
             }
         }
 
@@ -114,10 +121,19 @@ exports.createConsultancy = async (req, res) => {
             finalEntryType = 'Admin';
         }
 
+        let sanctionLetter = null;
+        let mou = null;
+        if (req.files) {
+            if (req.files.sanctionLetter && req.files.sanctionLetter.length > 0) sanctionLetter = `/uploads/consultancy/${req.files.sanctionLetter[0].filename}`;
+            if (req.files.mou && req.files.mou.length > 0) mou = `/uploads/consultancy/${req.files.mou[0].filename}`;
+        }
+
         const consultancy = new Consultancy({
             ...data,
-            applyIncentive: 'No',
+            applyIncentive: data.applyIncentive || 'No',
             title: trimmedTitle,
+            sanctionLetter,
+            mou,
             facultyId: finalFacultyId,
             coInvestigators: resolvedAuthors,
             appraisalClaimants,
@@ -219,6 +235,10 @@ exports.updateConsultancy = async (req, res) => {
             const numDuration = Number(data.duration);
             if (isNaN(numDuration) || numDuration <= 0) return res.status(400).json({ success: false, message: "Duration must be a positive numeric value." });
         }
+        if (data.receivedAmount) {
+            const numRecAmount = Number(data.receivedAmount);
+            if (isNaN(numRecAmount) || numRecAmount < 0) return res.status(400).json({ success: false, message: "Received Amount must be a positive numeric value." });
+        }
 
         // Date Validation
         if (data.year || data.month) {
@@ -264,7 +284,7 @@ exports.updateConsultancy = async (req, res) => {
         consultancy.title = data.title ? data.title.trim() : consultancy.title;
         consultancy.coInvestigators = resolvedAuthors;
         consultancy.appraisalClaimants = appraisalClaimants;
-        consultancy.applyIncentive = 'No';
+        if (data.applyIncentive) consultancy.applyIncentive = data.applyIncentive;
         consultancy.incentiveClaimant = null;
         consultancy.status = 'Pending'; // Resubmit
         consultancy.hodComment = '';
@@ -287,11 +307,11 @@ exports.updateConsultancy = async (req, res) => {
         if (req.files) {
             if (req.files.sanctionLetter) {
                 deleteOldFile(consultancy.sanctionLetter);
-                consultancy.sanctionLetter = `/uploads/consultancies/${req.files.sanctionLetter[0].filename}`;
+                consultancy.sanctionLetter = `/uploads/consultancy/${req.files.sanctionLetter[0].filename}`;
             }
             if (req.files.mou) {
                 deleteOldFile(consultancy.mou);
-                consultancy.mou = `/uploads/consultancies/${req.files.mou[0].filename}`;
+                consultancy.mou = `/uploads/consultancy/${req.files.mou[0].filename}`;
             }
         }
 

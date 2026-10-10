@@ -29,7 +29,7 @@ const PatentSchema = new mongoose.Schema({
     patentName: { type: String, required: true },
     area: { type: String, required: true },
     applicationNo: { type: String, required: true, unique: true },
-    dateOfFiling: { type: Date, required: true },
+    dateOfFiling: { type: Date },
     patentFiledCountry: { type: String, required: true, default: 'India' },
     patentFiledInInstitution: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
     isUtilityType: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
@@ -39,7 +39,7 @@ const PatentSchema = new mongoose.Schema({
     published: {
         publishedstatus: { type: String, enum: ['yes', 'no'], default: 'no' },
         publishedexpectedamount: { type: Number },
-        publishedinsentiveamount: { type: Number },
+        publishedincentiveamount: { type: Number },
         publisheddate: { type: Date },
         publishedinsentiveappllieddate: { type: Date }
     },
@@ -47,7 +47,7 @@ const PatentSchema = new mongoose.Schema({
     granted: {
         grantedstatus: { type: String, enum: ['yes', 'no'], default: 'no' },
         grantedexpectedamount: { type: Number },
-        grantedinsentiveamount: { type: Number },
+        grantedincentiveamount: { type: Number },
         granteddate: { type: Date },
         grantedinsentiveappllieddate: { type: Date }
     },
