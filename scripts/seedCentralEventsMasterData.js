@@ -18,12 +18,12 @@ async function seedData() {
 
     // 1. Seed Event Types
     const typesData = [
-      { code: 'VEDA', name: 'VEDA National Tech Fest', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 1 },
-      { code: 'COLORS', name: 'COLORS Youth Cultural Fest', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 2 },
-      { code: 'ALA', name: 'ALA Literary & Arts Festival', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 3 },
-      { code: 'CLUB', name: 'Club Events & Activities', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 4 },
-      { code: 'DEPARTMENTAL', name: 'Departmental Programs', hasCategories: false, hasLevels: true, allowedLevels: ['STUDENT', 'FACULTY'], sortOrder: 5 },
-      { code: 'UNIVERSITY', name: 'University Central Programs', hasCategories: false, hasLevels: true, allowedLevels: ['STUDENT', 'FACULTY'], sortOrder: 6 }
+      { code: 'VEDA', name: 'VEDA National Tech Fest', levelGroup: 'GLOBAL', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 1 },
+      { code: 'COLORS', name: 'COLORS Youth Cultural Fest', levelGroup: 'GLOBAL', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 2 },
+      { code: 'ALA', name: 'ALA Literary & Arts Festival', levelGroup: 'GLOBAL', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 3 },
+      { code: 'CLUB', name: 'Club Events & Activities', levelGroup: 'INSTITUTE', hasCategories: true, hasLevels: false, allowedLevels: [], sortOrder: 4 },
+      { code: 'DEPARTMENTAL', name: 'Departmental Programs', levelGroup: 'INSTITUTE', hasCategories: false, hasLevels: true, allowedLevels: ['STUDENT', 'FACULTY'], sortOrder: 5 },
+      { code: 'UNIVERSITY', name: 'University Central Programs', levelGroup: 'INSTITUTE', hasCategories: false, hasLevels: true, allowedLevels: ['STUDENT', 'FACULTY'], sortOrder: 6 }
     ];
 
     for (const t of typesData) {

@@ -23,6 +23,11 @@ const centralEventCategorySchema = new mongoose.Schema({
     required: true,
     trim: true
   },
+  academicYear: {
+    type: String,
+    trim: true,
+    default: null
+  },
   hasSubcategories: {
     type: Boolean,
     default: false
@@ -30,7 +35,12 @@ const centralEventCategorySchema = new mongoose.Schema({
   subcategories: [{
     code: { type: String, uppercase: true, trim: true },
     name: { type: String, trim: true },
-    isActive: { type: Boolean, default: true }
+    isActive: { type: Boolean, default: true },
+    sortOrder: { type: Number, default: 0 },
+    banner: {
+      url: { type: String, default: null },
+      key: { type: String, default: null }
+    }
   }],
   isActive: {
     type: Boolean,

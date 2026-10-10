@@ -146,6 +146,7 @@ const createCentralEvent = async (req, res, next) => {
       typeCode: typeObj.code,
       categoryId: catObj ? catObj._id : null,
       categoryName: catObj ? catObj.name : null,
+      academicYear: req.body.academicYear || catObj?.academicYear || null,
       level: typeObj.hasLevels ? level : null,
       activityType: typeObj.hasLevels ? activityType : null,
       organizer: typeObj.hasLevels ? {
@@ -289,7 +290,7 @@ const cancelCentralEvent = async (req, res, next) => {
 const getCentralEvents = async (req, res, next) => {
   try {
     const {
-      typeCode, categoryId, level, activityType, status, mode,
+      typeCode, categoryId, level, activityType, status, mode, academicYear,
       fromDate, toDate, search, cursor, limit = 20
     } = req.query;
 
@@ -298,12 +299,13 @@ const getCentralEvents = async (req, res, next) => {
     if (categoryId) filter.categoryId = new mongoose.Types.ObjectId(categoryId);
     if (level) filter.level = level.toUpperCase();
     if (activityType) filter.activityType = activityType.toUpperCase();
-    if (status) {
+    if (status && status.toUpperCase() !== 'ALL') {
       filter.status = status.toUpperCase();
-    } else {
-      filter.status = 'PUBLISHED'; // default to published for general list
     }
     if (mode) filter.mode = mode.toUpperCase();
+    if (academicYear && academicYear.toUpperCase() !== 'ALL') {
+      filter.academicYear = academicYear.trim();
+    }
 
     if (fromDate || toDate) {
       filter['schedule.fromDate'] = {};
@@ -335,13 +337,20 @@ const getCentralEvents = async (req, res, next) => {
     const projection = {
       title: 1,
       slug: 1,
+      typeId: 1,
       typeCode: 1,
       categoryId: 1,
       categoryName: 1,
       level: 1,
       activityType: 1,
       organizer: 1,
+      description: 1,
+      inAssociationWith: 1,
+      outcomes: 1,
+      rules: 1,
       mode: 1,
+      venue: 1,
+      participation: 1,
       fee: 1,
       schedule: 1,
       banner: 1,
@@ -400,7 +409,15 @@ const uploadCentralEventFile = async (req, res, next) => {
       return next(new Error('No file uploaded'));
     }
 
-    const relativePath = `/uploads/central-events/${req.file.filename}`;
+    const normalizedPath = req.file.path.replace(/\\/g, '/');
+    const uploadsIdx = normalizedPath.indexOf('/uploads/central_events/');
+    let relativePath = '';
+    if (uploadsIdx !== -1) {
+      relativePath = normalizedPath.substring(uploadsIdx);
+    } else {
+      relativePath = `/uploads/central_events/${req.file.filename}`;
+    }
+
     res.json({
       success: true,
       data: {

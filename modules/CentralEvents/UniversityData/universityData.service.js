@@ -168,8 +168,8 @@ class UniversityDataService {
       delete computed.roll_numbers;
     }
 
-    // Activity forms storage mapping (academic_activities collection)
-    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities';
+    // Activity forms storage mapping (central_event_academic_activities collection)
+    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities' || form.storage === 'central_event_academic_activities' || form.collection === 'central_event_academic_activities';
     if (isActivity) {
       const extra = {};
       const document = {
@@ -200,7 +200,7 @@ class UniversityDataService {
       const person = document.faculty_name || document.resource_person || document.recipient_name || document.faculty_emp_id || '';
       document.dedupe_key = `${form.code}|${document.academic_year || ''}|${document.department || ''}|${title}|${startDateStr}|${person}`;
 
-      return { isActivity, collectionName: 'academic_activities', document };
+      return { isActivity, collectionName: 'central_event_academic_activities', document };
     }
 
     return { isActivity: false, collectionName: form.collection, document: computed };
@@ -265,8 +265,8 @@ class UniversityDataService {
 
   async listRecords(code, query, user) {
     const form = this.getFormByCode(code);
-    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities';
-    const collectionName = isActivity ? 'academic_activities' : form.collection;
+    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities' || form.storage === 'central_event_academic_activities' || form.collection === 'central_event_academic_activities';
+    const collectionName = isActivity ? 'central_event_academic_activities' : form.collection;
 
     const { academic_year, department, search, page = 1, limit = 20, sort = '-created_at' } = query;
 
@@ -330,8 +330,8 @@ class UniversityDataService {
 
   async getRecordById(code, id) {
     const form = this.getFormByCode(code);
-    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities';
-    const collectionName = isActivity ? 'academic_activities' : form.collection;
+    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities' || form.storage === 'central_event_academic_activities' || form.collection === 'central_event_academic_activities';
+    const collectionName = isActivity ? 'central_event_academic_activities' : form.collection;
 
     const db = mongoose.connection.db;
     const collection = db.collection(collectionName);
@@ -390,8 +390,8 @@ class UniversityDataService {
     const form = this.getFormByCode(code);
     await this.getRecordById(code, id); // verifies existence
 
-    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities';
-    const collectionName = isActivity ? 'academic_activities' : form.collection;
+    const isActivity = form.storage === 'academic_activities' || form.collection === 'academic_activities' || form.storage === 'central_event_academic_activities' || form.collection === 'central_event_academic_activities';
+    const collectionName = isActivity ? 'central_event_academic_activities' : form.collection;
 
     const db = mongoose.connection.db;
     const collection = db.collection(collectionName);
@@ -422,7 +422,7 @@ class UniversityDataService {
         name: dbType?.name || form.name,
         group: dbType?.group || form.group,
         collection: dbType?.collection || form.collection,
-        kind: dbType?.kind || (form.storage === 'academic_activities' ? 'activity' : 'separate'),
+        kind: dbType?.kind || (form.storage === 'academic_activities' || form.storage === 'central_event_academic_activities' ? 'activity' : 'separate'),
         is_active: isActiveInDb !== false,
       };
     });
@@ -437,7 +437,7 @@ class UniversityDataService {
           group: ft.group || 'Custom Forms',
           collection: ft.collection,
           kind: ft.kind || 'separate',
-          storage: ft.kind === 'activity' ? 'academic_activities' : 'flat document',
+          storage: ft.kind === 'activity' ? 'central_event_academic_activities' : 'flat document',
           fields: ft.fields || [
             { key: 'academic_year', label: 'Academic year', type: 'text', required: true },
             { key: 'department', label: 'Department', type: 'text', required: true },
@@ -479,8 +479,8 @@ class UniversityDataService {
             code,
             name: form?.name || `Form ${code}`,
             group: form?.group || 'Custom Forms',
-            collection: form?.collection || 'academic_activities',
-            kind: form?.storage === 'academic_activities' ? 'activity' : 'separate',
+            collection: form?.collection || 'central_event_academic_activities',
+            kind: (form?.storage === 'academic_activities' || form?.storage === 'central_event_academic_activities') ? 'activity' : 'separate',
             is_active: false,
             updated_at: new Date()
           }

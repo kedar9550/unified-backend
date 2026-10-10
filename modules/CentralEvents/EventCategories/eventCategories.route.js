@@ -14,4 +14,10 @@ router.post('/central-event-categories', protect, authorize(...adminRoles), cont
 router.put('/central-event-categories/:id', protect, authorize(...adminRoles), controller.updateCentralEventCategory);
 router.delete('/central-event-categories/:id', protect, authorize(...adminRoles), controller.deleteCentralEventCategory);
 
+// Admin Subcategory Routes
+router.get('/central-event-subcategories/admin', protect, authorize(...adminRoles), controller.getAllCentralEventSubcategoriesAdmin);
+router.post('/central-event-subcategories', protect, authorize(...adminRoles), controller.createCentralEventSubcategory);
+router.put('/central-event-subcategories/:id', protect, authorize(...adminRoles), controller.updateCentralEventSubcategory);
+router.delete('/central-event-subcategories/:id', protect, authorize(...adminRoles), controller.deleteCentralEventSubcategory);
+
 module.exports = router;

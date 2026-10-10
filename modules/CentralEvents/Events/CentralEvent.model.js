@@ -52,6 +52,11 @@ const centralEventSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  academicYear: {
+    type: String,
+    trim: true,
+    default: null
+  },
   level: {
     type: String,
     enum: ['STUDENT', 'FACULTY', null],
