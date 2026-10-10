@@ -355,7 +355,7 @@ exports.updatePatent = async (req, res) => {
         patent.published = {
             publishedstatus: data.publishedstatus || patent.published?.publishedstatus || 'no',
             publishedexpectedamount: data.publishedexpectedamount ? Number(data.publishedexpectedamount) : (isPublishedNow ? 5000 : patent.published?.publishedexpectedamount),
-            publishedinsentiveampunt: patent.published?.publishedinsentiveampunt,
+            publishedincentiveamount: patent.published?.publishedincentiveamount,
             publisheddate: data.publisheddate || patent.published?.publisheddate,
             publishedinsentiveappllieddate: (isPublishedNow && (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes')) ? new Date() : patent.published?.publishedinsentiveappllieddate
         };
@@ -363,7 +363,7 @@ exports.updatePatent = async (req, res) => {
         patent.granted = {
             grantedstatus: data.grantedstatus || patent.granted?.grantedstatus || 'no',
             grantedexpectedamount: data.grantedexpectedamount ? Number(data.grantedexpectedamount) : (isGrantedNow ? 15000 : patent.granted?.grantedexpectedamount),
-            grantedinsentiveampunt: patent.granted?.grantedinsentiveampunt,
+            grantedincentiveamount: patent.granted?.grantedincentiveamount,
             granteddate: data.granteddate || patent.granted?.granteddate,
             grantedinsentiveappllieddate: (isGrantedNow && (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes')) ? new Date() : patent.granted?.grantedinsentiveappllieddate
         };
@@ -378,6 +378,8 @@ exports.updatePatent = async (req, res) => {
         patent.status = 'Pending'; // Resubmit
         patent.hodComment = '';
         patent.rndComment = '';
+        patent.approvedAmount = null;
+        patent.appraisalEligible = null;
 
         const fs = require('fs');
         const path = require('path');
@@ -488,9 +490,13 @@ exports.updatePatentStatus = async (req, res) => {
                 status: 'Pending',
                 hodComment: '',
                 rndComment: '',
+                appraisalEligible: null,
                 eligibleForTechTransfer: data.eligibleForTechTransfer || 'No',
                 granted: grantedInfo,
                 grantedCertificate: grantedCertificatePath
+            },
+            $unset: {
+                approvedAmount: 1
             }
         }, { new: true }).populate('facultyId', 'name employeeId college').populate('academicYear', 'year');
 
@@ -697,10 +703,10 @@ exports.rndAction = async (req, res) => {
             
             if (patent.patentStatus === 'Published') {
                 if (!patent.published) patent.published = {};
-                patent.published.publishedinsentiveampunt = approvedAmount;
+                patent.published.publishedincentiveamount = approvedAmount;
             } else if (patent.patentStatus === 'Granted') {
                 if (!patent.granted) patent.granted = {};
-                patent.granted.grantedinsentiveampunt = approvedAmount;
+                patent.granted.grantedincentiveamount = approvedAmount;
             }
         }
         if (action === 'Approve' && req.body.appraisalEligible && ['Yes', 'No'].includes(req.body.appraisalEligible)) {
