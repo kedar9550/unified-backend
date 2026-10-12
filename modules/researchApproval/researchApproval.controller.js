@@ -927,6 +927,14 @@ exports.editResearchDetails = async (req, res) => {
 
     } catch (error) {
         console.error("Edit Research Details Error:", error);
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyPattern || {})[0] || 'field';
+            const fieldLabel = field === 'titleOfPhdWork' ? 'Title of the Ph.D Work' : field;
+            return res.status(400).json({ 
+                success: false, 
+                message: `Duplicate entry: A record with this ${fieldLabel} already exists.` 
+            });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };

@@ -59,6 +59,9 @@ router.get('/:id', protect, phdScholarController.getApplicationById);
 // Faculty: Update/Resubmit rejected application
 router.put('/:id', protect, upload.single('document'), phdScholarController.updatePhdApplication);
 
+// Faculty: Mark Pursuing Scholar as Awarded (milestone progression)
+router.put('/:id/mark-awarded', protect, upload.single('document'), phdScholarController.markAsAwarded);
+
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize(...primaryEvaluatorRoles), phdScholarController.getPendingAtHOD);
 router.put('/hod-action/:id', protect, authorize(...primaryEvaluatorRoles), phdScholarController.hodAction);

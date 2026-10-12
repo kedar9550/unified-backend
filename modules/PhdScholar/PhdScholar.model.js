@@ -14,6 +14,10 @@ const PhdScholarSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
+    titleOfPhdWork: {
+        type: String,
+        trim: true
+    },
     course: {
         type: String,
         required: true,

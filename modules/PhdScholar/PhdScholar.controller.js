@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const PhdApplication = require('./PhdApplication.model');
 const PhdScholar = require('./PhdScholar.model');
 const Employee = require('../employee/employee.model');
@@ -5,6 +7,20 @@ const studentService = require('../StudentData/student.service');
 const Program = require('../academics/program.model');
 const escapeRegex = require('../../utils/escapeRegex');
 const { getHODDepartments } = require('../../utils/hodHelper');
+
+const deleteOldFile = (oldPath) => {
+    if (oldPath) {
+        try {
+            const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
+            const fullPath = path.join(__dirname, '../..', cleanPath);
+            if (fs.existsSync(fullPath)) {
+                fs.unlinkSync(fullPath);
+            }
+        } catch (e) {
+            console.error("Failed to delete old file:", oldPath, e);
+        }
+    }
+};
 
 // @desc    Validate student by Roll Number and verify if Ph.D. Scholar
 // @route   GET /api/research/phd-scholar/validate/:rollNo
@@ -72,10 +88,11 @@ exports.createPhdApplication = async (req, res) => {
     try {
         const data = req.body;
         const rollNo = data.rollNumber ? data.rollNumber.trim().toUpperCase() : "";
+        const titleOfPhdWork = data.titleOfPhdWork ? data.titleOfPhdWork.trim() : "";
 
         // 1. Mandatory Fields check
-        if (!rollNo || !data.studentName || !data.course || !data.scholarStatus || !data.admissionOrAwardDate || !data.academicYear || !data.scholarType || !data.university) {
-            return res.status(400).json({ success: false, message: "Please fill all mandatory fields." });
+        if (!rollNo || !data.studentName || !titleOfPhdWork || !data.course || !data.scholarStatus || !data.admissionOrAwardDate || !data.academicYear || !data.scholarType || !data.university) {
+            return res.status(400).json({ success: false, message: "Please fill all mandatory fields, including Title of the Ph.D Work." });
         }
 
         // Validate date (not in future)
@@ -91,13 +108,31 @@ exports.createPhdApplication = async (req, res) => {
         // 3. Master Awarded check
         const masterScholar = await PhdScholar.findOne({ rollNumber: rollNo });
         if (masterScholar && masterScholar.currentStatus === 'Awarded') {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
             return res.status(400).json({ 
                 success: false, 
                 message: "This scholar has already been awarded their Ph.D. degree." 
             });
         }
 
-        // 4. Duplicate check based on same student (rollNumber) + same type (guide/co-guide) + same scholarStatus
+        // 4. Duplicate check on Title of the Ph.D Work (Must be unique across all Ph.D. entries)
+        const existingWithTitle = await PhdApplication.findOne({
+            titleOfPhdWork: new RegExp(`^${escapeRegex(titleOfPhdWork)}$`, 'i')
+        }).populate('facultyId', 'name institutionId');
+
+        if (existingWithTitle) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            const facultyName = existingWithTitle.facultyId ? existingWithTitle.facultyId.name : "another faculty member";
+            const isSameUser = existingWithTitle.facultyId && existingWithTitle.facultyId._id.toString() === req.user.userId;
+            return res.status(400).json({
+                success: false,
+                message: isSameUser
+                    ? `You have already registered a Ph.D. Scholar with the title "${titleOfPhdWork}". Title of the Ph.D Work must be unique.`
+                    : `A Ph.D. Scholar entry with the title "${titleOfPhdWork}" already exists under ${facultyName}. Title of the Ph.D Work must be unique.`
+            });
+        }
+
+        // 5. Duplicate check based on same student (rollNumber) + same type (guide/co-guide) + same scholarStatus
         const supervisionType = (data.type || '').toLowerCase() === 'co-guide' ? 'co-guide' : 'guide';
         const roleLabel = supervisionType === 'co-guide' ? 'Co-Guide' : 'Guide';
 
@@ -105,11 +140,10 @@ exports.createPhdApplication = async (req, res) => {
             rollNumber: rollNo,
             type: supervisionType,
             scholarStatus: data.scholarStatus
-            // No status filter — block duplicates regardless of any status (including rejected).
-            // Rejected records can be re-edited and resubmitted, so a new duplicate is never needed.
         }).populate('facultyId', 'name institutionId');
 
         if (existingApp) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
             const facultyName = existingApp.facultyId ? existingApp.facultyId.name : "a faculty member";
             const isSameUser = existingApp.facultyId && existingApp.facultyId._id.toString() === req.user.userId;
             const isRejected = existingApp.status && existingApp.status.toLowerCase().includes('rejected');
@@ -167,11 +201,43 @@ exports.createPhdApplication = async (req, res) => {
             finalEntryType = 'Admin';
         }
 
+        // 6. If adding as 'Awarded', check if scholar already exists as 'Pursuing' for this faculty
+        if (data.scholarStatus === 'Awarded') {
+            const existingPursuing = await PhdApplication.findOne({
+                rollNumber: rollNo,
+                facultyId: finalFacultyId
+            });
+            if (existingPursuing && existingPursuing.scholarStatus === 'Pursuing') {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+                return res.status(400).json({
+                    success: false,
+                    message: `Scholar (${rollNo}) is already registered as 'Pursuing' under your submissions. You cannot create a separate new entry for 'Awarded'. Please locate the scholar in your list and click 'Mark as Awarded' to update their milestone.`
+                });
+            }
+        }
+
+        const pursuingDetails = data.scholarStatus === 'Pursuing' ? {
+            academicYear: data.academicYear,
+            admissionDate: data.admissionOrAwardDate,
+            document: `/uploads/phdScholars/${req.file.filename}`,
+            status: finalStatus,
+            submittedAt: new Date()
+        } : undefined;
+
+        const awardedDetails = data.scholarStatus === 'Awarded' ? {
+            academicYear: data.academicYear,
+            awardDate: data.admissionOrAwardDate,
+            document: `/uploads/phdScholars/${req.file.filename}`,
+            status: finalStatus,
+            submittedAt: new Date()
+        } : undefined;
+
         const application = new PhdApplication({
             facultyId: finalFacultyId,
             academicYear: data.academicYear,
             rollNumber: rollNo,
             studentName: data.studentName,
+            titleOfPhdWork: titleOfPhdWork,
             course: data.course,
             branch: data.branch,
             scholarStatus: data.scholarStatus,
@@ -181,7 +247,9 @@ exports.createPhdApplication = async (req, res) => {
             document: `/uploads/phdScholars/${req.file.filename}`,
             status: finalStatus,
             entryType: finalEntryType,
-            type: supervisionType
+            type: supervisionType,
+            ...(pursuingDetails ? { pursuingDetails } : {}),
+            ...(awardedDetails ? { awardedDetails } : {})
         });
 
         await application.save();
@@ -193,6 +261,7 @@ exports.createPhdApplication = async (req, res) => {
                 {
                     rollNumber: application.rollNumber,
                     studentName: application.studentName,
+                    titleOfPhdWork: application.titleOfPhdWork,
                     course: application.course,
                     branch: application.branch,
                     currentStatus: application.scholarStatus,
@@ -243,7 +312,14 @@ exports.createPhdApplication = async (req, res) => {
         }
         res.status(201).json({ success: true, data: application });
     } catch (err) {
+        if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
         console.error("Create PhdApplication Error:", err);
+        if (err.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: "Duplicate entry: A Ph.D. Scholar with this Title of Ph.D Work already exists."
+            });
+        }
         res.status(500).json({ success: false, message: err.message });
     }
 };
@@ -287,6 +363,26 @@ exports.updatePhdApplication = async (req, res) => {
             }
         }
 
+        // Title of the Ph.D Work uniqueness check if updating
+        if (data.titleOfPhdWork !== undefined) {
+            const checkTitle = data.titleOfPhdWork.trim();
+            if (!checkTitle) {
+                return res.status(400).json({ success: false, message: "Title of the Ph.D Work cannot be empty." });
+            }
+            const existingWithTitle = await PhdApplication.findOne({
+                _id: { $ne: id },
+                titleOfPhdWork: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+            }).populate('facultyId', 'name institutionId');
+
+            if (existingWithTitle) {
+                const facultyName = existingWithTitle.facultyId ? existingWithTitle.facultyId.name : "another faculty member";
+                return res.status(400).json({
+                    success: false,
+                    message: `A Ph.D. Scholar entry with the title "${checkTitle}" already exists under ${facultyName}. Title of the Ph.D Work must be unique.`
+                });
+            }
+        }
+
         // Duplicate checks based on student + type + scholarStatus
         const checkScholarStatus = data.scholarStatus || application.scholarStatus;
         const checkType = (data.type || application.type || 'guide').toLowerCase() === 'co-guide' ? 'co-guide' : 'guide';
@@ -312,6 +408,8 @@ exports.updatePhdApplication = async (req, res) => {
         }
 
         const oldDocument = application.document;
+        const pursuingDoc = application.pursuingDetails?.document;
+        const awardedDoc = application.awardedDetails?.document;
 
         // Update fields
         Object.keys(data).forEach(key => {
@@ -320,6 +418,10 @@ exports.updatePhdApplication = async (req, res) => {
             }
         });
 
+        if (data.titleOfPhdWork) {
+            application.titleOfPhdWork = data.titleOfPhdWork.trim();
+        }
+
         application.rollNumber = rollNo;
         application.type = checkType;
         application.scholarStatus = checkScholarStatus;
@@ -327,32 +429,209 @@ exports.updatePhdApplication = async (req, res) => {
         application.hodComment = '';
         application.rndComment = '';
 
-        const fs = require('fs');
-        const path = require('path');
-        const deleteOldFile = (oldPath) => {
-            if (oldPath) {
-                try {
-                    const cleanPath = oldPath.replace(/^\//, ''); // Remove leading slash
-                    const fullPath = path.join(__dirname, '../..', cleanPath);
-                    if (fs.existsSync(fullPath)) {
-                        fs.unlinkSync(fullPath);
-                    }
-                } catch (e) {
-                    console.error("Failed to delete old file:", oldPath, e);
-                }
-            }
-        };
-
         if (req.file) {
-            deleteOldFile(oldDocument);
+            if (checkScholarStatus === 'Awarded') {
+                const toDelete = new Set();
+                if (awardedDoc && awardedDoc !== pursuingDoc) toDelete.add(awardedDoc);
+                if (oldDocument && oldDocument !== pursuingDoc) toDelete.add(oldDocument);
+                toDelete.forEach(p => deleteOldFile(p));
+            } else {
+                deleteOldFile(oldDocument);
+                if (pursuingDoc && pursuingDoc !== oldDocument) deleteOldFile(pursuingDoc);
+            }
             application.document = `/uploads/phdScholars/${req.file.filename}`;
+        }
+
+        // Synchronize active milestone subdocument
+        if (application.scholarStatus === 'Pursuing') {
+            application.pursuingDetails = {
+                academicYear: application.academicYear,
+                admissionDate: application.admissionOrAwardDate,
+                document: application.document,
+                status: 'Pending',
+                hodComment: '',
+                rndComment: '',
+                submittedAt: new Date()
+            };
+        } else if (application.scholarStatus === 'Awarded') {
+            application.awardedDetails = {
+                academicYear: application.academicYear,
+                awardDate: application.admissionOrAwardDate,
+                document: application.document,
+                status: 'Pending',
+                hodComment: '',
+                rndComment: '',
+                submittedAt: new Date()
+            };
         }
 
         await application.save();
 
         res.json({ success: true, data: application });
     } catch (err) {
+        if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
         console.error("Update PhdApplication Error:", err);
+        if (err.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: "Duplicate entry: A Ph.D. Scholar with this Title of Ph.D Work already exists."
+            });
+        }
+        res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+// @desc    Mark an existing Pursuing Ph.D. Scholar as Awarded (milestone progression)
+// @route   PUT /api/research/phd-scholar/:id/mark-awarded
+// @access  Private (Faculty)
+exports.markAsAwarded = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { academicYear, awardDate } = req.body;
+
+        const application = await PhdApplication.findById(id);
+        if (!application) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(404).json({ success: false, message: "Ph.D. Scholar application not found." });
+        }
+
+        // Verify ownership
+        if (application.facultyId.toString() !== req.user.userId) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(403).json({ success: false, message: "Not authorized to update this scholar record." });
+        }
+
+        // Check if already approved as Awarded
+        if (application.scholarStatus === 'Awarded' && (application.status === 'Approved' || application.awardedDetails?.status === 'Approved')) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(400).json({ success: false, message: "This scholar has already been marked as Awarded and approved." });
+        }
+
+        if (!academicYear) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(400).json({ success: false, message: "Academic Year is required." });
+        }
+
+        // Validate Awarded Academic Year cannot be the same as Pursuing Academic Year
+        const pursuingAcyId = (
+            application.pursuingDetails?.academicYear?._id ||
+            application.pursuingDetails?.academicYear ||
+            application.academicYear?._id ||
+            application.academicYear
+        )?.toString();
+        const awardedAcyId = (academicYear?._id || academicYear)?.toString();
+
+        if (pursuingAcyId && awardedAcyId && pursuingAcyId === awardedAcyId) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(400).json({
+                success: false,
+                message: "Awarded Academic Year cannot be the same as the Pursuing Academic Year. A scholar cannot be admitted and awarded in the exact same academic year."
+            });
+        }
+
+        if (!awardDate) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(400).json({ success: false, message: "Degree Award Date is required." });
+        }
+
+        const existingAwardedDoc = application.awardedDetails?.document;
+        if (!req.file && !existingAwardedDoc) {
+            return res.status(400).json({ success: false, message: "Degree Award letter/proceedings document is mandatory." });
+        }
+
+        const awardDateObj = new Date(awardDate);
+        if (awardDateObj > new Date()) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(400).json({ success: false, message: "Degree Award Date cannot be in the future." });
+        }
+
+        // Check against admission date
+        const admissionDate = application.pursuingDetails?.admissionDate || application.admissionOrAwardDate;
+        if (admissionDate && awardDateObj <= new Date(admissionDate)) {
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(400).json({ 
+                success: false, 
+                message: `Ph.D. Award Date must be after the Admission Date (${new Date(admissionDate).toLocaleDateString('en-IN')}).` 
+            });
+        }
+
+        // If a new file is uploaded, remove previous awarded file from disk to avoid duplicate files
+        if (req.file) {
+            const pursuingDoc = application.pursuingDetails?.document;
+            const filesToDelete = new Set();
+            if (existingAwardedDoc && existingAwardedDoc !== pursuingDoc) {
+                filesToDelete.add(existingAwardedDoc);
+            }
+            if (application.scholarStatus === 'Awarded' && application.document && application.document !== pursuingDoc) {
+                filesToDelete.add(application.document);
+            }
+            filesToDelete.forEach(docPath => deleteOldFile(docPath));
+        }
+
+        const finalDoc = req.file ? `/uploads/phdScholars/${req.file.filename}` : existingAwardedDoc;
+
+        // Preserve pursuingDetails if not previously set
+        if (!application.pursuingDetails || !application.pursuingDetails.admissionDate) {
+            application.pursuingDetails = {
+                academicYear: application.academicYear,
+                admissionDate: application.admissionOrAwardDate,
+                document: application.document,
+                status: application.status,
+                hodComment: application.hodComment,
+                rndComment: application.rndComment,
+                submittedAt: application.createdAt
+            };
+        }
+
+        // Update awardedDetails
+        application.awardedDetails = {
+            academicYear: academicYear,
+            awardDate: awardDateObj,
+            document: finalDoc,
+            status: 'Pending',
+            hodComment: '',
+            rndComment: '',
+            submittedAt: new Date()
+        };
+
+        // Update root fields for active approval cycle
+        application.scholarStatus = 'Awarded';
+        application.status = 'Pending';
+        application.academicYear = academicYear;
+        application.admissionOrAwardDate = awardDateObj;
+        application.document = finalDoc;
+        application.hodComment = '';
+        application.rndComment = '';
+
+        await application.save();
+
+        // Send notification to HOD
+        try {
+            const { getReportingBossId } = require('../hierarchy/reportingBoss.helper');
+            const NotificationService = require('../notification/notification.service');
+            const EmployeeModel = require('../employee/employee.model');
+
+            const emp = await EmployeeModel.findById(req.user.userId);
+            const bossUserId = await getReportingBossId(req.user.userId);
+            if (bossUserId) {
+                await NotificationService.sendNotification({
+                    recipientId: bossUserId,
+                    senderId: req.user.userId,
+                    module: 'Research',
+                    type: 'INFO',
+                    title: 'Ph.D. Award Milestone Submitted',
+                    message: `${emp?.name || 'A faculty member'} has marked scholar ${application.studentName} (${application.rollNumber}) as Awarded. Pending your review.`,
+                    link: `/hod/research-approvals`
+                });
+            }
+        } catch (notifErr) {
+            console.error("Failed to send milestone notification:", notifErr);
+        }
+
+        res.json({ success: true, message: "Ph.D. Awarded milestone submitted successfully!", data: application });
+    } catch (err) {
+        if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+        console.error("Mark As Awarded Error:", err);
         res.status(500).json({ success: false, message: err.message });
     }
 };
@@ -364,6 +643,8 @@ exports.getMyApplications = async (req, res) => {
     try {
         const applications = await PhdApplication.find({ facultyId: req.user.userId })
             .populate('academicYear', 'year')
+            .populate('pursuingDetails.academicYear', 'year')
+            .populate('awardedDetails.academicYear', 'year')
             .populate('facultyId', 'name institutionId')
             .sort({ createdAt: -1 });
         
@@ -394,7 +675,9 @@ exports.getApplicationById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('academicYear', 'year');
+            .populate('academicYear', 'year')
+            .populate('pursuingDetails.academicYear', 'year')
+            .populate('awardedDetails.academicYear', 'year');
             
         if (!application) {
             return res.status(404).json({ success: false, message: 'Ph.D. Scholar application not found' });
@@ -421,6 +704,8 @@ exports.getApplicationsByFaculty = async (req, res) => {
                 ]
             })
             .populate('academicYear', 'year')
+            .populate('pursuingDetails.academicYear', 'year')
+            .populate('awardedDetails.academicYear', 'year')
             .sort({ createdAt: -1 });
             
         res.json({ success: true, data: applications });
@@ -446,7 +731,11 @@ exports.getPendingAtHOD = async (req, res) => {
         const applications = await PhdApplication.find({ 
             facultyId: { $in: facultyIds },
             status: 'Pending'
-        }).populate('facultyId', 'name institutionId department').populate('academicYear', 'year');
+        })
+        .populate('facultyId', 'name institutionId department')
+        .populate('academicYear', 'year')
+        .populate('pursuingDetails.academicYear', 'year')
+        .populate('awardedDetails.academicYear', 'year');
         
         res.json({ success: true, data: applications });
     } catch (err) {
@@ -463,12 +752,26 @@ exports.hodAction = async (req, res) => {
         const { action, comment } = req.body;
 
         const status = action === 'Approve' ? 'Pending at R&D' : 'Rejected';
-        const application = await PhdApplication.findByIdAndUpdate(id, { 
-            status, 
-            hodComment: comment 
-        }, { new: true });
-
         
+        const application = await PhdApplication.findById(id);
+        if (!application) {
+            return res.status(404).json({ success: false, message: "Application not found" });
+        }
+
+        application.status = status;
+        application.hodComment = comment;
+
+        // Synchronize with active milestone subdocument
+        if (application.scholarStatus === 'Awarded' && application.awardedDetails) {
+            application.awardedDetails.status = status;
+            application.awardedDetails.hodComment = comment;
+        } else if (application.pursuingDetails) {
+            application.pursuingDetails.status = status;
+            application.pursuingDetails.hodComment = comment;
+        }
+
+        await application.save();
+
         try {
             const NotificationService = require('../../modules/notification/notification.service');
             const targetFacultyId = application.facultyId || application.facultyId?._id;
@@ -480,7 +783,7 @@ exports.hodAction = async (req, res) => {
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
                     title: `Phd Scholar ${action}d by HOD`,
-                    message: `Your Phd Scholar has been ${action.toLowerCase()}d by HOD.`,
+                    message: `Your Phd Scholar (${application.studentName}) has been ${action.toLowerCase()}d by HOD.`,
                     link: '/research/phd-scholars'
                 });
             }
@@ -499,7 +802,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Phd Scholar for R&D Approval`,
-                        message: `A Phd Scholar application is pending your approval.`,
+                        message: `A Phd Scholar application (${application.studentName}) is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }
@@ -521,7 +824,9 @@ exports.getPendingAtRND = async (req, res) => {
     try {
         const applications = await PhdApplication.find({ status: 'Pending at R&D' })
             .populate('facultyId', 'name institutionId department')
-            .populate('academicYear', 'year');
+            .populate('academicYear', 'year')
+            .populate('pursuingDetails.academicYear', 'year')
+            .populate('awardedDetails.academicYear', 'year');
         res.json({ success: true, data: applications });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -538,15 +843,24 @@ exports.rndAction = async (req, res) => {
 
         const status = action === 'Approve' ? 'Approved' : 'Rejected by R&D';
         
-        // Find and update application
-        const application = await PhdApplication.findByIdAndUpdate(id, { 
-            status, 
-            rndComment: comment 
-        }, { new: true });
-
+        const application = await PhdApplication.findById(id);
         if (!application) {
             return res.status(404).json({ success: false, message: "Application not found" });
         }
+
+        application.status = status;
+        application.rndComment = comment;
+
+        // Synchronize with active milestone subdocument
+        if (application.scholarStatus === 'Awarded' && application.awardedDetails) {
+            application.awardedDetails.status = action === 'Approve' ? 'Approved' : 'Rejected';
+            application.awardedDetails.rndComment = comment;
+        } else if (application.pursuingDetails) {
+            application.pursuingDetails.status = action === 'Approve' ? 'Approved' : 'Rejected';
+            application.pursuingDetails.rndComment = comment;
+        }
+
+        await application.save();
 
         // Create or update Master Tracking record only when approved
         if (action === 'Approve') {
@@ -555,6 +869,7 @@ exports.rndAction = async (req, res) => {
                 {
                     rollNumber: application.rollNumber,
                     studentName: application.studentName,
+                    titleOfPhdWork: application.titleOfPhdWork,
                     course: application.course,
                     branch: application.branch,
                     currentStatus: application.scholarStatus,
@@ -566,7 +881,6 @@ exports.rndAction = async (req, res) => {
             );
         }
 
-        
         try {
             const NotificationService = require('../../modules/notification/notification.service');
             const targetFacultyId = application.facultyId || application.facultyId?._id;
@@ -578,7 +892,7 @@ exports.rndAction = async (req, res) => {
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
                     title: `Phd Scholar ${action}d by R&D`,
-                    message: `Your Phd Scholar has been ${action.toLowerCase()}d by R&D.`,
+                    message: `Your Phd Scholar (${application.studentName}) has been ${action.toLowerCase()}d by R&D.`,
                     link: '/research/phd-scholars'
                 });
             }
