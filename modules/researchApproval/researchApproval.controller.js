@@ -870,6 +870,7 @@ exports.editResearchDetails = async (req, res) => {
         }
 
         // Specific mapping conversions if needed
+        if (data.filingNo && !data.applicationNo) data.applicationNo = data.filingNo;
         // dateOfFiling / admissionOrAwardDate / sanctionDate conversions
         if (data.dateOfFiling) data.dateOfFiling = new Date(data.dateOfFiling);
         if (data.admissionOrAwardDate) data.admissionOrAwardDate = new Date(data.admissionOrAwardDate);
@@ -913,6 +914,29 @@ exports.editResearchDetails = async (req, res) => {
                 if (doc.status === 'Approved' && (providedApprovedAmount === undefined || providedApprovedAmount === oldApprovedAmount)) {
                     doc.approvedAmount = 0;
                 }
+            }
+        }
+
+        if (type.toLowerCase() === 'patent') {
+            if (doc.applyIncentive === 'Yes' || doc.applyIncentive === 'yes') {
+                const base = doc.patentStatus === 'Published' ? 5000 : (doc.patentStatus === 'Granted' ? 15000 : 0);
+                let expectedAmt = base;
+                if (doc.applyingSeedGrant === 'Yes' || doc.applyingSeedGrant === 'yes') {
+                    expectedAmt = expectedAmt / 2;
+                }
+                if (doc.isUtilityType === 'No') {
+                    expectedAmt = 0;
+                }
+                if (doc.patentStatus === 'Published') {
+                    if (!doc.published) doc.published = {};
+                    doc.published.publishedexpectedamount = expectedAmt;
+                } else if (doc.patentStatus === 'Granted') {
+                    if (!doc.granted) doc.granted = {};
+                    doc.granted.grantedexpectedamount = expectedAmt;
+                }
+            } else {
+                if (doc.published) doc.published.publishedexpectedamount = 0;
+                if (doc.granted) doc.granted.grantedexpectedamount = 0;
             }
         }
 

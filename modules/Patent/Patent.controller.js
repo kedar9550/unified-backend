@@ -287,8 +287,12 @@ exports.updatePatent = async (req, res) => {
 
         const currentStatus = data.status || patent.patentStatus;
         const currentFilingDate = data.dateOfFiling !== undefined ? data.dateOfFiling : patent.dateOfFiling;
-        const currentPublishedDate = data.dateOfPublished !== undefined ? data.dateOfPublished : patent.dateOfPublished;
-        const currentGrantedDate = data.dateOfGranted !== undefined ? data.dateOfGranted : patent.dateOfGranted;
+        const currentPublishedDate = (data.publisheddate || data.dateOfPublished) !== undefined
+            ? (data.publisheddate || data.dateOfPublished)
+            : (patent.published?.publisheddate || patent.dateOfPublished);
+        const currentGrantedDate = (data.granteddate || data.dateOfGranted) !== undefined
+            ? (data.granteddate || data.dateOfGranted)
+            : (patent.granted?.granteddate || patent.dateOfGranted);
 
         if (currentStatus === 'Published') {
             if (!currentFilingDate || !currentPublishedDate) {
@@ -305,13 +309,13 @@ exports.updatePatent = async (req, res) => {
         }
 
         // Date Validation
-        if (data.dateOfFiling && isFutureDate(data.dateOfFiling)) {
+        if (currentFilingDate && isFutureDate(currentFilingDate)) {
             return res.status(400).json({ success: false, message: "Date of Filing cannot be in the future." });
         }
-        if (data.dateOfPublished && isFutureDate(data.dateOfPublished)) {
+        if (currentPublishedDate && isFutureDate(currentPublishedDate)) {
             return res.status(400).json({ success: false, message: "Publication Date cannot be in the future." });
         }
-        if (data.dateOfGranted && isFutureDate(data.dateOfGranted)) {
+        if (currentGrantedDate && isFutureDate(currentGrantedDate)) {
             return res.status(400).json({ success: false, message: "Grant Date cannot be in the future." });
         }
 
