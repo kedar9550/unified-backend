@@ -33,13 +33,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 1024 * 1024 }, // 1MB limit
+    limits: { fileSize: 10 * 1024 * 1024 }, // Accommodate 5MB Complete Document
     fileFilter: (req, file, cb) => {
-        const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+        const allowed = ['.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
-
-if (allowed.includes(ext)) return cb(null, true);
-        cb(new Error('Only PDF and image files are allowed.'));
+        if (allowed.includes(ext) || file.mimetype === 'application/pdf') return cb(null, true);
+        cb(new Error('Only PDF files are allowed.'));
     }
 });
 

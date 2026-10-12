@@ -78,23 +78,26 @@ exports.createJournal = async (req, res) => {
             return res.status(400).json({ success: false, message: "All documents are mandatory." });
         }
 
-        // Validate completeJournal type strictly to PDF or DOCX (no images allowed)
+        // Validate completeJournal type strictly to PDF (no images or docx allowed)
         if (req.files.completeJournal) {
             const path = require('path');
             const ext = path.extname(req.files.completeJournal[0].originalname).toLowerCase();
-            if (ext !== '.pdf' && ext !== '.docx') {
-                return res.status(400).json({ success: false, message: "Complete Journal must be a PDF or DOCX file." });
+            if (ext !== '.pdf') {
+                return res.status(400).json({ success: false, message: "Complete Journal must be a PDF file." });
+            }
+            if (req.files.completeJournal[0].size > 5 * 1024 * 1024) {
+                return res.status(400).json({ success: false, message: "Complete Journal is too large. Maximum allowed size is 5MB." });
             }
         }
 
-        // Check file sizes individually (500KB limit as per standard)
-        const filesToCheck = ['publishedPaper', 'referencePages', 'completeJournal'];
+        // Check other file sizes individually (200KB limit as per guidelines)
+        const filesToCheck = ['publishedPaper', 'referencePages'];
         for (const field of filesToCheck) {
-            if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+            if (req.files[field] && req.files[field][0].size > 200 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                 return res.status(400).json({
                     success: false,
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
                 });
             }
         }
@@ -353,24 +356,27 @@ exports.updateJournal = async (req, res) => {
             }
         }
 
-        // Validate completeJournal type strictly to PDF or DOCX (no images allowed)
+        // Validate completeJournal type strictly to PDF (no images or docx allowed)
         if (req.files && req.files.completeJournal) {
             const path = require('path');
             const ext = path.extname(req.files.completeJournal[0].originalname).toLowerCase();
-            if (ext !== '.pdf' && ext !== '.docx') {
-                return res.status(400).json({ success: false, message: "Complete Journal must be a PDF or DOCX file." });
+            if (ext !== '.pdf') {
+                return res.status(400).json({ success: false, message: "Complete Journal must be a PDF file." });
+            }
+            if (req.files.completeJournal[0].size > 5 * 1024 * 1024) {
+                return res.status(400).json({ success: false, message: "Complete Journal is too large. Maximum allowed size is 5MB." });
             }
         }
 
-        // Check file sizes
+        // Check other file sizes (200KB limit)
         if (req.files) {
-            const filesToCheck = ['publishedPaper', 'referencePages', 'completeJournal'];
+            const filesToCheck = ['publishedPaper', 'referencePages'];
             for (const field of filesToCheck) {
-                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+                if (req.files[field] && req.files[field][0].size > 200 * 1024) {
                     const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                     return res.status(400).json({
                         success: false,
-                        message: `${label} is too large. Maximum allowed size is 500KB.`
+                        message: `${label} is too large. Maximum allowed size is 200KB.`
                     });
                 }
             }

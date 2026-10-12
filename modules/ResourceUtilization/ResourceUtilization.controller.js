@@ -27,6 +27,12 @@ const normalizeDurationToWeeks = (duration) => {
     return 0;
 };
 
+const isCourseParticipant = (category, type) => {
+    const cat = category || "";
+    const t = (type || "").toLowerCase();
+    return (cat === "FDP" || cat === "STTP" || cat === "Refresher Course") && t.includes("participant");
+};
+
 // @desc    Submit new resource utilization activity (saves as Draft by default)
 // @route   POST /api/value-addition/resource-utilization
 // @access  Private (Faculty)
@@ -34,8 +40,8 @@ exports.createResourceUtilization = async (req, res) => {
     try {
         const data = req.body;
 
-        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant") {
-            data.organizationName = data.courseFdpName;
+        if (isCourseParticipant(data.activityCategory, data.activityType)) {
+            data.organizationName = data.courseName;
         }
 
         const isDirectEntry = data.isDirectEntry === 'true' || data.isDirectEntry === true;
@@ -133,10 +139,10 @@ exports.createResourceUtilization = async (req, res) => {
             }
         }
 
-        // FDP Participant specific validation
-        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant") {
-            if (!data.courseFdpName) {
-                return res.status(400).json({ success: false, message: "Course / FDP Name is required." });
+        // Course Participant specific validation (FDP, STTP, Refresher Course)
+        if (isCourseParticipant(data.activityCategory, data.activityType)) {
+            if (!data.courseName) {
+                return res.status(400).json({ success: false, message: "Course Name is required." });
             }
             if (!data.organizingInstitutionCategory) {
                 return res.status(400).json({ success: false, message: "Organizing Institution Category is required." });
@@ -201,7 +207,7 @@ exports.createResourceUtilization = async (req, res) => {
         }
 
         // Cross-module NPTEL duplicate check
-        if (data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NPTEL") {
+        if (isCourseParticipant(data.activityCategory, data.activityType) && data.organizingInstitutionCategory === "NPTEL") {
             const nptelCategory = await ContributionCategory.findOne({ code: 11 });
             const existingContributions = nptelCategory ? await Contribution.find({
                 facultyId: req.user.userId,
@@ -212,7 +218,7 @@ exports.createResourceUtilization = async (req, res) => {
             }) : [];
 
             const certNoInput = data.certificateNumber ? data.certificateNumber.trim().toLowerCase() : "";
-            const courseNameInput = data.courseFdpName ? data.courseFdpName.trim().toLowerCase() : "";
+            const courseNameInput = data.courseName ? data.courseName.trim().toLowerCase() : "";
 
             let conflictFound = false;
             for (const c of existingContributions) {
@@ -298,14 +304,14 @@ exports.createResourceUtilization = async (req, res) => {
             status: finalStatus, // Direct entry saves as Approved, otherwise Draft
             certificateNumber: data.certificateNumber || undefined,
 
-            // new FDP fields
-            courseFdpName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.courseFdpName : undefined,
-            organizingInstitutionCategory: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.organizingInstitutionCategory : undefined,
-            location: data.activityCategory === "FDP" && data.activityType === "FDP Participant" ? data.location : undefined,
-            labName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "MHRD R&D Lab" ? data.labName : undefined,
-            universityName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "Govt. University" ? data.universityName : undefined,
-            instituteName: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && (data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" || data.organizingInstitutionCategory === "Other / Host Institute") ? data.instituteName : undefined,
-            nirfRank: data.activityCategory === "FDP" && data.activityType === "FDP Participant" && data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" ? parseInt(data.nirfRank) : undefined
+            // Course Participant fields (FDP, STTP, Refresher Course)
+            courseName: isCourseParticipant(data.activityCategory, data.activityType) ? data.courseName : undefined,
+            organizingInstitutionCategory: isCourseParticipant(data.activityCategory, data.activityType) ? data.organizingInstitutionCategory : undefined,
+            location: isCourseParticipant(data.activityCategory, data.activityType) ? data.location : undefined,
+            labName: isCourseParticipant(data.activityCategory, data.activityType) && data.organizingInstitutionCategory === "MHRD R&D Lab" ? data.labName : undefined,
+            universityName: isCourseParticipant(data.activityCategory, data.activityType) && data.organizingInstitutionCategory === "Govt. University" ? data.universityName : undefined,
+            instituteName: isCourseParticipant(data.activityCategory, data.activityType) && (data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" || data.organizingInstitutionCategory === "Other / Host Institute") ? data.instituteName : undefined,
+            nirfRank: isCourseParticipant(data.activityCategory, data.activityType) && data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" ? parseInt(data.nirfRank) : undefined
         });
 
         await resourceUtilization.save();
@@ -366,10 +372,10 @@ exports.updateResourceUtilization = async (req, res) => {
         const category = data.activityCategory || record.activityCategory;
         const type = data.activityType || record.activityType;
 
-        if (category === "FDP" && type === "FDP Participant") {
-            const courseFdpName = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
-            if (courseFdpName) {
-                data.organizationName = courseFdpName;
+        if (isCourseParticipant(category, type)) {
+            const courseName = data.courseName !== undefined ? data.courseName : record.courseName;
+            if (courseName) {
+                data.organizationName = courseName;
             }
         }
 
@@ -440,9 +446,9 @@ exports.updateResourceUtilization = async (req, res) => {
             }
         }
 
-        // FDP Participant specific validation
-        if (category === "FDP" && type === "FDP Participant") {
-            const courseFdpName = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
+        // Course Participant specific validation (FDP, STTP, Refresher Course)
+        if (isCourseParticipant(category, type)) {
+            const courseName = data.courseName !== undefined ? data.courseName : record.courseName;
             const organizingInstitutionCategory = data.organizingInstitutionCategory !== undefined ? data.organizingInstitutionCategory : record.organizingInstitutionCategory;
             const location = data.location !== undefined ? data.location : record.location;
             const labName = data.labName !== undefined ? data.labName : record.labName;
@@ -450,8 +456,8 @@ exports.updateResourceUtilization = async (req, res) => {
             const instituteName = data.instituteName !== undefined ? data.instituteName : record.instituteName;
             const nirfRank = data.nirfRank !== undefined ? data.nirfRank : record.nirfRank;
 
-            if (!courseFdpName) {
-                return res.status(400).json({ success: false, message: "Course / FDP Name is required." });
+            if (!courseName) {
+                return res.status(400).json({ success: false, message: "Course Name is required." });
             }
             if (!organizingInstitutionCategory) {
                 return res.status(400).json({ success: false, message: "Organizing Institution Category is required." });
@@ -519,7 +525,7 @@ exports.updateResourceUtilization = async (req, res) => {
         }
 
         // Cross-module NPTEL duplicate check
-        if (category === "FDP" && type === "FDP Participant" && (data.organizingInstitutionCategory || record.organizingInstitutionCategory) === "NPTEL") {
+        if (isCourseParticipant(category, type) && (data.organizingInstitutionCategory || record.organizingInstitutionCategory) === "NPTEL") {
             const nptelCategory = await ContributionCategory.findOne({ code: 11 });
             const existingContributions = nptelCategory ? await Contribution.find({
                 facultyId: req.user.userId,
@@ -532,8 +538,8 @@ exports.updateResourceUtilization = async (req, res) => {
             const certNoInput = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
             const certNoInputNorm = certNoInput ? certNoInput.trim().toLowerCase() : "";
 
-            const courseFdpNameVal = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
-            const courseNameInput = courseFdpNameVal ? courseFdpNameVal.trim().toLowerCase() : "";
+            const courseNameVal = data.courseName !== undefined ? data.courseName : record.courseName;
+            const courseNameInput = courseNameVal ? courseNameVal.trim().toLowerCase() : "";
 
             let conflictFound = false;
             for (const c of existingContributions) {
@@ -575,8 +581,9 @@ exports.updateResourceUtilization = async (req, res) => {
         record.numberOfDaysOrganized = isOrganized ? (data.numberOfDaysOrganized !== undefined ? (data.numberOfDaysOrganized ? parseInt(data.numberOfDaysOrganized) : undefined) : record.numberOfDaysOrganized) : undefined;
         record.certificateNumber = data.certificateNumber !== undefined ? data.certificateNumber : record.certificateNumber;
 
-        if (category === "FDP" && type === "FDP Participant") {
-            record.courseFdpName = data.courseFdpName !== undefined ? data.courseFdpName : record.courseFdpName;
+        if (isCourseParticipant(category, type)) {
+            const updatedCourseName = data.courseName !== undefined ? data.courseName : record.courseName;
+            record.courseName = updatedCourseName;
             record.organizingInstitutionCategory = data.organizingInstitutionCategory !== undefined ? data.organizingInstitutionCategory : record.organizingInstitutionCategory;
             record.location = data.location !== undefined ? data.location : record.location;
             
@@ -597,7 +604,7 @@ exports.updateResourceUtilization = async (req, res) => {
                 record.nirfRank = undefined;
             }
         } else {
-            record.courseFdpName = undefined;
+            record.courseName = undefined;
             record.organizingInstitutionCategory = undefined;
             record.location = undefined;
             record.labName = undefined;

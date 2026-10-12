@@ -38,7 +38,7 @@ const upload = multer({
         const allowed = ['.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
 
-        if (allowed.includes(ext)) return cb(null, true);
+        if (allowed.includes(ext) || file.mimetype === 'application/pdf') return cb(null, true);
         cb(new Error('Only PDF files are allowed. Max size 200KB.'));
     }
 });

@@ -271,7 +271,7 @@ exports.createContribution = async (req, res) => {
             const existingFdp = await ResourceUtilization.find({
                 facultyId: req.user.userId,
                 academicYear: data.academicYear,
-                activityCategory: 'FDP',
+                activityCategory: { $in: ['FDP', 'STTP', 'Refresher Course'] },
                 organizingInstitutionCategory: 'NPTEL',
                 status: { $ne: 'Rejected' },
                 removedFromAppraisal: { $ne: true }
@@ -283,7 +283,7 @@ exports.createContribution = async (req, res) => {
             let conflictFound = false;
             for (const r of existingFdp) {
                 const certNoExist = r.certificateNumber ? r.certificateNumber.trim().toLowerCase() : "";
-                const courseNameExist = r.courseFdpName ? r.courseFdpName.trim().toLowerCase() : "";
+                const courseNameExist = r.courseName ? r.courseName.trim().toLowerCase() : "";
 
                 if (certNoInput && certNoExist) {
                     if (certNoInput === certNoExist) {
@@ -459,7 +459,7 @@ exports.updateContribution = async (req, res) => {
             const existingFdp = await ResourceUtilization.find({
                 facultyId: req.user.userId,
                 academicYear: data.academicYear || record.academicYear,
-                activityCategory: 'FDP',
+                activityCategory: { $in: ['FDP', 'STTP', 'Refresher Course'] },
                 organizingInstitutionCategory: 'NPTEL',
                 status: { $ne: 'Rejected' },
                 removedFromAppraisal: { $ne: true }
@@ -476,7 +476,7 @@ exports.updateContribution = async (req, res) => {
             let conflictFound = false;
             for (const r of existingFdp) {
                 const certNoExist = r.certificateNumber ? r.certificateNumber.trim().toLowerCase() : "";
-                const courseNameExist = r.courseFdpName ? r.courseFdpName.trim().toLowerCase() : "";
+                const courseNameExist = r.courseName ? r.courseName.trim().toLowerCase() : "";
 
                 if (certNoInputNorm && certNoExist) {
                     if (certNoInputNorm === certNoExist) {
