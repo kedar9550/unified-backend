@@ -20,16 +20,22 @@ exports.createBookChapter = async (req, res) => {
             return res.status(400).json({ success: false, message: "Page displaying author affiliation and chapter title is mandatory." });
         }
 
-        // Check file sizes individually to provide specific error messages
+        // Check file sizes individually (totalBookChapter up to 5MB, other documents up to 200KB)
         const filesToCheck = ['coverPage', 'authorAffiliation', 'index', 'softCopy'];
         for (const field of filesToCheck) {
-            if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+            if (req.files[field] && req.files[field][0].size > 200 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                 return res.status(400).json({
                     success: false,
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
                 });
             }
+        }
+        if (req.files.totalBookChapter && req.files.totalBookChapter[0].size > 5 * 1024 * 1024) {
+            return res.status(400).json({
+                success: false,
+                message: `Total Book Chapter is too large (${(req.files.totalBookChapter[0].size / 1024 / 1024).toFixed(1)}MB). Maximum allowed size is 5MB.`
+            });
         }
 
         const trimmedChapterTitle = data.chapterTitle.trim();
@@ -237,17 +243,23 @@ exports.updateBookChapter = async (req, res) => {
             return res.status(400).json({ success: false, message: "Only rejected book chapters can be edited and resubmitted." });
         }
 
-        // Validate file sizes
+        // Validate file sizes (totalBookChapter up to 5MB, other documents up to 200KB)
         const filesToCheck = ['coverPage', 'authorAffiliation', 'index', 'softCopy'];
         if (req.files) {
             for (const field of filesToCheck) {
-                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+                if (req.files[field] && req.files[field][0].size > 200 * 1024) {
                     const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                     return res.status(400).json({
                         success: false,
-                        message: `${label} is too large. Maximum allowed size is 500KB.`
+                        message: `${label} is too large. Maximum allowed size is 200KB.`
                     });
                 }
+            }
+            if (req.files.totalBookChapter && req.files.totalBookChapter[0].size > 5 * 1024 * 1024) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Total Book Chapter is too large. Maximum allowed size is 5MB.`
+                });
             }
         }
 
