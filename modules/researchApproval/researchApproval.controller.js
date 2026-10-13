@@ -248,6 +248,17 @@ exports.getResearchRequests = async (req, res) => {
         // Fetch Patents
         if (typesToFetch.includes('Patent')) {
             let patentQuery = { ...query };
+
+            if (query.createdAt) {
+                const dateRange = query.createdAt;
+                delete patentQuery.createdAt;
+                patentQuery.$or = [
+                    { createdAt: dateRange },
+                    { statusUpdatedDate: dateRange },
+                    { 'granted.submittedDate': dateRange },
+                    { 'granted.grantedinsentiveappllieddate': dateRange }
+                ];
+            }
             
             if (searchRegex && !isResearchAdmin) {
                 patentQuery.$or = [
@@ -273,6 +284,11 @@ exports.getResearchRequests = async (req, res) => {
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
                 }
+
+                const isGrantedUpdate = item.statusUpdatedToGranted || (item.patentStatus === 'Granted' && (item.published?.status === 'Approved' || item.published?.publishedstatus === 'yes'));
+                const effectiveSubmittedDate = isGrantedUpdate
+                    ? (item.statusUpdatedDate || item.granted?.submittedDate || item.granted?.grantedinsentiveappllieddate || item.createdAt)
+                    : (item.published?.publishedinsentiveappllieddate || item.createdAt);
                 
                 allRequests.push({
                     _id: item._id,
@@ -280,7 +296,9 @@ exports.getResearchRequests = async (req, res) => {
                     faculty: fac,
                     title: item.title,
                     status: item.status,
-                    createdAt: item.createdAt,
+                    createdAt: effectiveSubmittedDate,
+                    submittedDate: effectiveSubmittedDate,
+                    statusUpdatedToGranted: item.statusUpdatedToGranted,
                     academicYear: item.academicYear,
                     hodComment: item.hodComment,
                     rndComment: item.rndComment,
@@ -940,6 +958,22 @@ exports.editResearchDetails = async (req, res) => {
             } else {
                 if (doc.published) doc.published.publishedexpectedamount = 0;
                 if (doc.granted) doc.granted.grantedexpectedamount = 0;
+            }
+
+            if (data.approvedAmount !== undefined) {
+                if (doc.patentStatus === 'Published' && doc.published) {
+                    doc.published.publishedincentiveamount = doc.approvedAmount;
+                } else if (doc.patentStatus === 'Granted' && doc.granted) {
+                    doc.granted.grantedincentiveamount = doc.approvedAmount;
+                }
+            }
+            if (data.hodComment !== undefined) {
+                if (doc.patentStatus === 'Published' && doc.published) doc.published.hodComment = doc.hodComment;
+                else if (doc.patentStatus === 'Granted' && doc.granted) doc.granted.hodComment = doc.hodComment;
+            }
+            if (data.rndComment !== undefined) {
+                if (doc.patentStatus === 'Published' && doc.published) doc.published.rndComment = doc.rndComment;
+                else if (doc.patentStatus === 'Granted' && doc.granted) doc.granted.rndComment = doc.rndComment;
             }
         }
 

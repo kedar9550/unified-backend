@@ -450,7 +450,9 @@ exports.hodAction = async (req, res) => {
         
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = project.facultyId || project.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -458,8 +460,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Funded Project ${action}d by HOD`,
-                    message: `Your Funded Project has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Funded Project ${action}d by ${approverRole}`,
+                    message: `Your Funded Project has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/funded-project'
                 });
             }
@@ -478,7 +480,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Funded Project for R&D Approval`,
-                        message: `A Funded Project application is pending your approval.`,
+                        message: `A Funded Project application has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }

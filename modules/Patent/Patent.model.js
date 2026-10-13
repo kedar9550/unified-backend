@@ -37,19 +37,42 @@ const PatentSchema = new mongoose.Schema({
     patentStatus: { type: String, enum: ['Published', 'Granted'], required: true },
     
     published: {
+        academicYear: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademicYear' },
         publishedstatus: { type: String, enum: ['yes', 'no'], default: 'no' },
         publishedexpectedamount: { type: Number },
         publishedincentiveamount: { type: Number },
         publisheddate: { type: Date },
-        publishedinsentiveappllieddate: { type: Date }
+        publishedinsentiveappllieddate: { type: Date },
+        applyIncentive: { type: String, enum: ['Yes', 'No'] },
+        applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
+        status: { 
+            type: String, 
+            enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'] 
+        },
+        hodComment: { type: String },
+        rndComment: { type: String },
+        appraisalClaimant: { type: String, default: null },
+        appraisalEligible: { type: String, enum: ['Yes', 'No'], default: null }
     },
 
     granted: {
+        academicYear: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademicYear' },
         grantedstatus: { type: String, enum: ['yes', 'no'], default: 'no' },
         grantedexpectedamount: { type: Number },
         grantedincentiveamount: { type: Number },
         granteddate: { type: Date },
-        grantedinsentiveappllieddate: { type: Date }
+        grantedinsentiveappllieddate: { type: Date },
+        submittedDate: { type: Date },
+        applyIncentive: { type: String, enum: ['Yes', 'No'] },
+        applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
+        status: { 
+            type: String, 
+            enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'] 
+        },
+        hodComment: { type: String },
+        rndComment: { type: String },
+        appraisalClaimant: { type: String, default: null },
+        appraisalEligible: { type: String, enum: ['Yes', 'No'], default: null }
     },
     coInventors: [CoInventorSchema],
     isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
@@ -90,6 +113,14 @@ const PatentSchema = new mongoose.Schema({
         type: String,
         enum: ['Self', 'Admin'],
         default: 'Self'
+    },
+    statusUpdatedToGranted: {
+        type: Boolean,
+        default: false
+    },
+    statusUpdatedDate: {
+        type: Date,
+        default: null
     },
     
     createdAt: {

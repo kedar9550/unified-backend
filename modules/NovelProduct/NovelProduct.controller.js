@@ -423,7 +423,9 @@ exports.hodAction = async (req, res) => {
         
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = product.facultyId || product.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -431,8 +433,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Novel Product ${action}d by HOD`,
-                    message: `Your Novel Product has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Novel Product ${action}d by ${approverRole}`,
+                    message: `Your Novel Product has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/novel-products'
                 });
             }
@@ -451,7 +453,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Novel Product for R&D Approval`,
-                        message: `A Novel Product application is pending your approval.`,
+                        message: `A Novel Product application has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }

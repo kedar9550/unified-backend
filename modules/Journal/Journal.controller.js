@@ -656,7 +656,9 @@ exports.hodAction = async (req, res) => {
         
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = journal.facultyId || journal.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -664,8 +666,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Journal ${action}d by HOD`,
-                    message: `Your Journal has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Journal ${action}d by ${approverRole}`,
+                    message: `Your Journal has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/journal-publication'
                 });
             }
@@ -684,7 +686,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Journal for R&D Approval`,
-                        message: `A Journal application is pending your approval.`,
+                        message: `A Journal application has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }

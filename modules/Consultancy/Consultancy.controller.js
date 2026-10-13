@@ -409,7 +409,9 @@ exports.hodAction = async (req, res) => {
         
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = consultancy.facultyId || consultancy.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -417,8 +419,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Consultancy ${action}d by HOD`,
-                    message: `Your Consultancy has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Consultancy ${action}d by ${approverRole}`,
+                    message: `Your Consultancy has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/consultancy-publication'
                 });
             }
@@ -437,7 +439,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Consultancy for R&D Approval`,
-                        message: `A Consultancy application is pending your approval.`,
+                        message: `A Consultancy application has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }
