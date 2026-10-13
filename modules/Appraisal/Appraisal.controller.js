@@ -210,7 +210,6 @@ const Conference = require("../Conference/Conference.model");
 const Textbook = require("../Textbook/Textbook.model");
 const BookChapter = require("../BookChapter/BookChapter.model");
 const Patent = require("../Patent/Patent.model");
-const PhdScholar = require("../PhdScholar/PhdScholar.model");
 const PhdApplication = require("../PhdScholar/PhdApplication.model");
 const NovelProduct = require("../NovelProduct/NovelProduct.model");
 const FundedProject = require("../FundedProject/FundedProject.model");

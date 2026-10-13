@@ -82,7 +82,7 @@ const PhdApplicationSchema = new mongoose.Schema({
     },
     titleOfPhdWork: {
         type: String,
-        required: true,
+        required: false,
         trim: true,
         unique: true,
         sparse: true,
@@ -114,7 +114,7 @@ const PhdApplicationSchema = new mongoose.Schema({
     },
     admissionOrAwardDate: {
         type: Date,
-        required: true
+        required: false
     },
     document: {
         type: String, // Path of uploaded proof document

@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
 const PhdApplication = require('./PhdApplication.model');
-const PhdScholar = require('./PhdScholar.model');
 const Employee = require('../employee/employee.model');
 const studentService = require('../StudentData/student.service');
 const Program = require('../academics/program.model');
@@ -29,9 +28,13 @@ exports.validateScholar = async (req, res) => {
     try {
         const rollNo = req.params.rollNo.trim().toUpperCase();
 
-        // 1. Check if scholar already completed/Awarded in Master
-        const masterScholar = await PhdScholar.findOne({ rollNumber: rollNo });
-        if (masterScholar && masterScholar.currentStatus === 'Awarded') {
+        // 1. Check if scholar already completed/Awarded in PhdApplication
+        const awardedApp = await PhdApplication.findOne({ 
+            rollNumber: rollNo, 
+            scholarStatus: 'Awarded', 
+            status: 'Approved' 
+        });
+        if (awardedApp) {
             return res.status(400).json({ 
                 success: false, 
                 message: `Scholar ${rollNo} has already been awarded their Ph.D. degree.` 
@@ -64,6 +67,20 @@ exports.validateScholar = async (req, res) => {
             });
         }
 
+        const existingGuide = await PhdApplication.findOne({
+            rollNumber: rollNo,
+            type: { $ne: 'co-guide' },
+            status: { $not: /rejected/i }
+        }).populate('facultyId', 'name institutionId');
+
+        const existingCoGuide = await PhdApplication.findOne({
+            rollNumber: rollNo,
+            type: 'co-guide',
+            status: { $not: /rejected/i }
+        }).populate('facultyId', 'name institutionId');
+
+        const myExistingApp = await PhdApplication.findOne({ rollNumber: rollNo, facultyId: req.user.userId });
+
         res.json({
             success: true,
             data: {
@@ -71,8 +88,22 @@ exports.validateScholar = async (req, res) => {
                 course: programName,
                 branch: branchName,
                 isPhd: true,
-                existingGuide: masterScholar ? masterScholar.guideId : null,
-                currentStatus: masterScholar ? masterScholar.currentStatus : 'New Scholar'
+                existingGuide: existingGuide ? {
+                    name: existingGuide.facultyId?.name,
+                    empId: existingGuide.facultyId?.institutionId
+                } : null,
+                existingCoGuide: existingCoGuide ? {
+                    name: existingCoGuide.facultyId?.name,
+                    empId: existingCoGuide.facultyId?.institutionId
+                } : null,
+                currentStatus: (myExistingApp || existingGuide || existingCoGuide)?.scholarStatus || 'New Scholar',
+                existingApplication: myExistingApp ? {
+                    _id: myExistingApp._id,
+                    scholarStatus: myExistingApp.scholarStatus,
+                    status: myExistingApp.status,
+                    type: myExistingApp.type || 'guide',
+                    isRejected: Boolean(myExistingApp.status && myExistingApp.status.toLowerCase().includes('rejected'))
+                } : null
             }
         });
     } catch (err) {
@@ -90,13 +121,15 @@ exports.createPhdApplication = async (req, res) => {
         const rollNo = data.rollNumber ? data.rollNumber.trim().toUpperCase() : "";
         const titleOfPhdWork = data.titleOfPhdWork ? data.titleOfPhdWork.trim() : "";
 
-        // 1. Mandatory Fields check
-        if (!rollNo || !data.studentName || !titleOfPhdWork || !data.course || !data.scholarStatus || !data.admissionOrAwardDate || !data.academicYear || !data.scholarType || !data.university) {
-            return res.status(400).json({ success: false, message: "Please fill all mandatory fields, including Title of the Ph.D Work." });
+        const dateVal = data.admissionDate || data.awardDate || data.admissionOrAwardDate;
+
+        // 1. Mandatory Fields check (titleOfPhdWork is optional, but unique if provided)
+        if (!rollNo || !data.studentName || !data.course || !data.scholarStatus || !dateVal || !data.academicYear || !data.scholarType || !data.university) {
+            return res.status(400).json({ success: false, message: "Please fill all mandatory fields." });
         }
 
         // Validate date (not in future)
-        if (new Date(data.admissionOrAwardDate) > new Date()) {
+        if (new Date(dateVal) > new Date()) {
             return res.status(400).json({ success: false, message: "Admission or Award Date cannot be in the future." });
         }
 
@@ -105,9 +138,13 @@ exports.createPhdApplication = async (req, res) => {
             return res.status(400).json({ success: false, message: "Supporting proof document is mandatory." });
         }
 
-        // 3. Master Awarded check
-        const masterScholar = await PhdScholar.findOne({ rollNumber: rollNo });
-        if (masterScholar && masterScholar.currentStatus === 'Awarded') {
+        // 3. Awarded check in PhdApplication
+        const existingAwarded = await PhdApplication.findOne({ 
+            rollNumber: rollNo, 
+            scholarStatus: 'Awarded', 
+            status: 'Approved' 
+        });
+        if (existingAwarded) {
             if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
             return res.status(400).json({ 
                 success: false, 
@@ -115,50 +152,26 @@ exports.createPhdApplication = async (req, res) => {
             });
         }
 
-        // 4. Duplicate check on Title of the Ph.D Work (Must be unique across all Ph.D. entries)
-        const existingWithTitle = await PhdApplication.findOne({
-            titleOfPhdWork: new RegExp(`^${escapeRegex(titleOfPhdWork)}$`, 'i')
-        }).populate('facultyId', 'name institutionId');
+        // 4. Duplicate check on Title of the Ph.D Work (Must be unique across all Ph.D. entries if provided)
+        if (titleOfPhdWork) {
+            const existingWithTitle = await PhdApplication.findOne({
+                titleOfPhdWork: new RegExp(`^${escapeRegex(titleOfPhdWork)}$`, 'i')
+            }).populate('facultyId', 'name institutionId');
 
-        if (existingWithTitle) {
-            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
-            const facultyName = existingWithTitle.facultyId ? existingWithTitle.facultyId.name : "another faculty member";
-            const isSameUser = existingWithTitle.facultyId && existingWithTitle.facultyId._id.toString() === req.user.userId;
-            return res.status(400).json({
-                success: false,
-                message: isSameUser
-                    ? `You have already registered a Ph.D. Scholar with the title "${titleOfPhdWork}". Title of the Ph.D Work must be unique.`
-                    : `A Ph.D. Scholar entry with the title "${titleOfPhdWork}" already exists under ${facultyName}. Title of the Ph.D Work must be unique.`
-            });
+            if (existingWithTitle) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+                const facultyName = existingWithTitle.facultyId ? existingWithTitle.facultyId.name : "another faculty member";
+                const isSameUser = existingWithTitle.facultyId && existingWithTitle.facultyId._id.toString() === req.user.userId;
+                return res.status(400).json({
+                    success: false,
+                    message: isSameUser
+                        ? `You have already registered a Ph.D. Scholar with the title "${titleOfPhdWork}". Title of the Ph.D Work must be unique.`
+                        : `A Ph.D. Scholar entry with the title "${titleOfPhdWork}" already exists under ${facultyName}. Title of the Ph.D Work must be unique.`
+                });
+            }
         }
 
-        // 5. Duplicate check based on same student (rollNumber) + same type (guide/co-guide) + same scholarStatus
-        const supervisionType = (data.type || '').toLowerCase() === 'co-guide' ? 'co-guide' : 'guide';
-        const roleLabel = supervisionType === 'co-guide' ? 'Co-Guide' : 'Guide';
-
-        const existingApp = await PhdApplication.findOne({
-            rollNumber: rollNo,
-            type: supervisionType,
-            scholarStatus: data.scholarStatus
-        }).populate('facultyId', 'name institutionId');
-
-        if (existingApp) {
-            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
-            const facultyName = existingApp.facultyId ? existingApp.facultyId.name : "a faculty member";
-            const isSameUser = existingApp.facultyId && existingApp.facultyId._id.toString() === req.user.userId;
-            const isRejected = existingApp.status && existingApp.status.toLowerCase().includes('rejected');
-            return res.status(400).json({
-                success: false,
-                message: isSameUser
-                    ? isRejected
-                        ? `You already have a rejected application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}". Please edit and resubmit the existing one instead of creating a new entry.`
-                        : `You have already submitted an application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}".`
-                    : isRejected
-                        ? `A rejected application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}" exists under ${facultyName}. It must be resubmitted rather than duplicated.`
-                        : `An application for this scholar (${rollNo}) as ${roleLabel} with status "${data.scholarStatus}" has already been registered under ${facultyName}.`
-            });
-        }
-
+        // Determine target faculty ID and status (supports direct entry by R&D admin)
         let finalFacultyId = req.user.userId;
         let finalStatus = 'Pending';
         let finalEntryType = 'Self';
@@ -176,11 +189,13 @@ exports.createPhdApplication = async (req, res) => {
                                userRoles.includes('RESEARCH DEAN') || userRoles.includes('ADMIN');
 
             if (!isRndAdmin) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
                 return res.status(403).json({ success: false, message: "Only R&D Admin or Dean can use direct entry." });
             }
 
             const targetEmpId = data.targetFacultyEmpId;
             if (!targetEmpId) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
                 return res.status(400).json({ success: false, message: "Target Faculty Employee ID is required for direct entry." });
             }
 
@@ -189,10 +204,12 @@ exports.createPhdApplication = async (req, res) => {
             });
 
             if (!targetFaculty) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
                 return res.status(400).json({ success: false, message: `Target Faculty with ID ${targetEmpId} not found.` });
             }
 
             if (!targetFaculty.isActive) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
                 return res.status(400).json({ success: false, message: `Faculty ${targetFaculty.name} (${targetFaculty.institutionId}) is inactive and cannot be selected.` });
             }
 
@@ -201,24 +218,88 @@ exports.createPhdApplication = async (req, res) => {
             finalEntryType = 'Admin';
         }
 
-        // 6. If adding as 'Awarded', check if scholar already exists as 'Pursuing' for this faculty
-        if (data.scholarStatus === 'Awarded') {
-            const existingPursuing = await PhdApplication.findOne({
-                rollNumber: rollNo,
-                facultyId: finalFacultyId
-            });
-            if (existingPursuing && existingPursuing.scholarStatus === 'Pursuing') {
+        const supervisionType = (data.type || '').toLowerCase() === 'co-guide' ? 'co-guide' : 'guide';
+        const roleLabel = supervisionType === 'co-guide' ? 'Co-Guide' : 'Guide';
+
+        // 5. Duplicate Check: Same Faculty cannot submit duplicate entries for the same scholar
+        // Whether they previously applied as Guide or Co-Guide, or are now changing roles
+        const myExistingApp = await PhdApplication.findOne({
+            rollNumber: rollNo,
+            facultyId: finalFacultyId
+        });
+
+        if (myExistingApp) {
+            // Case 5a: If scholar is currently 'Pursuing' and user is submitting 'Awarded' -> prompt milestone update modal
+            if (myExistingApp.scholarStatus === 'Pursuing' && data.scholarStatus === 'Awarded') {
                 if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
                 return res.status(400).json({
                     success: false,
+                    code: 'PURSUING_SCHOLAR_EXISTS',
+                    existingScholar: {
+                        _id: myExistingApp._id,
+                        rollNumber: myExistingApp.rollNumber,
+                        studentName: myExistingApp.studentName,
+                        status: myExistingApp.status
+                    },
                     message: `Scholar (${rollNo}) is already registered as 'Pursuing' under your submissions. You cannot create a separate new entry for 'Awarded'. Please locate the scholar in your list and click 'Mark as Awarded' to update their milestone.`
+                });
+            }
+
+            // Case 5b: If existing application was rejected, instruct faculty to edit and resubmit
+            const existingRole = (myExistingApp.type || 'guide').toLowerCase() === 'co-guide' ? 'Co-Guide' : 'Guide';
+            if (myExistingApp.status && myExistingApp.status.toLowerCase().includes('rejected')) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+                return res.status(400).json({
+                    success: false,
+                    message: `You already have a rejected application for this scholar (${rollNo}) as ${existingRole}. Please edit and resubmit your existing application instead of creating a new duplicate entry.`
+                });
+            }
+
+            // Case 5c: Already registered (under Guide or Co-Guide)
+            if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+            return res.status(400).json({
+                success: false,
+                message: `You have already registered scholar (${rollNo}) as ${existingRole} (Status: ${myExistingApp.status || 'Pending'}). A faculty member cannot submit the same scholar multiple times.`
+            });
+        }
+
+        // 6. University-wide Duplicate Check: Role Uniqueness across different faculty members
+        // A Ph.D. scholar can have at most one primary Guide and at most one Co-Guide
+        if (supervisionType === 'guide') {
+            const existingGuide = await PhdApplication.findOne({
+                rollNumber: rollNo,
+                type: { $ne: 'co-guide' },
+                status: { $not: /rejected/i }
+            }).populate('facultyId', 'name institutionId');
+
+            if (existingGuide) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+                const guideName = existingGuide.facultyId ? existingGuide.facultyId.name : "another faculty member";
+                return res.status(400).json({
+                    success: false,
+                    message: `Scholar (${rollNo}) already has a registered Guide (${guideName}). A Ph.D. scholar can only have one primary Guide.`
+                });
+            }
+        } else if (supervisionType === 'co-guide') {
+            const existingCoGuide = await PhdApplication.findOne({
+                rollNumber: rollNo,
+                type: 'co-guide',
+                status: { $not: /rejected/i }
+            }).populate('facultyId', 'name institutionId');
+
+            if (existingCoGuide) {
+                if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+                const coGuideName = existingCoGuide.facultyId ? existingCoGuide.facultyId.name : "another faculty member";
+                return res.status(400).json({
+                    success: false,
+                    message: `Scholar (${rollNo}) already has a registered Co-Guide (${coGuideName}). A Ph.D. scholar can only have one Co-Guide.`
                 });
             }
         }
 
         const pursuingDetails = data.scholarStatus === 'Pursuing' ? {
             academicYear: data.academicYear,
-            admissionDate: data.admissionOrAwardDate,
+            admissionDate: dateVal,
             document: `/uploads/phdScholars/${req.file.filename}`,
             status: finalStatus,
             submittedAt: new Date()
@@ -226,7 +307,7 @@ exports.createPhdApplication = async (req, res) => {
 
         const awardedDetails = data.scholarStatus === 'Awarded' ? {
             academicYear: data.academicYear,
-            awardDate: data.admissionOrAwardDate,
+            awardDate: dateVal,
             document: `/uploads/phdScholars/${req.file.filename}`,
             status: finalStatus,
             submittedAt: new Date()
@@ -237,13 +318,12 @@ exports.createPhdApplication = async (req, res) => {
             academicYear: data.academicYear,
             rollNumber: rollNo,
             studentName: data.studentName,
-            titleOfPhdWork: titleOfPhdWork,
+            ...(titleOfPhdWork ? { titleOfPhdWork } : {}),
             course: data.course,
             branch: data.branch,
             scholarStatus: data.scholarStatus,
             scholarType: data.scholarType,
             university: data.university,
-            admissionOrAwardDate: data.admissionOrAwardDate,
             document: `/uploads/phdScholars/${req.file.filename}`,
             status: finalStatus,
             entryType: finalEntryType,
@@ -253,25 +333,6 @@ exports.createPhdApplication = async (req, res) => {
         });
 
         await application.save();
-        
-        // If Approved immediately (Direct Entry), upsert Master Tracking record
-        if (finalStatus === 'Approved') {
-            await PhdScholar.findOneAndUpdate(
-                { rollNumber: application.rollNumber },
-                {
-                    rollNumber: application.rollNumber,
-                    studentName: application.studentName,
-                    titleOfPhdWork: application.titleOfPhdWork,
-                    course: application.course,
-                    branch: application.branch,
-                    currentStatus: application.scholarStatus,
-                    scholarType: application.scholarType || "Full-Time",
-                    university: application.university || "Aditya University",
-                    guideId: application.facultyId
-                },
-                { upsert: true, new: true }
-            );
-        }
 
         // Target: Send notification to the applicant's reporting boss
         try {
@@ -363,23 +424,22 @@ exports.updatePhdApplication = async (req, res) => {
             }
         }
 
-        // Title of the Ph.D Work uniqueness check if updating
+        // Title of the Ph.D Work uniqueness check if updating (optional, unique if provided)
         if (data.titleOfPhdWork !== undefined) {
             const checkTitle = data.titleOfPhdWork.trim();
-            if (!checkTitle) {
-                return res.status(400).json({ success: false, message: "Title of the Ph.D Work cannot be empty." });
-            }
-            const existingWithTitle = await PhdApplication.findOne({
-                _id: { $ne: id },
-                titleOfPhdWork: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
-            }).populate('facultyId', 'name institutionId');
+            if (checkTitle) {
+                const existingWithTitle = await PhdApplication.findOne({
+                    _id: { $ne: id },
+                    titleOfPhdWork: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+                }).populate('facultyId', 'name institutionId');
 
-            if (existingWithTitle) {
-                const facultyName = existingWithTitle.facultyId ? existingWithTitle.facultyId.name : "another faculty member";
-                return res.status(400).json({
-                    success: false,
-                    message: `A Ph.D. Scholar entry with the title "${checkTitle}" already exists under ${facultyName}. Title of the Ph.D Work must be unique.`
-                });
+                if (existingWithTitle) {
+                    const facultyName = existingWithTitle.facultyId ? existingWithTitle.facultyId.name : "another faculty member";
+                    return res.status(400).json({
+                        success: false,
+                        message: `A Ph.D. Scholar entry with the title "${checkTitle}" already exists under ${facultyName}. Title of the Ph.D Work must be unique.`
+                    });
+                }
             }
         }
 
@@ -388,23 +448,54 @@ exports.updatePhdApplication = async (req, res) => {
         const checkType = (data.type || application.type || 'guide').toLowerCase() === 'co-guide' ? 'co-guide' : 'guide';
         const roleLabel = checkType === 'co-guide' ? 'Co-Guide' : 'Guide';
 
-        const existingApp = await PhdApplication.findOne({
+        // 1. Same faculty check: Cannot duplicate another application under this faculty for the same scholar
+        const duplicateForFaculty = await PhdApplication.findOne({
             _id: { $ne: id },
             rollNumber: rollNo,
-            type: checkType,
-            scholarStatus: checkScholarStatus
-            // No status filter — block duplicates regardless of any status (including rejected).
-        }).populate('facultyId', 'name institutionId');
-
-        if (existingApp) {
-            const facultyName = existingApp.facultyId ? existingApp.facultyId.name : "a faculty member";
-            const isSameUser = existingApp.facultyId && existingApp.facultyId._id.toString() === req.user.userId;
+            facultyId: application.facultyId
+        });
+        if (duplicateForFaculty) {
+            const dupRole = (duplicateForFaculty.type || 'guide').toLowerCase() === 'co-guide' ? 'Co-Guide' : 'Guide';
             return res.status(400).json({
                 success: false,
-                message: isSameUser
-                    ? `You already have an existing application for this scholar (${rollNo}) as ${roleLabel} with status "${checkScholarStatus}".`
-                    : `An application for this scholar (${rollNo}) as ${roleLabel} with status "${checkScholarStatus}" already exists under ${facultyName}.`
+                message: `You already have another application for this scholar (${rollNo}) as ${dupRole}. Duplicate entries are not permitted.`
             });
+        }
+
+        // 2. Guide uniqueness across university
+        if (checkType === 'guide') {
+            const existingGuide = await PhdApplication.findOne({
+                _id: { $ne: id },
+                rollNumber: rollNo,
+                type: { $ne: 'co-guide' },
+                status: { $not: /rejected/i }
+            }).populate('facultyId', 'name institutionId');
+
+            if (existingGuide) {
+                const guideName = existingGuide.facultyId ? existingGuide.facultyId.name : "another faculty member";
+                return res.status(400).json({
+                    success: false,
+                    message: `Scholar (${rollNo}) already has a registered Guide (${guideName}). A Ph.D. scholar can only have one primary Guide.`
+                });
+            }
+        }
+
+        // 3. Co-Guide uniqueness across university
+        if (checkType === 'co-guide') {
+            const existingCoGuide = await PhdApplication.findOne({
+                _id: { $ne: id },
+                rollNumber: rollNo,
+                type: 'co-guide',
+                status: { $not: /rejected/i }
+            }).populate('facultyId', 'name institutionId');
+
+            if (existingCoGuide) {
+                const coGuideName = existingCoGuide.facultyId ? existingCoGuide.facultyId.name : "another faculty member";
+                return res.status(400).json({
+                    success: false,
+                    message: `Scholar (${rollNo}) already has a registered Co-Guide (${coGuideName}). A Ph.D. scholar can only have one Co-Guide.`
+                });
+            }
         }
 
         const oldDocument = application.document;
@@ -413,13 +504,17 @@ exports.updatePhdApplication = async (req, res) => {
 
         // Update fields
         Object.keys(data).forEach(key => {
-            if (key !== 'status' && key !== 'facultyId' && key !== 'document' && data[key] !== undefined) {
+            if (key !== 'status' && key !== 'facultyId' && key !== 'document' && key !== 'titleOfPhdWork' && key !== 'admissionOrAwardDate' && data[key] !== undefined) {
                 application[key] = data[key];
             }
         });
 
-        if (data.titleOfPhdWork) {
-            application.titleOfPhdWork = data.titleOfPhdWork.trim();
+        if (data.titleOfPhdWork !== undefined) {
+            if (data.titleOfPhdWork.trim()) {
+                application.titleOfPhdWork = data.titleOfPhdWork.trim();
+            } else {
+                application.titleOfPhdWork = undefined;
+            }
         }
 
         application.rollNumber = rollNo;
@@ -442,11 +537,13 @@ exports.updatePhdApplication = async (req, res) => {
             application.document = `/uploads/phdScholars/${req.file.filename}`;
         }
 
+        const updatedDate = data.admissionDate || data.awardDate || data.admissionOrAwardDate;
+
         // Synchronize active milestone subdocument
         if (application.scholarStatus === 'Pursuing') {
             application.pursuingDetails = {
                 academicYear: application.academicYear,
-                admissionDate: application.admissionOrAwardDate,
+                admissionDate: updatedDate ? new Date(updatedDate) : (application.pursuingDetails?.admissionDate || application.admissionOrAwardDate),
                 document: application.document,
                 status: 'Pending',
                 hodComment: '',
@@ -456,7 +553,7 @@ exports.updatePhdApplication = async (req, res) => {
         } else if (application.scholarStatus === 'Awarded') {
             application.awardedDetails = {
                 academicYear: application.academicYear,
-                awardDate: application.admissionOrAwardDate,
+                awardDate: updatedDate ? new Date(updatedDate) : (application.awardedDetails?.awardDate || application.admissionOrAwardDate),
                 document: application.document,
                 status: 'Pending',
                 hodComment: '',
@@ -487,7 +584,7 @@ exports.updatePhdApplication = async (req, res) => {
 exports.markAsAwarded = async (req, res) => {
     try {
         const { id } = req.params;
-        const { academicYear, awardDate } = req.body;
+        const { academicYear, awardDate, titleOfPhdWork } = req.body;
 
         const application = await PhdApplication.findById(id);
         if (!application) {
@@ -555,6 +652,29 @@ exports.markAsAwarded = async (req, res) => {
             });
         }
 
+        // Validate and update Title of the Ph.D Work (optional, but unique across all entries)
+        if (titleOfPhdWork !== undefined) {
+            const checkTitle = titleOfPhdWork.trim();
+            if (checkTitle) {
+                const existingWithTitle = await PhdApplication.findOne({
+                    _id: { $ne: application._id },
+                    titleOfPhdWork: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+                }).populate('facultyId', 'name institutionId');
+
+                if (existingWithTitle) {
+                    if (req.file) deleteOldFile(`/uploads/phdScholars/${req.file.filename}`);
+                    const facultyName = existingWithTitle.facultyId ? existingWithTitle.facultyId.name : "another faculty member";
+                    return res.status(400).json({
+                        success: false,
+                        message: `A Ph.D. Scholar entry with the title "${checkTitle}" already exists under ${facultyName}. Title of the Ph.D Work must be unique.`
+                    });
+                }
+                application.titleOfPhdWork = checkTitle;
+            } else {
+                application.titleOfPhdWork = undefined;
+            }
+        }
+
         // If a new file is uploaded, remove previous awarded file from disk to avoid duplicate files
         if (req.file) {
             const pursuingDoc = application.pursuingDetails?.document;
@@ -598,7 +718,6 @@ exports.markAsAwarded = async (req, res) => {
         application.scholarStatus = 'Awarded';
         application.status = 'Pending';
         application.academicYear = academicYear;
-        application.admissionOrAwardDate = awardDateObj;
         application.document = finalDoc;
         application.hodComment = '';
         application.rndComment = '';
@@ -863,25 +982,6 @@ exports.rndAction = async (req, res) => {
         }
 
         await application.save();
-
-        // Create or update Master Tracking record only when approved
-        if (action === 'Approve') {
-            await PhdScholar.findOneAndUpdate(
-                { rollNumber: application.rollNumber },
-                {
-                    rollNumber: application.rollNumber,
-                    studentName: application.studentName,
-                    titleOfPhdWork: application.titleOfPhdWork,
-                    course: application.course,
-                    branch: application.branch,
-                    currentStatus: application.scholarStatus,
-                    scholarType: application.scholarType || "Full-Time",
-                    university: application.university || "Aditya University",
-                    guideId: application.facultyId
-                },
-                { upsert: true, new: true }
-            );
-        }
 
         try {
             const NotificationService = require('../../modules/notification/notification.service');
