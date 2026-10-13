@@ -118,10 +118,6 @@ const createCentralEvent = async (req, res, next) => {
       res.status(400);
       return next(new Error('toDate must be after or equal to fromDate'));
     }
-    if (regDeadline > fromDate) {
-      res.status(400);
-      return next(new Error('regDeadline must be before or equal to fromDate'));
-    }
 
     // 5. Validate Participation
     if (participation?.type === 'TEAM') {
@@ -146,6 +142,7 @@ const createCentralEvent = async (req, res, next) => {
       typeCode: typeObj.code,
       categoryId: catObj ? catObj._id : null,
       categoryName: catObj ? catObj.name : null,
+      department: req.body.department || req.body.departments || [],
       academicYear: req.body.academicYear || catObj?.academicYear || null,
       level: typeObj.hasLevels ? level : null,
       activityType: typeObj.hasLevels ? activityType : null,
@@ -223,10 +220,6 @@ const updateCentralEvent = async (req, res, next) => {
       if (toDate < fromDate) {
         res.status(400);
         return next(new Error('toDate must be after or equal to fromDate'));
-      }
-      if (regDeadline > fromDate) {
-        res.status(400);
-        return next(new Error('regDeadline must be before or equal to fromDate'));
       }
       updates.schedule = { fromDate, toDate, regDeadline };
     }

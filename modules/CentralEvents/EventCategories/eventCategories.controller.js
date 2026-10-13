@@ -197,6 +197,10 @@ const getAllCentralEventSubcategoriesAdmin = async (req, res, next) => {
     const subcategoriesList = [];
     categories.forEach(cat => {
       (cat.subcategories || []).forEach(sub => {
+        const coords = (sub.coordinators && sub.coordinators.length > 0)
+          ? sub.coordinators
+          : (sub.coordinator?.empId || sub.coordinator?.name ? [sub.coordinator] : []);
+
         subcategoriesList.push({
           _id: sub._id || `${cat._id}_${sub.code}`,
           subId: sub._id,
@@ -205,6 +209,8 @@ const getAllCentralEventSubcategoriesAdmin = async (req, res, next) => {
           isActive: sub.isActive !== undefined ? sub.isActive : true,
           sortOrder: Number(sub.sortOrder || 0),
           banner: sub.banner || null,
+          coordinator: sub.coordinator || (coords[0] || null),
+          coordinators: coords,
           categoryId: cat._id,
           categoryCode: cat.code,
           categoryName: cat.name,
@@ -228,7 +234,7 @@ const getAllCentralEventSubcategoriesAdmin = async (req, res, next) => {
  */
 const createCentralEventSubcategory = async (req, res, next) => {
   try {
-    const { categoryId, code, name, isActive, sortOrder, banner } = req.body;
+    const { categoryId, code, name, isActive, sortOrder, banner, coordinator, coordinators } = req.body;
     if (!categoryId || !code || !name) {
       res.status(400);
       return next(new Error('Parent Category, Subcategory Code, and Name are required'));
@@ -252,12 +258,16 @@ const createCentralEventSubcategory = async (req, res, next) => {
       return next(new Error(`Subcategory code "${codeUpper}" already exists in this category`));
     }
 
+    const coordsList = Array.isArray(coordinators) ? coordinators : (coordinator ? [coordinator] : []);
+
     const newSubcat = {
       code: codeUpper,
       name: name.trim(),
       isActive: isActive !== undefined ? isActive : true,
       sortOrder: Number(sortOrder) || 0,
-      banner: banner || null
+      banner: banner || null,
+      coordinator: coordsList[0] || coordinator || null,
+      coordinators: coordsList
     };
 
     category.subcategories = category.subcategories || [];
@@ -277,6 +287,8 @@ const createCentralEventSubcategory = async (req, res, next) => {
         isActive: createdItem.isActive,
         sortOrder: createdItem.sortOrder,
         banner: createdItem.banner,
+        coordinator: createdItem.coordinator,
+        coordinators: createdItem.coordinators,
         categoryId: category._id,
         categoryCode: category.code,
         categoryName: category.name,
@@ -295,7 +307,7 @@ const createCentralEventSubcategory = async (req, res, next) => {
 const updateCentralEventSubcategory = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { categoryId, code, name, isActive, sortOrder, banner } = req.body;
+    const { categoryId, code, name, isActive, sortOrder, banner, coordinator, coordinators } = req.body;
 
     let category = null;
     if (categoryId) {
@@ -321,6 +333,13 @@ const updateCentralEventSubcategory = async (req, res, next) => {
     if (isActive !== undefined) subItem.isActive = isActive;
     if (sortOrder !== undefined) subItem.sortOrder = Number(sortOrder) || 0;
     if (banner !== undefined) subItem.banner = banner;
+    if (coordinators !== undefined) {
+      subItem.coordinators = Array.isArray(coordinators) ? coordinators : [];
+      subItem.coordinator = subItem.coordinators[0] || null;
+    } else if (coordinator !== undefined) {
+      subItem.coordinator = coordinator;
+      subItem.coordinators = coordinator ? [coordinator] : [];
+    }
 
     await category.save();
     cachedCategoriesMap.delete(category.typeCode);
