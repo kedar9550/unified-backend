@@ -381,7 +381,10 @@ const getCentralEvents = async (req, res, next) => {
 const getCentralEventBySlug = async (req, res, next) => {
   try {
     const { slug } = req.params;
-    const event = await CentralEvent.findOne({ slug }).lean();
+    const query = mongoose.Types.ObjectId.isValid(slug)
+      ? { $or: [{ slug }, { _id: slug }] }
+      : { slug };
+    const event = await CentralEvent.findOne(query).lean();
     if (!event) {
       res.status(404);
       return next(new Error('Central event not found'));
