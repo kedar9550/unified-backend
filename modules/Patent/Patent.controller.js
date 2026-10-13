@@ -739,7 +739,7 @@ exports.updatePatentStatus = async (req, res) => {
             applyIncentive: patent.published?.applyIncentive || patent.applyIncentive || 'No',
             applyingSeedGrant: patent.published?.applyingSeedGrant || patent.applyingSeedGrant || 'No',
             appraisalClaimant: patent.published?.appraisalClaimant || patent.appraisalClaimant || null,
-            appraisalEligible: patent.published?.appraisalEligible || patent.appraisalEligible || 'Yes'
+            appraisalEligible: patent.published?.appraisalEligible || patent.appraisalEligible || null
         };
 
         const ausCoInventors = (patent.coInventors || []).filter(c => c.employeeId || (c.affiliation && c.affiliation.toLowerCase().includes('aditya')));
