@@ -587,7 +587,9 @@ exports.hodAction = async (req, res) => {
         
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = conference.facultyId || conference.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -595,8 +597,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Conference ${action}d by HOD`,
-                    message: `Your Conference has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Conference ${action}d by ${approverRole}`,
+                    message: `Your Conference has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/conference-publication'
                 });
             }
@@ -615,7 +617,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Conference for R&D Approval`,
-                        message: `A Conference application is pending your approval.`,
+                        message: `A Conference application has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }

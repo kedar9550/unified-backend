@@ -62,6 +62,7 @@ const PatentSchema = new mongoose.Schema({
         grantedincentiveamount: { type: Number },
         granteddate: { type: Date },
         grantedinsentiveappllieddate: { type: Date },
+        submittedDate: { type: Date },
         applyIncentive: { type: String, enum: ['Yes', 'No'] },
         applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
         status: { 
@@ -116,6 +117,10 @@ const PatentSchema = new mongoose.Schema({
     statusUpdatedToGranted: {
         type: Boolean,
         default: false
+    },
+    statusUpdatedDate: {
+        type: Date,
+        default: null
     },
     
     createdAt: {

@@ -774,7 +774,9 @@ exports.hodAction = async (req, res) => {
 
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = application.facultyId || application.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -782,8 +784,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Phd Scholar ${action}d by HOD`,
-                    message: `Your Phd Scholar (${application.studentName}) has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Phd Scholar ${action}d by ${approverRole}`,
+                    message: `Your Phd Scholar (${application.studentName}) has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/phd-scholars'
                 });
             }
@@ -802,7 +804,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Phd Scholar for R&D Approval`,
-                        message: `A Phd Scholar application (${application.studentName}) is pending your approval.`,
+                        message: `A Phd Scholar application (${application.studentName}) has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }

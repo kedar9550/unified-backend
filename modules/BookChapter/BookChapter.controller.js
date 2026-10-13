@@ -516,7 +516,9 @@ exports.hodAction = async (req, res) => {
         
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = chapter.facultyId || chapter.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -524,8 +526,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Book Chapter ${action}d by HOD`,
-                    message: `Your Book Chapter has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Book Chapter ${action}d by ${approverRole}`,
+                    message: `Your Book Chapter has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/book-chapter-publication'
                 });
             }
@@ -544,7 +546,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Book Chapter for R&D Approval`,
-                        message: `A Book Chapter application is pending your approval.`,
+                        message: `A Book Chapter application has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }
