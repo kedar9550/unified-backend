@@ -4,6 +4,17 @@ const coordinatorSchema = new mongoose.Schema({
   name: { type: String, trim: true },
   empId: { type: String, trim: true },
   phone: { type: String, trim: true },
+  email: { type: String, trim: true },
+  designation: { type: String, trim: true },
+  department: { type: String, trim: true }
+}, { _id: false });
+
+const studentCoordinatorSchema = new mongoose.Schema({
+  rollNo: { type: String, trim: true, uppercase: true },
+  name: { type: String, trim: true },
+  department: { type: String, trim: true },
+  branch: { type: String, trim: true },
+  phone: { type: String, trim: true },
   email: { type: String, trim: true }
 }, { _id: false });
 
@@ -93,6 +104,10 @@ const centralEventSchema = new mongoose.Schema({
     type: [{ type: String, trim: true }],
     validate: [v => v.length <= 50, 'Rules cannot exceed 50 items']
   },
+  department: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'EventDepartment'
+  }],
   mode: {
     type: String,
     enum: ['ONLINE', 'OFFLINE', 'HYBRID'],
@@ -102,7 +117,12 @@ const centralEventSchema = new mongoose.Schema({
   venue: {
     name: { type: String, trim: true },
     address: { type: String, trim: true },
-    link: { type: String, trim: true }
+    link: { type: String, trim: true },
+    venueType: { type: String, enum: ['Indoor', 'Outdoor', null], default: null },
+    building: { type: mongoose.Schema.Types.ObjectId, ref: 'Building', default: null },
+    floor: { type: mongoose.Schema.Types.ObjectId, ref: 'Floor', default: null },
+    ground: { type: mongoose.Schema.Types.ObjectId, ref: 'Ground', default: null },
+    roomNo: { type: String, trim: true, default: '' }
   },
   participation: {
     type: {
@@ -131,6 +151,7 @@ const centralEventSchema = new mongoose.Schema({
   },
   coordinators: {
     faculty: [coordinatorSchema],
+    student: [studentCoordinatorSchema],
     school: [coordinatorSchema]
   },
   resourcePersons: {
