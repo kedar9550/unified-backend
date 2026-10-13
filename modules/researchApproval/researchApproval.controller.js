@@ -252,6 +252,7 @@ exports.getResearchRequests = async (req, res) => {
             if (searchRegex && !isResearchAdmin) {
                 patentQuery.$or = [
                     { title: searchRegex },
+                    { applicationNo: searchRegex },
                     { filingNo: searchRegex }
                 ];
             }
@@ -267,7 +268,7 @@ exports.getResearchRequests = async (req, res) => {
                 if (!fac) continue;
 
                 if (searchRegex) {
-                    const matchesTitle = searchRegex.test(item.title) || searchRegex.test(item.filingNo);
+                    const matchesTitle = searchRegex.test(item.title) || searchRegex.test(item.applicationNo || item.filingNo || '');
                     const matchesName = searchRegex.test(fac.name);
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
@@ -724,7 +725,9 @@ exports.getResearchReports = async (req, res) => {
                 facultyName: item.facultyId?.name || 'N/A',
                 empId: item.facultyId?.institutionId || 'N/A',
                 title: item.title || 'N/A',
-                filingNo: item.filingNo || 'N/A',
+                applicationNo: item.applicationNo || item.filingNo || 'N/A',
+                filingNo: item.applicationNo || item.filingNo || 'N/A',
+                patentStatus: item.patentStatus || 'N/A',
                 year: item.academicYear?.year || 'N/A',
                 amount: item.approvedAmount || 0,
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
