@@ -35,13 +35,12 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 1024 * 1024 }, // Set to 1MB, validate for 500KB in front-end/controller
+    limits: { fileSize: 200 * 1024 }, // 200KB limit
     fileFilter: (req, file, cb) => {
-        const allowed = ['.pdf', '.jpg', '.jpeg', '.png'];
+        const allowed = ['.pdf'];
         const ext = path.extname(file.originalname).toLowerCase();
-
-if (allowed.includes(ext)) return cb(null, true);
-        cb(new Error('Only PDF and image files are allowed. Max size 500KB.'));
+        if (allowed.includes(ext) || file.mimetype === 'application/pdf') return cb(null, true);
+        cb(new Error('Only PDF files are allowed. Max size 200KB.'));
     }
 });
 
@@ -58,6 +57,9 @@ router.get('/:id', protect, phdScholarController.getApplicationById);
 
 // Faculty: Update/Resubmit rejected application
 router.put('/:id', protect, upload.single('document'), phdScholarController.updatePhdApplication);
+
+// Faculty: Mark Pursuing Scholar as Awarded (milestone progression)
+router.put('/:id/mark-awarded', protect, upload.single('document'), phdScholarController.markAsAwarded);
 
 // HOD: View pending and Action
 router.get('/pending-hod', protect, authorize(...primaryEvaluatorRoles), phdScholarController.getPendingAtHOD);

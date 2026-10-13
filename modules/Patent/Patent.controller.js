@@ -37,29 +37,64 @@ exports.createPatent = async (req, res) => {
             return res.status(400).json({ success: false, message: "Granted Certificate is mandatory for Granted patents." });
         }
 
-        // Check file sizes individually (500KB limit)
+        // Check file sizes individually (200KB limit as per guidelines)
         const filesToCheck = ['cbr', 'form1', 'grantedCertificate'];
         for (const field of filesToCheck) {
-            if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+            if (req.files[field] && req.files[field][0].size > 200 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                 return res.status(400).json({
                     success: false,
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
                 });
             }
         }
 
         const trimmedTitle = data.title.trim();
+        const trimmedAppNo = (data.applicationNo || data.applicationnumber || '').trim();
 
         // 2. Duplicate Validation
-        const existingRecord = await Patent.findOne({
-            title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i')
-        });
+        let existingRecord = null;
+        if (trimmedAppNo) {
+            existingRecord = await Patent.findOne({
+                $or: [
+                    { applicationNo: new RegExp(`^${escapeRegex(trimmedAppNo)}$`, 'i') },
+                    { filingNo: new RegExp(`^${escapeRegex(trimmedAppNo)}$`, 'i') },
+                    { title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i') }
+                ]
+            });
+        } else {
+            existingRecord = await Patent.findOne({
+                title: new RegExp(`^${escapeRegex(trimmedTitle)}$`, 'i')
+            });
+        }
 
         if (existingRecord) {
+            if (existingRecord.patentStatus === 'Published') {
+                return res.status(400).json({
+                    success: false,
+                    isPublishedDuplicate: true,
+                    existingPatentId: existingRecord._id,
+                    message: "This patent has already been submitted under the 'Published' category. If your patent has now been granted, you can update its status from your existing patent records."
+                });
+            }
+
+            if (existingRecord.patentStatus === 'Granted') {
+                return res.status(400).json({
+                    success: false,
+                    message: "A patent entry with this title or application number is already registered and marked as 'Granted'."
+                });
+            }
+
+            if (existingRecord.status === 'Rejected' || existingRecord.status === 'Rejected by R&D') {
+                return res.status(400).json({
+                    success: false,
+                    message: "A patent entry with this title or application number already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
+                });
+            }
+
             return res.status(400).json({
                 success: false,
-                message: "A patent entry with this title already exists. If it was rejected, please use the Edit & Resubmit option instead of creating a new one."
+                message: "A patent entry with this title or application number already exists in the system."
             });
         }
 
@@ -224,8 +259,19 @@ exports.createPatent = async (req, res) => {
     } catch (err) {
         console.error("Create Patent Error:", err);
         if (err.code === 11000) {
-            const field = Object.keys(err.keyValue)[0];
-            const value = err.keyValue[field];
+            const field = Object.keys(err.keyValue || {})[0];
+            const value = err.keyValue ? err.keyValue[field] : '';
+            try {
+                const dupDoc = await Patent.findOne({ [field]: value });
+                if (dupDoc && dupDoc.patentStatus === 'Published') {
+                    return res.status(400).json({
+                        success: false,
+                        isPublishedDuplicate: true,
+                        existingPatentId: dupDoc._id,
+                        message: "This patent has already been submitted under the 'Published' category. If your patent has now been granted, you can update its status from your existing patent records."
+                    });
+                }
+            } catch (e) {}
             const message = `Duplicate entry: A patent with ${field} '${value}' already exists.`;
             return res.status(400).json({ success: false, message });
         }
@@ -255,40 +301,61 @@ exports.updatePatent = async (req, res) => {
             return res.status(400).json({ success: false, message: "Only rejected patents can be edited and resubmitted." });
         }
 
-        // Validate file sizes
+        // Validate file sizes (200KB limit)
         const filesToCheck = ['cbr', 'form1', 'grantedCertificate'];
         if (req.files) {
             for (const field of filesToCheck) {
-                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
+                if (req.files[field] && req.files[field][0].size > 200 * 1024) {
                     const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                     return res.status(400).json({
                         success: false,
-                        message: `${label} is too large. Maximum allowed size is 500KB.`
+                        message: `${label} is too large. Maximum allowed size is 200KB.`
                     });
                 }
             }
         }
 
-        // Validate Title for duplicates
-        if (data.title) {
-            const checkTitle = data.title.trim();
+        // Validate Title and Application No for duplicates
+        const checkTitle = data.title ? data.title.trim() : null;
+        const checkAppNo = (data.applicationNo || data.applicationnumber) ? (data.applicationNo || data.applicationnumber).trim() : null;
+
+        const orClauses = [];
+        if (checkTitle) orClauses.push({ title: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i') });
+        if (checkAppNo) {
+            orClauses.push({ applicationNo: new RegExp(`^${escapeRegex(checkAppNo)}$`, 'i') });
+            orClauses.push({ filingNo: new RegExp(`^${escapeRegex(checkAppNo)}$`, 'i') });
+        }
+
+        if (orClauses.length > 0) {
             const existingRecord = await Patent.findOne({
                 _id: { $ne: id },
-                title: new RegExp(`^${escapeRegex(checkTitle)}$`, 'i')
+                $or: orClauses
             });
 
             if (existingRecord) {
+                if (existingRecord.patentStatus === 'Published') {
+                    return res.status(400).json({
+                        success: false,
+                        isPublishedDuplicate: true,
+                        existingPatentId: existingRecord._id,
+                        message: "This patent has already been submitted under the 'Published' category. If your patent has now been granted, you can update its status from your existing patent records."
+                    });
+                }
                 return res.status(400).json({
                     success: false,
-                    message: "A patent entry with this title already exists."
+                    message: "A patent entry with this title or application number already exists."
                 });
             }
         }
 
         const currentStatus = data.status || patent.patentStatus;
         const currentFilingDate = data.dateOfFiling !== undefined ? data.dateOfFiling : patent.dateOfFiling;
-        const currentPublishedDate = data.dateOfPublished !== undefined ? data.dateOfPublished : patent.dateOfPublished;
-        const currentGrantedDate = data.dateOfGranted !== undefined ? data.dateOfGranted : patent.dateOfGranted;
+        const currentPublishedDate = (data.publisheddate || data.dateOfPublished) !== undefined
+            ? (data.publisheddate || data.dateOfPublished)
+            : (patent.published?.publisheddate || patent.dateOfPublished);
+        const currentGrantedDate = (data.granteddate || data.dateOfGranted) !== undefined
+            ? (data.granteddate || data.dateOfGranted)
+            : (patent.granted?.granteddate || patent.dateOfGranted);
 
         if (currentStatus === 'Published') {
             if (!currentFilingDate || !currentPublishedDate) {
@@ -305,13 +372,13 @@ exports.updatePatent = async (req, res) => {
         }
 
         // Date Validation
-        if (data.dateOfFiling && isFutureDate(data.dateOfFiling)) {
+        if (currentFilingDate && isFutureDate(currentFilingDate)) {
             return res.status(400).json({ success: false, message: "Date of Filing cannot be in the future." });
         }
-        if (data.dateOfPublished && isFutureDate(data.dateOfPublished)) {
+        if (currentPublishedDate && isFutureDate(currentPublishedDate)) {
             return res.status(400).json({ success: false, message: "Publication Date cannot be in the future." });
         }
-        if (data.dateOfGranted && isFutureDate(data.dateOfGranted)) {
+        if (currentGrantedDate && isFutureDate(currentGrantedDate)) {
             return res.status(400).json({ success: false, message: "Grant Date cannot be in the future." });
         }
 

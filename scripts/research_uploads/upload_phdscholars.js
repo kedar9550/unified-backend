@@ -93,6 +93,7 @@ async function processCSV() {
                         academicYear: academicYear._id,
                         rollNumber: row['rollNumber'] || `UNKNOWN-${Date.now()}`,
                         studentName: row['studentName'] || 'Unknown Student',
+                        titleOfPhdWork: row['titleOfPhdWork'] || row['title'] || row['titleOfWork'] || `Ph.D Work - ${row['rollNumber'] || Date.now()}`,
                         course: row['course'] || 'Ph.D',
                         branch: row['branch'] || '',
                         scholarStatus: row['scholarStatus'] || 'Pursuing',

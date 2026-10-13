@@ -252,6 +252,7 @@ exports.getResearchRequests = async (req, res) => {
             if (searchRegex && !isResearchAdmin) {
                 patentQuery.$or = [
                     { title: searchRegex },
+                    { applicationNo: searchRegex },
                     { filingNo: searchRegex }
                 ];
             }
@@ -267,7 +268,7 @@ exports.getResearchRequests = async (req, res) => {
                 if (!fac) continue;
 
                 if (searchRegex) {
-                    const matchesTitle = searchRegex.test(item.title) || searchRegex.test(item.filingNo);
+                    const matchesTitle = searchRegex.test(item.title) || searchRegex.test(item.applicationNo || item.filingNo || '');
                     const matchesName = searchRegex.test(fac.name);
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
@@ -724,7 +725,9 @@ exports.getResearchReports = async (req, res) => {
                 facultyName: item.facultyId?.name || 'N/A',
                 empId: item.facultyId?.institutionId || 'N/A',
                 title: item.title || 'N/A',
-                filingNo: item.filingNo || 'N/A',
+                applicationNo: item.applicationNo || item.filingNo || 'N/A',
+                filingNo: item.applicationNo || item.filingNo || 'N/A',
+                patentStatus: item.patentStatus || 'N/A',
                 year: item.academicYear?.year || 'N/A',
                 amount: item.approvedAmount || 0,
                 panNo: item.panNumber || item.facultyId?.panNumber || 'N/A',
@@ -870,6 +873,7 @@ exports.editResearchDetails = async (req, res) => {
         }
 
         // Specific mapping conversions if needed
+        if (data.filingNo && !data.applicationNo) data.applicationNo = data.filingNo;
         // dateOfFiling / admissionOrAwardDate / sanctionDate conversions
         if (data.dateOfFiling) data.dateOfFiling = new Date(data.dateOfFiling);
         if (data.admissionOrAwardDate) data.admissionOrAwardDate = new Date(data.admissionOrAwardDate);
@@ -916,6 +920,29 @@ exports.editResearchDetails = async (req, res) => {
             }
         }
 
+        if (type.toLowerCase() === 'patent') {
+            if (doc.applyIncentive === 'Yes' || doc.applyIncentive === 'yes') {
+                const base = doc.patentStatus === 'Published' ? 5000 : (doc.patentStatus === 'Granted' ? 15000 : 0);
+                let expectedAmt = base;
+                if (doc.applyingSeedGrant === 'Yes' || doc.applyingSeedGrant === 'yes') {
+                    expectedAmt = expectedAmt / 2;
+                }
+                if (doc.isUtilityType === 'No') {
+                    expectedAmt = 0;
+                }
+                if (doc.patentStatus === 'Published') {
+                    if (!doc.published) doc.published = {};
+                    doc.published.publishedexpectedamount = expectedAmt;
+                } else if (doc.patentStatus === 'Granted') {
+                    if (!doc.granted) doc.granted = {};
+                    doc.granted.grantedexpectedamount = expectedAmt;
+                }
+            } else {
+                if (doc.published) doc.published.publishedexpectedamount = 0;
+                if (doc.granted) doc.granted.grantedexpectedamount = 0;
+            }
+        }
+
         // Save updated document
         const savedDoc = await doc.save();
 
@@ -927,6 +954,14 @@ exports.editResearchDetails = async (req, res) => {
 
     } catch (error) {
         console.error("Edit Research Details Error:", error);
+        if (error.code === 11000) {
+            const field = Object.keys(error.keyPattern || {})[0] || 'field';
+            const fieldLabel = field === 'titleOfPhdWork' ? 'Title of the Ph.D Work' : field;
+            return res.status(400).json({ 
+                success: false, 
+                message: `Duplicate entry: A record with this ${fieldLabel} already exists.` 
+            });
+        }
         res.status(500).json({ success: false, message: error.message });
     }
 };

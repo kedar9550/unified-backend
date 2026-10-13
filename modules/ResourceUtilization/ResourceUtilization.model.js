@@ -47,7 +47,7 @@ const ResourceUtilizationSchema = new mongoose.Schema({
     numberOfDaysOrganized: {
         type: Number
     },
-    courseFdpName: {
+    courseName: {
         type: String
     },
     organizingInstitutionCategory: {
