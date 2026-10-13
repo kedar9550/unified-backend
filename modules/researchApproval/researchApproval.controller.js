@@ -941,6 +941,22 @@ exports.editResearchDetails = async (req, res) => {
                 if (doc.published) doc.published.publishedexpectedamount = 0;
                 if (doc.granted) doc.granted.grantedexpectedamount = 0;
             }
+
+            if (data.approvedAmount !== undefined) {
+                if (doc.patentStatus === 'Published' && doc.published) {
+                    doc.published.publishedincentiveamount = doc.approvedAmount;
+                } else if (doc.patentStatus === 'Granted' && doc.granted) {
+                    doc.granted.grantedincentiveamount = doc.approvedAmount;
+                }
+            }
+            if (data.hodComment !== undefined) {
+                if (doc.patentStatus === 'Published' && doc.published) doc.published.hodComment = doc.hodComment;
+                else if (doc.patentStatus === 'Granted' && doc.granted) doc.granted.hodComment = doc.hodComment;
+            }
+            if (data.rndComment !== undefined) {
+                if (doc.patentStatus === 'Published' && doc.published) doc.published.rndComment = doc.rndComment;
+                else if (doc.patentStatus === 'Granted' && doc.granted) doc.granted.rndComment = doc.rndComment;
+            }
         }
 
         // Save updated document
