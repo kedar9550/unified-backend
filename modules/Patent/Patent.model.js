@@ -50,7 +50,9 @@ const PatentSchema = new mongoose.Schema({
             enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'] 
         },
         hodComment: { type: String },
-        rndComment: { type: String }
+        rndComment: { type: String },
+        appraisalClaimant: { type: String, default: null },
+        appraisalEligible: { type: String, enum: ['Yes', 'No'], default: null }
     },
 
     granted: {
@@ -67,7 +69,9 @@ const PatentSchema = new mongoose.Schema({
             enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'] 
         },
         hodComment: { type: String },
-        rndComment: { type: String }
+        rndComment: { type: String },
+        appraisalClaimant: { type: String, default: null },
+        appraisalEligible: { type: String, enum: ['Yes', 'No'], default: null }
     },
     coInventors: [CoInventorSchema],
     isStudentsInvolved: { type: String, enum: ['Yes', 'No'], default: 'No' },
