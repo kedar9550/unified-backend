@@ -746,6 +746,7 @@ exports.updatePatentStatus = async (req, res) => {
         const hasOtherAusAuthors = ausCoInventors.length > 0;
         const grantedClaimant = hasOtherAusAuthors ? null : applicantEmpId;
 
+        const statusUpdateTimestamp = new Date();
         const grantedInfo = {
             ...(patent.granted && typeof patent.granted.toObject === 'function' ? patent.granted.toObject() : (patent.granted || {})),
             academicYear: grantAcademicYear,
@@ -758,7 +759,8 @@ exports.updatePatentStatus = async (req, res) => {
             applyIncentive: grantedApplyIncentive,
             applyingSeedGrant: grantedApplyingSeedGrant,
             grantedexpectedamount: expectedAmt,
-            grantedinsentiveappllieddate: (grantedApplyIncentive === 'Yes' || grantedApplyIncentive === 'yes') ? new Date() : undefined,
+            submittedDate: statusUpdateTimestamp,
+            grantedinsentiveappllieddate: (grantedApplyIncentive === 'Yes' || grantedApplyIncentive === 'yes') ? statusUpdateTimestamp : undefined,
             appraisalClaimant: grantedClaimant,
             appraisalEligible: null
         };
@@ -779,6 +781,7 @@ exports.updatePatentStatus = async (req, res) => {
                 patentStatus: 'Granted',
                 status: 'Pending',
                 statusUpdatedToGranted: true,
+                statusUpdatedDate: statusUpdateTimestamp,
                 academicYear: grantAcademicYear,
                 hodComment: '',
                 rndComment: '',
@@ -938,7 +941,9 @@ exports.hodAction = async (req, res) => {
         
         try {
             const NotificationService = require('../../modules/notification/notification.service');
+            const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = patent.facultyId || patent.facultyId?._id;
+            const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
@@ -946,8 +951,8 @@ exports.hodAction = async (req, res) => {
                     senderId: req.user.userId,
                     module: 'Research',
                     type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Patent ${action}d by HOD`,
-                    message: `Your Patent has been ${action.toLowerCase()}d by HOD.`,
+                    title: `Patent ${action}d by ${approverRole}`,
+                    message: `Your Patent has been ${action.toLowerCase()}d by ${approverRole}.`,
                     link: '/research/patent-publication'
                 });
             }
@@ -966,7 +971,7 @@ exports.hodAction = async (req, res) => {
                         module: 'Research',
                         type: 'INFO',
                         title: `New Patent for R&D Approval`,
-                        message: `A Patent application is pending your approval.`,
+                        message: `A Patent application has been approved by ${approverRole} and is pending your approval.`,
                         link: '/research-dean/approvals'
                     });
                 }

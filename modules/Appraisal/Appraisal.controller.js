@@ -2883,12 +2883,18 @@ exports.resolveClaim = async (req, res) => {
             }
 
             if (stage === 'published') {
+                if (record.published?.appraisalClaimant) {
+                    return res.status(400).json({ success: false, message: "Appraisal claimant for published stage has already been designated and cannot be changed." });
+                }
                 record.published = record.published || {};
                 record.published.appraisalClaimant = employee.institutionId;
                 if (record.patentStatus === 'Published') {
                     record.appraisalClaimant = employee.institutionId;
                 }
             } else if (stage === 'granted') {
+                if (record.granted?.appraisalClaimant) {
+                    return res.status(400).json({ success: false, message: "Appraisal claimant for granted stage has already been designated and cannot be changed." });
+                }
                 record.granted = record.granted || {};
                 record.granted.appraisalClaimant = employee.institutionId;
                 if (record.patentStatus === 'Granted') {
@@ -2896,6 +2902,9 @@ exports.resolveClaim = async (req, res) => {
                 }
             }
         } else {
+            if (record.appraisalClaimant) {
+                return res.status(400).json({ success: false, message: "Appraisal claimant has already been designated and cannot be changed." });
+            }
             record.appraisalClaimant = employee.institutionId;
         }
         if (record.status === 'Approved' && (record.applyIncentive === 'Yes' || record.applyIncentive === 'yes')) {
