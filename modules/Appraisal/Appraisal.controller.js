@@ -1204,12 +1204,21 @@ exports.initiateOrGetAppraisal = async (req, res) => {
 
         // 2.4 Patents Published/Granted
         const patents = await Patent.find({
-            academicYear: academicYearId,
-            status: "Approved",
-            $or: [
-                { facultyId },
-                { 'coInventors.employeeId': faculty.institutionId },
-                { 'coInventors.name': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
+            $and: [
+                {
+                    $or: [
+                        { academicYear: academicYearId, status: "Approved" },
+                        { 'published.academicYear': academicYearId, 'published.status': "Approved" },
+                        { 'granted.academicYear': academicYearId, 'granted.status': "Approved" }
+                    ]
+                },
+                {
+                    $or: [
+                        { facultyId },
+                        { 'coInventors.employeeId': faculty.institutionId },
+                        { 'coInventors.name': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
+                    ]
+                }
             ]
         }).populate('facultyId', 'name institutionId');
 
@@ -1224,23 +1233,31 @@ exports.initiateOrGetAppraisal = async (req, res) => {
             let claimStatus = "unclaimed";
             let claimedBy = null;
 
-            if (p.appraisalClaimant) {
-                if (p.appraisalClaimant === faculty.institutionId) {
+            const isGrantedYear = p.granted?.academicYear?.toString() === academicYearId.toString();
+            const isPublishedYear = p.published?.academicYear?.toString() === academicYearId.toString();
+
+            const statusKey = isGrantedYear ? 'granted' : (isPublishedYear ? 'published' : (p.patentStatus ? p.patentStatus.toLowerCase().trim() : 'published'));
+            const stageClaimant = isGrantedYear
+                ? (p.granted?.appraisalClaimant || p.appraisalClaimant)
+                : isPublishedYear
+                    ? (p.published?.appraisalClaimant || p.appraisalClaimant)
+                    : (statusKey === 'granted' ? (p.granted?.appraisalClaimant || p.appraisalClaimant) : (p.published?.appraisalClaimant || p.appraisalClaimant));
+
+            if (stageClaimant) {
+                if (stageClaimant === faculty.institutionId) {
                     claimStatus = "claimed_by_me";
-                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase().trim() : 'published';
                     if (statusKey === 'published' || statusKey === 'granted') {
                         pts = config.research.patentPoints[statusKey] !== undefined ? config.research.patentPoints[statusKey] : (statusKey === 'granted' ? 20 : 5);
                     }
                 } else {
                     claimStatus = "claimed_by_other";
-                    const claimFaculty = await Employee.findOne({ institutionId: p.appraisalClaimant }).select("name institutionId");
+                    const claimFaculty = await Employee.findOne({ institutionId: stageClaimant }).select("name institutionId");
                     claimedBy = claimFaculty ? `${claimFaculty.name} (${claimFaculty.institutionId})` : "Other Faculty";
                     pts = 0;
                 }
             } else {
                 if (!isMultiAUSAuthor) {
                     claimStatus = "auto_eligible";
-                    const statusKey = p.patentStatus ? p.patentStatus.toLowerCase().trim() : 'published';
                     if (statusKey === 'published' || statusKey === 'granted') {
                         pts = config.research.patentPoints[statusKey] !== undefined ? config.research.patentPoints[statusKey] : (statusKey === 'granted' ? 20 : 5);
                     }
@@ -2588,34 +2605,52 @@ exports.getUnresolvedClaims = async (req, res) => {
 
         // 2. Patents
         const patents = await Patent.find({
-            academicYear: academicYearId,
-            status: 'Approved',
-            appraisalClaimant: null,
-            $or: [
-                { facultyId },
-                { 'coInventors.employeeId': faculty.institutionId },
-                { 'coInventors.name': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
+            $and: [
+                {
+                    $or: [
+                        { academicYear: academicYearId },
+                        { 'published.academicYear': academicYearId },
+                        { 'granted.academicYear': academicYearId }
+                    ]
+                },
+                {
+                    $or: [
+                        { facultyId },
+                        { 'coInventors.employeeId': faculty.institutionId },
+                        { 'coInventors.name': new RegExp(`^${escapeRegex(faculty.name)}$`, 'i') }
+                    ]
+                }
             ]
         }).populate('facultyId', 'name institutionId');
 
         for (const p of patents) {
-            const ausCoInventors = p.coInventors.filter(c => c.employeeId);
-            if (ausCoInventors.length > 0) {
-                const claimants = [
-                    { _id: p.facultyId._id, name: p.facultyId.name, institutionId: p.facultyId.institutionId },
-                    ...ausCoInventors.map(c => ({ _id: c.employeeId, name: c.name, institutionId: c.employeeId }))
-                ];
-                const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
+            const isGrantedYear = p.granted?.academicYear?.toString() === academicYearId.toString();
+            const isPublishedYear = p.published?.academicYear?.toString() === academicYearId.toString();
+            const targetStage = isGrantedYear ? 'granted' : (isPublishedYear ? 'published' : (p.patentStatus === 'Granted' ? 'granted' : 'published'));
+            const stageStatus = targetStage === 'granted' ? (p.granted?.status || p.status) : (p.published?.status || p.status);
+            const stageEligible = targetStage === 'granted' ? (p.granted?.appraisalEligible || p.appraisalEligible) : (p.published?.appraisalEligible || p.appraisalEligible);
+            const stageClaimant = targetStage === 'granted' ? p.granted?.appraisalClaimant : p.published?.appraisalClaimant;
 
-                unresolved.push({
-                    _id: p._id,
-                    type: 'Patent',
-                    title: p.title,
-                    info: `Patent Name: ${p.patentName}`,
-                    applicant: p.facultyId,
-                    isApplicant: p.facultyId._id.toString() === facultyId.toString(),
-                    eligibleClaimants: uniqueClaimants
-                });
+            if (stageStatus === 'Approved' && (stageEligible === 'Yes' || (!stageEligible && p.appraisalEligible === 'Yes')) && !stageClaimant && !p.appraisalClaimant) {
+                const ausCoInventors = (p.coInventors || []).filter(c => c.employeeId);
+                if (ausCoInventors.length > 0) {
+                    const claimants = [
+                        { _id: p.facultyId._id, name: p.facultyId.name, institutionId: p.facultyId.institutionId },
+                        ...ausCoInventors.map(c => ({ _id: c.employeeId, name: c.name, institutionId: c.employeeId }))
+                    ];
+                    const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
+
+                    unresolved.push({
+                        _id: p._id,
+                        type: 'Patent',
+                        stage: targetStage,
+                        title: p.title,
+                        info: `Patent Name: ${p.patentName} (${targetStage.toUpperCase()})`,
+                        applicant: p.facultyId,
+                        isApplicant: p.facultyId._id.toString() === facultyId.toString(),
+                        eligibleClaimants: uniqueClaimants
+                    });
+                }
             }
         }
 
@@ -2811,6 +2846,29 @@ exports.resolveClaim = async (req, res) => {
         }
 
         record.appraisalClaimant = employee.institutionId;
+        if (researchType === 'Patent' || model.modelName === 'Patent') {
+            const stage = req.body.stage;
+            if (stage === 'published') {
+                record.published = record.published || {};
+                record.published.appraisalClaimant = employee.institutionId;
+                if (record.patentStatus === 'Published') {
+                    record.appraisalClaimant = employee.institutionId;
+                }
+            } else if (stage === 'granted') {
+                record.granted = record.granted || {};
+                record.granted.appraisalClaimant = employee.institutionId;
+                record.appraisalClaimant = employee.institutionId;
+            } else {
+                if (record.patentStatus === 'Granted') {
+                    record.granted = record.granted || {};
+                    record.granted.appraisalClaimant = employee.institutionId;
+                } else {
+                    record.published = record.published || {};
+                    record.published.appraisalClaimant = employee.institutionId;
+                }
+                record.appraisalClaimant = employee.institutionId;
+            }
+        }
         if (record.status === 'Approved' && (record.applyIncentive === 'Yes' || record.applyIncentive === 'yes')) {
             const applicantEmp = await Employee.findById(record.facultyId).select('institutionId');
             if (applicantEmp && applicantEmp.institutionId) {
