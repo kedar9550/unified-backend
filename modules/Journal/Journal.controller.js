@@ -74,6 +74,16 @@ exports.createJournal = async (req, res) => {
             }
         }
 
+        // ISSN / eISSN Format Validation
+        const ISSN_REGEX = /^\d{4}-\d{3}[\dX]$/;
+        if (data.issn && data.issn.trim() && !ISSN_REGEX.test(data.issn.trim())) {
+            return res.status(400).json({ success: false, message: "Invalid ISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 0028-0836)" });
+        }
+        if (data.eissn && data.eissn.trim() && !ISSN_REGEX.test(data.eissn.trim())) {
+            return res.status(400).json({ success: false, message: "Invalid eISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 2049-3630)" });
+        }
+
+        if (!req.files || !req.files.publishedPaper || !req.files.referencePages || !req.files.completeJournal) {
         let numberOfReferencesBelongingToAGEC = 0;
         if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
             if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
@@ -138,20 +148,40 @@ exports.createJournal = async (req, res) => {
         // Fetch JCR Impact Factor from JournalImpactFactor collection
         const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
         const searchName = (data.journalName || '').trim().toUpperCase();
-        const jifRecord = await JournalImpactFactor.findOne({
-            journalName: new RegExp(`^${escapeRegex(searchName)}$`)
-        });
+        let jifRecord = null;
+        if (data.issn || data.eissn) {
+            const orConds = [];
+            if (data.issn) orConds.push({ issn: data.issn.trim() }, { eissn: data.issn.trim() });
+            if (data.eissn) orConds.push({ issn: data.eissn.trim() }, { eissn: data.eissn.trim() });
+            jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+        }
+        if (!jifRecord && searchName) {
+            jifRecord = await JournalImpactFactor.findOne({
+                journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+            });
+        }
 
         const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;
 
         // Resolve Journal Category (journalCategory)
         let resolvedJournalCategory = (data.journalCategory || '').trim();
         if (resolvedJournalCategory === 'OTHERS' || !resolvedJournalCategory) {
-            if (data.journalName) {
+            if (data.journalName || cleanIssn || cleanEissn) {
                 const JournalMaster = require('../JournalMaster/JournalMaster.model');
-                const match = await JournalMaster.findOne({
-                    journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
-                });
+                let match = null;
+                if (data.journalName) {
+                    match = await JournalMaster.findOne({
+                        journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                    });
+                }
+                if (!match && (cleanIssn || cleanEissn)) {
+                    const jmOrConds = [];
+                    if (cleanIssn) jmOrConds.push({ issn: cleanIssn }, { eissn: cleanIssn });
+                    if (cleanEissn) jmOrConds.push({ issn: cleanEissn }, { eissn: cleanEissn });
+                    if (jmOrConds.length > 0) {
+                        match = await JournalMaster.findOne({ $or: jmOrConds });
+                    }
+                }
                 if (match && match.type) {
                     resolvedJournalCategory = match.type;
                 } else {
@@ -369,6 +399,15 @@ exports.updateJournal = async (req, res) => {
             }
         }
 
+        // ISSN / eISSN Format Validation
+        const ISSN_REGEX = /^\d{4}-\d{3}[\dX]$/;
+        if (data.issn && data.issn.trim() && !ISSN_REGEX.test(data.issn.trim())) {
+            return res.status(400).json({ success: false, message: "Invalid ISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 0028-0836)" });
+        }
+        if (data.eissn && data.eissn.trim() && !ISSN_REGEX.test(data.eissn.trim())) {
+            return res.status(400).json({ success: false, message: "Invalid eISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 2049-3630)" });
+        }
+
         // Validate completeJournal type strictly to PDF (no images or docx allowed)
         if (req.files && req.files.completeJournal) {
             const path = require('path');
@@ -438,12 +477,23 @@ exports.updateJournal = async (req, res) => {
         // Fetch JCR Impact Factor if journalName changed
         let jcrImpactFactor = journal.jcrImpactFactor;
         const currentJournalName = data.journalName !== undefined ? data.journalName : journal.journalName;
-        if (data.journalName) {
+        if (data.journalName || data.issn !== undefined || data.eissn !== undefined) {
             const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
-            const searchName = data.journalName.trim().toUpperCase();
-            const jifRecord = await JournalImpactFactor.findOne({
-                journalName: new RegExp(`^${escapeRegex(searchName)}$`)
-            });
+            const searchName = (data.journalName !== undefined ? data.journalName : journal.journalName || '').trim().toUpperCase();
+            const checkIssn = data.issn !== undefined ? data.issn : journal.issn;
+            const checkEissn = data.eissn !== undefined ? data.eissn : journal.eissn;
+            let jifRecord = null;
+            if (checkIssn || checkEissn) {
+                const orConds = [];
+                if (checkIssn) orConds.push({ issn: checkIssn.trim() }, { eissn: checkIssn.trim() });
+                if (checkEissn) orConds.push({ issn: checkEissn.trim() }, { eissn: checkEissn.trim() });
+                jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+            }
+            if (!jifRecord && searchName) {
+                jifRecord = await JournalImpactFactor.findOne({
+                    journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                });
+            }
             jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : (data.jcrImpactFactor !== undefined ? data.jcrImpactFactor : journal.jcrImpactFactor);
         }
 
@@ -1344,13 +1394,22 @@ exports.fetchDoiDetails = async (req, res) => {
         }
 
         // Step 4: Lookup JCR Impact Factor from JournalImpactFactor collection
-        if (metadata.journalName) {
+        if (metadata.journalName || metadata.issn || metadata.eissn) {
             try {
                 const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
-                const searchName = metadata.journalName.trim();
-                const jifRecord = await JournalImpactFactor.findOne({
-                    journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
-                });
+                let jifRecord = null;
+                if (metadata.issn || metadata.eissn) {
+                    const orConds = [];
+                    if (metadata.issn) orConds.push({ issn: metadata.issn.trim() }, { eissn: metadata.issn.trim() });
+                    if (metadata.eissn) orConds.push({ issn: metadata.eissn.trim() }, { eissn: metadata.eissn.trim() });
+                    jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+                }
+                if (!jifRecord && metadata.journalName) {
+                    const searchName = (metadata.journalName || '').trim();
+                    jifRecord = await JournalImpactFactor.findOne({
+                        journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                    });
+                }
                 if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
                     metadata.jcrImpactFactor = String(jifRecord.jif);
                 } else {
@@ -1381,20 +1440,34 @@ exports.fetchDoiDetails = async (req, res) => {
 
 exports.fetchDetailsByName = async (req, res) => {
     try {
-        const { journalName } = req.body;
-        if (!journalName) return res.status(400).json({ success: false, message: 'Journal name is required' });
+        const { journalName, issn, eissn } = req.body;
+        if (!journalName && !issn && !eissn) return res.status(400).json({ success: false, message: 'Journal name or ISSN is required' });
         
-        const metadata = { journalName, journalCategory: 'OTHERS', jcrImpactFactor: '0' };
+        const metadata = { journalName: journalName || '', journalCategory: 'OTHERS', jcrImpactFactor: '0' };
         const JournalMaster = require('../JournalMaster/JournalMaster.model');
         const escapeRegex = require('../../utils/escapeRegex');
-        const searchName = journalName.trim().toUpperCase();
+        const searchName = (journalName || '').trim().toUpperCase();
         
-        const match = await JournalMaster.findOne({
-            journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
-        });
+        let match = null;
+        if (searchName) {
+            match = await JournalMaster.findOne({
+                journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+            });
+        }
+        if (!match && (issn || eissn)) {
+            const jmOr = [];
+            if (issn) jmOr.push({ issn: issn.trim() }, { eissn: issn.trim() });
+            if (eissn) jmOr.push({ issn: eissn.trim() }, { eissn: eissn.trim() });
+            if (jmOr.length > 0) {
+                match = await JournalMaster.findOne({ $or: jmOr });
+            }
+        }
         
         if (match && match.type) {
             metadata.journalCategory = match.type;
+            if (!metadata.journalName && match.journalTitle) {
+                metadata.journalName = match.journalTitle;
+            }
         }
         
         const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
