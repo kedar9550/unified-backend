@@ -37,14 +37,14 @@ exports.createPatent = async (req, res) => {
             return res.status(400).json({ success: false, message: "Granted Certificate is mandatory for Granted patents." });
         }
 
-        // Check file sizes individually (200KB limit as per guidelines)
+        // Check file sizes individually (500KB limit as per guidelines)
         const filesToCheck = ['cbr', 'form1', 'grantedCertificate'];
         for (const field of filesToCheck) {
-            if (req.files[field] && req.files[field][0].size > 200 * 1024) {
+            if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                 return res.status(400).json({
                     success: false,
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
             }
         }
@@ -333,15 +333,15 @@ exports.updatePatent = async (req, res) => {
             return res.status(400).json({ success: false, message: "Only rejected patents can be edited and resubmitted." });
         }
 
-        // Validate file sizes (200KB limit)
+        // Validate file sizes (500KB limit)
         const filesToCheck = ['cbr', 'form1', 'grantedCertificate'];
         if (req.files) {
             for (const field of filesToCheck) {
-                if (req.files[field] && req.files[field][0].size > 200 * 1024) {
+                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                     const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                     return res.status(400).json({
                         success: false,
-                        message: `${label} is too large. Maximum allowed size is 200KB.`
+                        message: `${label} is too large. Maximum allowed size is 500KB.`
                     });
                 }
             }
@@ -704,8 +704,8 @@ exports.updatePatentStatus = async (req, res) => {
             return res.status(400).json({ success: false, message: "Granted certificate is required." });
         }
 
-        if (req.files.grantedCertificate[0].size > 200 * 1024) {
-            return res.status(400).json({ success: false, message: "Granted certificate is too large. Maximum allowed size is 200KB." });
+        if (req.files.grantedCertificate[0].size > 500 * 1024) {
+            return res.status(400).json({ success: false, message: "Granted certificate is too large. Maximum allowed size is 500KB." });
         }
 
         const grantedApplyIncentive = data.applyIncentive || 'No';

@@ -84,7 +84,22 @@ exports.createJournal = async (req, res) => {
         }
 
         if (!req.files || !req.files.publishedPaper || !req.files.referencePages || !req.files.completeJournal) {
+        let numberOfReferencesBelongingToAGEC = 0;
+        if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
+            if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
+                return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
+            }
+            numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
+        } else if (data.numberOfReferencesBelongingToAGEC !== undefined && !isNaN(Number(data.numberOfReferencesBelongingToAGEC))) {
+            numberOfReferencesBelongingToAGEC = Number(data.numberOfReferencesBelongingToAGEC);
+        }
+
+        if (!req.files || !req.files.publishedPaper || !req.files.completeJournal) {
             return res.status(400).json({ success: false, message: "All documents are mandatory." });
+        }
+
+        if (numberOfReferencesBelongingToAGEC > 0 && !req.files.referencePages) {
+            return res.status(400).json({ success: false, message: "Reference Pages document is mandatory when AGEC references are greater than 0." });
         }
 
         // Validate completeJournal type strictly to PDF (no images or docx allowed)
@@ -99,14 +114,17 @@ exports.createJournal = async (req, res) => {
             }
         }
 
-        // Check other file sizes individually (200KB limit as per guidelines)
-        const filesToCheck = ['publishedPaper', 'referencePages'];
+        // Check other file sizes individually (500KB limit as per guidelines)
+        const filesToCheck = ['publishedPaper'];
+        if (numberOfReferencesBelongingToAGEC > 0) {
+            filesToCheck.push('referencePages');
+        }
         for (const field of filesToCheck) {
-            if (req.files[field] && req.files[field][0].size > 200 * 1024) {
+            if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                 return res.status(400).json({
                     success: false,
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
             }
         }
@@ -126,14 +144,6 @@ exports.createJournal = async (req, res) => {
         const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
-
-        let numberOfReferencesBelongingToAGEC = 0;
-        if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
-            if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
-                return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
-            }
-            numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
-        }
 
         // Fetch JCR Impact Factor from JournalImpactFactor collection
         const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
@@ -274,7 +284,11 @@ exports.createJournal = async (req, res) => {
 
         if (req.files) {
             if (req.files.publishedPaper) journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
-            if (req.files.referencePages) journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            if (numberOfReferencesBelongingToAGEC > 0 && req.files.referencePages) {
+                journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            } else {
+                journal.referencePages = null;
+            }
             if (req.files.completeJournal) journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
         }
 
@@ -406,15 +420,37 @@ exports.updateJournal = async (req, res) => {
             }
         }
 
-        // Check other file sizes (200KB limit)
+        // Calculate numberOfReferencesBelongingToAGEC
+        let numberOfReferencesBelongingToAGEC = journal.numberOfReferencesBelongingToAGEC || 0;
+        if (data.agecReferencingNumbers !== undefined) {
+            if (data.agecReferencingNumbers.trim()) {
+                if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
+                    return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
+                }
+                numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
+            } else {
+                numberOfReferencesBelongingToAGEC = 0;
+            }
+        } else if (data.numberOfReferencesBelongingToAGEC !== undefined && !isNaN(Number(data.numberOfReferencesBelongingToAGEC))) {
+            numberOfReferencesBelongingToAGEC = Number(data.numberOfReferencesBelongingToAGEC);
+        }
+
+        if (numberOfReferencesBelongingToAGEC > 0 && !req.files?.referencePages && !journal.referencePages) {
+            return res.status(400).json({ success: false, message: "Reference Pages document is mandatory when AGEC references are greater than 0." });
+        }
+
+        // Check other file sizes (500KB limit)
         if (req.files) {
-            const filesToCheck = ['publishedPaper', 'referencePages'];
+            const filesToCheck = ['publishedPaper'];
+            if (numberOfReferencesBelongingToAGEC > 0) {
+                filesToCheck.push('referencePages');
+            }
             for (const field of filesToCheck) {
-                if (req.files[field] && req.files[field][0].size > 200 * 1024) {
+                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                     const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                     return res.status(400).json({
                         success: false,
-                        message: `${label} is too large. Maximum allowed size is 200KB.`
+                        message: `${label} is too large. Maximum allowed size is 500KB.`
                     });
                 }
             }
@@ -437,18 +473,6 @@ exports.updateJournal = async (req, res) => {
         const { resolveCoAuthorsAndClaims, getDefaultClaimant } = require('../../utils/claimantHelper');
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
-
-        let numberOfReferencesBelongingToAGEC = journal.numberOfReferencesBelongingToAGEC;
-        if (data.agecReferencingNumbers !== undefined) {
-            if (data.agecReferencingNumbers.trim()) {
-                if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
-                    return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
-                }
-                numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
-            } else {
-                numberOfReferencesBelongingToAGEC = 0;
-            }
-        }
 
         // Fetch JCR Impact Factor if journalName changed
         let jcrImpactFactor = journal.jcrImpactFactor;
@@ -562,14 +586,24 @@ exports.updateJournal = async (req, res) => {
                 deleteOldFile(journal.publishedPaper);
                 journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
             }
-            if (req.files.referencePages) {
-                deleteOldFile(journal.referencePages);
-                journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            if (numberOfReferencesBelongingToAGEC > 0) {
+                if (req.files.referencePages) {
+                    deleteOldFile(journal.referencePages);
+                    journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+                }
+            } else {
+                if (journal.referencePages) {
+                    deleteOldFile(journal.referencePages);
+                    journal.referencePages = null;
+                }
             }
             if (req.files.completeJournal) {
                 deleteOldFile(journal.completeJournal);
                 journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
             }
+        } else if (numberOfReferencesBelongingToAGEC === 0 && journal.referencePages) {
+            deleteOldFile(journal.referencePages);
+            journal.referencePages = null;
         }
 
         // Handle case where user wants to remove an existing file without replacing it?
