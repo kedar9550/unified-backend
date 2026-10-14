@@ -76,14 +76,16 @@ exports.createJournal = async (req, res) => {
 
         // ISSN / eISSN Format Validation
         const ISSN_REGEX = /^\d{4}-\d{3}[\dX]$/;
-        if (data.issn && data.issn.trim() && !ISSN_REGEX.test(data.issn.trim())) {
+        const cleanIssn = (data.issn || '').trim();
+        const cleanEissn = (data.eissn || '').trim();
+
+        if (cleanIssn && !ISSN_REGEX.test(cleanIssn)) {
             return res.status(400).json({ success: false, message: "Invalid ISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 0028-0836)" });
         }
-        if (data.eissn && data.eissn.trim() && !ISSN_REGEX.test(data.eissn.trim())) {
+        if (cleanEissn && !ISSN_REGEX.test(cleanEissn)) {
             return res.status(400).json({ success: false, message: "Invalid eISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 2049-3630)" });
         }
 
-        if (!req.files || !req.files.publishedPaper || !req.files.referencePages || !req.files.completeJournal) {
         let numberOfReferencesBelongingToAGEC = 0;
         if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
             if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
