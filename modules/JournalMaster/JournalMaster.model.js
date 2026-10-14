@@ -7,6 +7,16 @@ const JournalMasterSchema = new mongoose.Schema({
         trim: true,
         uppercase: true
     },
+    issn: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    eissn: {
+        type: String,
+        trim: true,
+        default: ''
+    },
     impactFactor: {
         type: Number,
         default: null
@@ -23,5 +33,7 @@ const JournalMasterSchema = new mongoose.Schema({
 
 // Indexes for faster lookups
 JournalMasterSchema.index({ journalTitle: 1 });
+JournalMasterSchema.index({ issn: 1 });
+JournalMasterSchema.index({ eissn: 1 });
 
 module.exports = mongoose.model('JournalMaster', JournalMasterSchema);

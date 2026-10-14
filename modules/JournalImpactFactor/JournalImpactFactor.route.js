@@ -22,7 +22,10 @@ const csvStorage = multer.diskStorage({
 });
 const uploadCsv = multer({ storage: csvStorage });
 
-// Secure all endpoints under research deans and coordinators
+// Lookup JCR Impact Factor by ISSN, eISSN, or Journal Name (open to all authenticated faculty/staff)
+router.get('/lookup', protect, jifController.lookupJournalImpactFactor);
+
+// Secure admin/management endpoints under research deans and coordinators
 router.use(protect, authorize('RESEARCH_DEAN', 'RESEARCH_COORDINATOR'));
 
 router.get('/', jifController.getJournalImpactFactors);
