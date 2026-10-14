@@ -142,15 +142,15 @@ exports.createConference = async (req, res) => {
 
         const files = req.files || {};
 
-        // Validate file sizes according to guidelines (Complete Document up to 5MB, other documents up to 200KB)
+        // Validate file sizes according to guidelines (Complete Document up to 5MB, other documents up to 500KB)
         if (files.completeDocument && files.completeDocument[0].size > 5 * 1024 * 1024) {
             return res.status(400).json({ success: false, message: "Complete Document is too large. Maximum allowed size is 5MB." });
         }
         const otherConferenceFiles = ['certificate', 'firstPage', 'flightTicket'];
         for (const f of otherConferenceFiles) {
-            if (files[f] && files[f][0].size > 200 * 1024) {
+            if (files[f] && files[f][0].size > 500 * 1024) {
                 const label = f.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                return res.status(400).json({ success: false, message: `${label} is too large (${(files[f][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.` });
+                return res.status(400).json({ success: false, message: `${label} is too large (${(files[f][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.` });
             }
         }
 
@@ -452,9 +452,9 @@ exports.updateConference = async (req, res) => {
             }
             const otherConferenceFiles = ['certificate', 'firstPage', 'flightTicket'];
             for (const f of otherConferenceFiles) {
-                if (req.files[f] && req.files[f][0].size > 200 * 1024) {
+                if (req.files[f] && req.files[f][0].size > 500 * 1024) {
                     const label = f.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    return res.status(400).json({ success: false, message: `${label} is too large (${(req.files[f][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.` });
+                    return res.status(400).json({ success: false, message: `${label} is too large (${(req.files[f][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.` });
                 }
             }
 

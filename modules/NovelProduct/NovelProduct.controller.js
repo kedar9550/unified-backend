@@ -210,12 +210,12 @@ exports.updateNovelProduct = async (req, res) => {
             });
         }
 
-        // Validate file size (200KB limit as per guidelines)
+        // Validate file size (500KB limit as per guidelines)
         if (req.file) {
-            if (req.file.size > 200 * 1024) {
+            if (req.file.size > 500 * 1024) {
                 return res.status(400).json({ 
                     success: false, 
-                    message: `Supporting document is too large. Maximum allowed size is 200KB.` 
+                    message: `Supporting document is too large. Maximum allowed size is 500KB.` 
                 });
             }
         }

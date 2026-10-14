@@ -20,11 +20,11 @@ exports.createProject = async (req, res) => {
             return res.status(400).json({ success: false, message: "Sanction Order is mandatory." });
         }
 
-        // Check file size (200KB limit as per guidelines)
-        if (req.file.size > 200 * 1024) {
+        // Check file size (500KB limit as per guidelines)
+        if (req.file.size > 500 * 1024) {
             return res.status(400).json({ 
                 success: false, 
-                message: `File is too large (${(req.file.size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.` 
+                message: `File is too large (${(req.file.size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.` 
             });
         }
 

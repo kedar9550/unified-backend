@@ -41,6 +41,7 @@ const JournalSchema = new mongoose.Schema({
     journalName: { type: String, required: true },
     vol: { type: String },
     issue: { type: String },
+    pageNos: { type: String },
     publishedMonth: { type: String, required: true },
     publishedYear: { type: String, required: true },
     hIndex: { type: String },
@@ -59,7 +60,13 @@ const JournalSchema = new mongoose.Schema({
 
     // Files
     publishedPaper: { type: String, required: true },
-    referencePages: { type: String, required: true },
+    referencePages: {
+        type: String,
+        required: function() {
+            return (Number(this.numberOfReferencesBelongingToAGEC) || 0) > 0;
+        },
+        default: null
+    },
     completeJournal: { type: String },
 
     status: {

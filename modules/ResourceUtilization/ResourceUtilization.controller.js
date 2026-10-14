@@ -251,11 +251,11 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Relevant proof upload is mandatory." });
         }
 
-        // Validate file size (200KB limit)
-        if (req.file.size > 200 * 1024) {
+        // Validate file size (500KB limit)
+        if (req.file.size > 500 * 1024) {
             return res.status(400).json({
                 success: false,
-                message: `Proof document is too large (${(req.file.size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
+                message: `Proof document is too large (${(req.file.size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
             });
         }
 
@@ -614,10 +614,10 @@ exports.updateResourceUtilization = async (req, res) => {
         }
 
         if (req.file) {
-            if (req.file.size > 200 * 1024) {
+            if (req.file.size > 500 * 1024) {
                 return res.status(400).json({
                     success: false,
-                    message: `Proof document is too large (${(req.file.size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
+                    message: `Proof document is too large (${(req.file.size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
             }
             if (record.proof) {
