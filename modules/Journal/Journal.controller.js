@@ -28,6 +28,18 @@ const resolveWoSTypeAndStatus = (input) => {
     return { journalType: 'None', isWos: 'No' };
 };
 
+const getIssnVariants = (val) => {
+    if (!val) return [];
+    const trimmed = String(val).trim();
+    const unhyphenated = trimmed.replace(/-/g, '');
+    const variants = [trimmed];
+    if (unhyphenated.length === 8) {
+        variants.push(`${unhyphenated.slice(0, 4)}-${unhyphenated.slice(4)}`);
+        variants.push(unhyphenated);
+    }
+    return Array.from(new Set(variants));
+};
+
 // @desc    Submit new journal publication
 // @route   POST /api/research/journal
 // @access  Private (Faculty)
@@ -153,9 +165,21 @@ exports.createJournal = async (req, res) => {
         let jifRecord = null;
         if (data.issn || data.eissn) {
             const orConds = [];
-            if (data.issn) orConds.push({ issn: data.issn.trim() }, { eissn: data.issn.trim() });
-            if (data.eissn) orConds.push({ issn: data.eissn.trim() }, { eissn: data.eissn.trim() });
-            jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+            if (data.issn) {
+                getIssnVariants(data.issn).forEach(v => {
+                    orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                });
+            }
+            if (data.eissn) {
+                getIssnVariants(data.eissn).forEach(v => {
+                    orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                });
+            }
+            if (orConds.length > 0) {
+                jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+            }
         }
         if (!jifRecord && searchName) {
             jifRecord = await JournalImpactFactor.findOne({
@@ -163,7 +187,15 @@ exports.createJournal = async (req, res) => {
             });
         }
 
-        const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;
+        const isDirect = data.isDirectEntry === 'true' || data.isDirectEntry === true;
+        let jcrImpactFactor = "0";
+        if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
+            jcrImpactFactor = jifRecord.jif.toString();
+        } else if (isDirect && data.jcrImpactFactor !== undefined && data.jcrImpactFactor !== null && String(data.jcrImpactFactor).trim() !== '') {
+            jcrImpactFactor = String(data.jcrImpactFactor).trim();
+        } else {
+            jcrImpactFactor = "0";
+        }
 
         // Resolve Journal Category (journalCategory)
         let resolvedJournalCategory = (data.journalCategory || '').trim();
@@ -476,10 +508,10 @@ exports.updateJournal = async (req, res) => {
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
-        // Fetch JCR Impact Factor if journalName changed
-        let jcrImpactFactor = journal.jcrImpactFactor;
+        // Fetch JCR Impact Factor if journalName, issn, or eissn changed
+        let jcrImpactFactor = journal.jcrImpactFactor || "0";
         const currentJournalName = data.journalName !== undefined ? data.journalName : journal.journalName;
-        if (data.journalName || data.issn !== undefined || data.eissn !== undefined) {
+        if (data.journalName !== undefined || data.issn !== undefined || data.eissn !== undefined) {
             const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
             const searchName = (data.journalName !== undefined ? data.journalName : journal.journalName || '').trim().toUpperCase();
             const checkIssn = data.issn !== undefined ? data.issn : journal.issn;
@@ -487,16 +519,46 @@ exports.updateJournal = async (req, res) => {
             let jifRecord = null;
             if (checkIssn || checkEissn) {
                 const orConds = [];
-                if (checkIssn) orConds.push({ issn: checkIssn.trim() }, { eissn: checkIssn.trim() });
-                if (checkEissn) orConds.push({ issn: checkEissn.trim() }, { eissn: checkEissn.trim() });
-                jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+                if (checkIssn) {
+                    getIssnVariants(checkIssn).forEach(v => {
+                        orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    });
+                }
+                if (checkEissn) {
+                    getIssnVariants(checkEissn).forEach(v => {
+                        orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    });
+                }
+                if (orConds.length > 0) {
+                    jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+                }
             }
             if (!jifRecord && searchName) {
                 jifRecord = await JournalImpactFactor.findOne({
                     journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
                 });
             }
-            jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : (data.jcrImpactFactor !== undefined ? data.jcrImpactFactor : journal.jcrImpactFactor);
+
+            const activeRole = (req.headers['active-role'] || req.user?.role || '').toUpperCase().trim();
+            const userRoles = (req.user?.roles || []).flatMap(r => {
+                const roleName = (r.role?.name || '').toUpperCase().trim();
+                const roleKey = (r.role?.key || '').toUpperCase().trim();
+                const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+                return [roleName, roleKey, roleDirect].filter(Boolean);
+            });
+            const isRndAdmin = activeRole === 'RESEARCH_DEAN' || activeRole === 'RESEARCH_COORDINATOR' ||
+                               userRoles.includes('RESEARCH_DEAN') || userRoles.includes('RESEARCH_COORDINATOR') ||
+                               userRoles.includes('RESEARCH DEAN') || userRoles.includes('ADMIN');
+
+            if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
+                jcrImpactFactor = jifRecord.jif.toString();
+            } else if (isRndAdmin && data.jcrImpactFactor !== undefined && data.jcrImpactFactor !== null && String(data.jcrImpactFactor).trim() !== '') {
+                jcrImpactFactor = String(data.jcrImpactFactor).trim();
+            } else {
+                jcrImpactFactor = "0";
+            }
         }
 
         // Resolve Journal Category (journalCategory)
@@ -1402,9 +1464,21 @@ exports.fetchDoiDetails = async (req, res) => {
                 let jifRecord = null;
                 if (metadata.issn || metadata.eissn) {
                     const orConds = [];
-                    if (metadata.issn) orConds.push({ issn: metadata.issn.trim() }, { eissn: metadata.issn.trim() });
-                    if (metadata.eissn) orConds.push({ issn: metadata.eissn.trim() }, { eissn: metadata.eissn.trim() });
-                    jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+                    if (metadata.issn) {
+                        getIssnVariants(metadata.issn).forEach(v => {
+                            orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                            orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        });
+                    }
+                    if (metadata.eissn) {
+                        getIssnVariants(metadata.eissn).forEach(v => {
+                            orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                            orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        });
+                    }
+                    if (orConds.length > 0) {
+                        jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+                    }
                 }
                 if (!jifRecord && metadata.journalName) {
                     const searchName = (metadata.journalName || '').trim();
