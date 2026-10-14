@@ -274,15 +274,17 @@ exports.bulkUploadJournalImpactFactors = async (req, res, next) => {
                 }
             }
 
-            const jif = Number(jifStr);
+            let cleanedJif = (jifStr || '').trim().replace(/,/g, '.');
+            if (cleanedJif.startsWith('<')) {
+                cleanedJif = cleanedJif.replace('<', '').trim();
+            }
+            let jif = Number(cleanedJif);
+            if (isNaN(jif) || cleanedJif === '' || cleanedJif.toUpperCase() === 'N/A' || cleanedJif === '-' || cleanedJif.toUpperCase() === 'NOT AVAILABLE') {
+                jif = 0;
+            }
 
             if (!journalName) {
                 errors.push({ line: trimmedLine, error: 'Missing journal name' });
-                continue;
-            }
-
-            if (isNaN(jif)) {
-                errors.push({ line: trimmedLine, error: 'Invalid or missing JIF value' });
                 continue;
             }
 
@@ -304,23 +306,35 @@ exports.bulkUploadJournalImpactFactors = async (req, res, next) => {
                 success: false,
                 message: 'No valid journal impact factor rows found in CSV.',
                 errorCount: errors.length,
-                errors
+                errors: errors.slice(0, 50)
             });
         }
 
+        // Deduplicate by journalName in memory to avoid MongoDB WriteConflict during parallel upsert
+        const uniqueMap = new Map();
+        for (const item of results) {
+            uniqueMap.set(item.journalName, item);
+        }
+        const uniqueResults = Array.from(uniqueMap.values());
+
         let insertedCount = 0;
-        let skippedDuplicates = 0;
 
         try {
-            const bulkOps = results.map(item => ({
+            const bulkOps = uniqueResults.map(item => ({
                 updateOne: {
                     filter: { journalName: item.journalName },
                     update: { $set: item },
                     upsert: true
                 }
             }));
-            const bulkResult = await JournalImpactFactor.bulkWrite(bulkOps, { ordered: false });
-            insertedCount = bulkResult.upsertedCount + bulkResult.modifiedCount;
+
+            // Chunk in batches of 1,000 to prevent database timeout and wire payload overflow
+            const BATCH_SIZE = 1000;
+            for (let i = 0; i < bulkOps.length; i += BATCH_SIZE) {
+                const batch = bulkOps.slice(i, i + BATCH_SIZE);
+                const batchResult = await JournalImpactFactor.bulkWrite(batch, { ordered: false });
+                insertedCount += (batchResult.upsertedCount || 0) + (batchResult.modifiedCount || 0);
+            }
         } catch (bulkError) {
             console.error('Bulk write JIF error:', bulkError);
             return res.status(500).json({ success: false, message: 'Bulk upload failed.', error: bulkError.message });
@@ -328,10 +342,12 @@ exports.bulkUploadJournalImpactFactors = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            message: `Successfully processed CSV file.`,
-            insertedCount: results.length,
+            message: `Successfully processed CSV file (${uniqueResults.length} records).`,
+            insertedCount,
+            totalRows: results.length,
+            uniqueJournals: uniqueResults.length,
             errorCount: errors.length,
-            errors
+            errors: errors.slice(0, 50)
         });
     } catch (error) {
         console.error('Bulk upload JIF error:', error);
