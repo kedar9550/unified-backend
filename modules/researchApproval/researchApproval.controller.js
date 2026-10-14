@@ -700,6 +700,7 @@ exports.getResearchReports = async (req, res) => {
                     journalCategory: item.journalCategory || 'N/A',
                     vol: item.vol || 'N/A',
                     issue: item.issue || 'N/A',
+                    pageNos: item.pageNos || 'N/A',
                     hIndex: item.hIndex || 'N/A',
                     jcrImpactFactor: item.jcrImpactFactor || 'N/A',
                     citations: item.citations || 'N/A',
