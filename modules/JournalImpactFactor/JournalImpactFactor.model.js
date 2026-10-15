@@ -1,10 +1,6 @@
 const mongoose = require('mongoose');
 
 const JournalImpactFactorSchema = new mongoose.Schema({
-    rank: {
-        type: Number,
-        required: true
-    },
     journalName: {
         type: String,
         required: true,
@@ -15,7 +11,12 @@ const JournalImpactFactorSchema = new mongoose.Schema({
         trim: true,
         default: ''
     },
-    publisher: {
+    issn: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    eissn: {
         type: String,
         trim: true,
         default: ''
@@ -33,7 +34,8 @@ const JournalImpactFactorSchema = new mongoose.Schema({
 
 // Indices for optimizing queries and text search
 JournalImpactFactorSchema.index({ journalName: 1 });
-JournalImpactFactorSchema.index({ rank: 1 });
 JournalImpactFactorSchema.index({ abbreviatedJournal: 1 });
+JournalImpactFactorSchema.index({ issn: 1 });
+JournalImpactFactorSchema.index({ eissn: 1 });
 
 module.exports = mongoose.model('JournalImpactFactor', JournalImpactFactorSchema);

@@ -577,8 +577,18 @@ exports.getResearchReports = async (req, res) => {
             populate: { path: 'coreDepartment', select: 'name' }
         };
 
+        const phdQuery = (academicYear && academicYear !== 'All')
+            ? {
+                $or: [
+                    { academicYear },
+                    { 'pursuingDetails.academicYear': academicYear },
+                    { 'awardedDetails.academicYear': academicYear }
+                ]
+              }
+            : {};
+
         // Parallelize database queries across all requested categories
-        const [textbooksRaw, chaptersRaw, journalsRaw, conferencesRaw, patentsRaw, projectsRaw, productsRaw, consultanciesRaw] = await Promise.all([
+        const [textbooksRaw, chaptersRaw, journalsRaw, conferencesRaw, patentsRaw, projectsRaw, productsRaw, consultanciesRaw, phdScholarsRaw] = await Promise.all([
             shouldFetch('Text Book') ? Textbook.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
             shouldFetch('Book Chapter') ? BookChapter.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
             shouldFetch('Journal') ? Journal.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
@@ -586,7 +596,8 @@ exports.getResearchReports = async (req, res) => {
             shouldFetch('Patent') ? Patent.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
             shouldFetch('Funded Project') ? FundedProject.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
             shouldFetch('Novel Product') ? NovelProduct.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
-            shouldFetch('Consultancy') ? Consultancy.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([])
+            shouldFetch('Consultancy') ? Consultancy.find(query).populate(populateOptions).populate('academicYear', 'year').lean() : Promise.resolve([]),
+            shouldFetch('Ph.D Scholar') ? PhdApplication.find(phdQuery).populate(populateOptions).populate('academicYear', 'year').populate('pursuingDetails.academicYear', 'year').populate('awardedDetails.academicYear', 'year').lean() : Promise.resolve([])
         ]);
 
         const filterByDateRange = (list) => {
@@ -611,6 +622,7 @@ exports.getResearchReports = async (req, res) => {
         const projectsFiltered = filterByDateRange(projectsRaw);
         const productsFiltered = filterByDateRange(productsRaw);
         const consultanciesFiltered = filterByDateRange(consultanciesRaw);
+        const phdScholarsFiltered = filterByDateRange(phdScholarsRaw);
 
         const reportData = {
             textbooks: textbooksFiltered.map(item => ({
@@ -688,6 +700,7 @@ exports.getResearchReports = async (req, res) => {
                     journalCategory: item.journalCategory || 'N/A',
                     vol: item.vol || 'N/A',
                     issue: item.issue || 'N/A',
+                    pageNos: item.pageNos || 'N/A',
                     hIndex: item.hIndex || 'N/A',
                     jcrImpactFactor: item.jcrImpactFactor || 'N/A',
                     citations: item.citations || 'N/A',
@@ -801,7 +814,40 @@ exports.getResearchReports = async (req, res) => {
                 projectStatus: item.projectStatus || 'N/A',
                 coAuthorsText: formatAuthors(item.coInvestigators),
                 appliedAt: formatAppliedAt(item)
-            }))
+            })),
+
+            phdScholars: phdScholarsFiltered.map(item => {
+                const admissionDateRaw = item.pursuingDetails?.admissionDate || (item.scholarStatus === 'Pursuing' ? item.admissionOrAwardDate : null);
+                const awardDateRaw = item.awardedDetails?.awardDate || (item.scholarStatus === 'Awarded' && !item.pursuingDetails?.admissionDate ? item.admissionOrAwardDate : null);
+
+                const formatD = (d) => {
+                    if (!d) return 'N/A';
+                    const dt = new Date(d);
+                    return isNaN(dt.getTime()) ? 'N/A' : dt.toLocaleDateString('en-IN');
+                };
+
+                return {
+                    sNo: '',
+                    empId: item.facultyId?.institutionId || 'N/A',
+                    facultyName: item.facultyId?.name || 'N/A',
+                    dept: item.facultyId?.coreDepartment?.name || item.facultyId?.department?.name || 'N/A',
+                    rollNumber: item.rollNumber || 'N/A',
+                    studentName: item.studentName || 'N/A',
+                    titleOfPhdWork: item.titleOfPhdWork || 'N/A',
+                    course: item.course || 'Ph.D.',
+                    branch: item.branch || 'N/A',
+                    scholarStatus: item.scholarStatus || 'N/A',
+                    scholarType: item.scholarType || 'N/A',
+                    type: item.type === 'co-guide' ? 'Co-Guide' : 'Guide',
+                    university: item.university || 'N/A',
+                    admissionDate: formatD(admissionDateRaw),
+                    pursuingStatus: item.pursuingDetails?.status || (item.scholarStatus === 'Pursuing' ? item.status : 'N/A'),
+                    awardDate: formatD(awardDateRaw),
+                    awardedStatus: item.awardedDetails?.status || (item.scholarStatus === 'Awarded' ? item.status : 'Not Submitted'),
+                    year: item.academicYear?.year || item.pursuingDetails?.academicYear?.year || 'N/A',
+                    appliedAt: formatAppliedAt(item)
+                };
+            })
         };
 
         res.json({ success: true, data: reportData });

@@ -28,6 +28,18 @@ const resolveWoSTypeAndStatus = (input) => {
     return { journalType: 'None', isWos: 'No' };
 };
 
+const getIssnVariants = (val) => {
+    if (!val) return [];
+    const trimmed = String(val).trim();
+    const unhyphenated = trimmed.replace(/-/g, '');
+    const variants = [trimmed];
+    if (unhyphenated.length === 8) {
+        variants.push(`${unhyphenated.slice(0, 4)}-${unhyphenated.slice(4)}`);
+        variants.push(unhyphenated);
+    }
+    return Array.from(new Set(variants));
+};
+
 // @desc    Submit new journal publication
 // @route   POST /api/research/journal
 // @access  Private (Faculty)
@@ -74,8 +86,34 @@ exports.createJournal = async (req, res) => {
             }
         }
 
-        if (!req.files || !req.files.publishedPaper || !req.files.referencePages || !req.files.completeJournal) {
+        // ISSN / eISSN Format Validation
+        const ISSN_REGEX = /^\d{4}-\d{3}[\dX]$/;
+        const cleanIssn = (data.issn || '').trim();
+        const cleanEissn = (data.eissn || '').trim();
+
+        if (cleanIssn && !ISSN_REGEX.test(cleanIssn)) {
+            return res.status(400).json({ success: false, message: "Invalid ISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 0028-0836)" });
+        }
+        if (cleanEissn && !ISSN_REGEX.test(cleanEissn)) {
+            return res.status(400).json({ success: false, message: "Invalid eISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 2049-3630)" });
+        }
+
+        let numberOfReferencesBelongingToAGEC = 0;
+        if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
+            if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
+                return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
+            }
+            numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
+        } else if (data.numberOfReferencesBelongingToAGEC !== undefined && !isNaN(Number(data.numberOfReferencesBelongingToAGEC))) {
+            numberOfReferencesBelongingToAGEC = Number(data.numberOfReferencesBelongingToAGEC);
+        }
+
+        if (!req.files || !req.files.publishedPaper || !req.files.completeJournal) {
             return res.status(400).json({ success: false, message: "All documents are mandatory." });
+        }
+
+        if (numberOfReferencesBelongingToAGEC > 0 && !req.files.referencePages) {
+            return res.status(400).json({ success: false, message: "Reference Pages document is mandatory when AGEC references are greater than 0." });
         }
 
         // Validate completeJournal type strictly to PDF (no images or docx allowed)
@@ -90,14 +128,17 @@ exports.createJournal = async (req, res) => {
             }
         }
 
-        // Check other file sizes individually (200KB limit as per guidelines)
-        const filesToCheck = ['publishedPaper', 'referencePages'];
+        // Check other file sizes individually (500KB limit as per guidelines)
+        const filesToCheck = ['publishedPaper'];
+        if (numberOfReferencesBelongingToAGEC > 0) {
+            filesToCheck.push('referencePages');
+        }
         for (const field of filesToCheck) {
-            if (req.files[field] && req.files[field][0].size > 200 * 1024) {
+            if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                 const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                 return res.status(400).json({
                     success: false,
-                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 200KB.`
+                    message: `${label} is too large (${(req.files[field][0].size / 1024).toFixed(1)}KB). Maximum allowed size is 500KB.`
                 });
             }
         }
@@ -118,31 +159,63 @@ exports.createJournal = async (req, res) => {
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
-        let numberOfReferencesBelongingToAGEC = 0;
-        if (data.agecReferencingNumbers && data.agecReferencingNumbers.trim()) {
-            if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
-                return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
-            }
-            numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
-        }
-
         // Fetch JCR Impact Factor from JournalImpactFactor collection
         const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
         const searchName = (data.journalName || '').trim().toUpperCase();
-        const jifRecord = await JournalImpactFactor.findOne({
-            journalName: new RegExp(`^${escapeRegex(searchName)}$`)
-        });
+        let jifRecord = null;
+        if (data.issn || data.eissn) {
+            const orConds = [];
+            if (data.issn) {
+                getIssnVariants(data.issn).forEach(v => {
+                    orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                });
+            }
+            if (data.eissn) {
+                getIssnVariants(data.eissn).forEach(v => {
+                    orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                });
+            }
+            if (orConds.length > 0) {
+                jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+            }
+        }
+        if (!jifRecord && searchName) {
+            jifRecord = await JournalImpactFactor.findOne({
+                journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+            });
+        }
 
-        const jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : data.jcrImpactFactor || null;
+        const isDirect = data.isDirectEntry === 'true' || data.isDirectEntry === true;
+        let jcrImpactFactor = "0";
+        if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
+            jcrImpactFactor = jifRecord.jif.toString();
+        } else if (isDirect && data.jcrImpactFactor !== undefined && data.jcrImpactFactor !== null && String(data.jcrImpactFactor).trim() !== '') {
+            jcrImpactFactor = String(data.jcrImpactFactor).trim();
+        } else {
+            jcrImpactFactor = "0";
+        }
 
         // Resolve Journal Category (journalCategory)
         let resolvedJournalCategory = (data.journalCategory || '').trim();
         if (resolvedJournalCategory === 'OTHERS' || !resolvedJournalCategory) {
-            if (data.journalName) {
+            if (data.journalName || cleanIssn || cleanEissn) {
                 const JournalMaster = require('../JournalMaster/JournalMaster.model');
-                const match = await JournalMaster.findOne({
-                    journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
-                });
+                let match = null;
+                if (data.journalName) {
+                    match = await JournalMaster.findOne({
+                        journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                    });
+                }
+                if (!match && (cleanIssn || cleanEissn)) {
+                    const jmOrConds = [];
+                    if (cleanIssn) jmOrConds.push({ issn: cleanIssn }, { eissn: cleanIssn });
+                    if (cleanEissn) jmOrConds.push({ issn: cleanEissn }, { eissn: cleanEissn });
+                    if (jmOrConds.length > 0) {
+                        match = await JournalMaster.findOne({ $or: jmOrConds });
+                    }
+                }
                 if (match && match.type) {
                     resolvedJournalCategory = match.type;
                 } else {
@@ -245,7 +318,11 @@ exports.createJournal = async (req, res) => {
 
         if (req.files) {
             if (req.files.publishedPaper) journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
-            if (req.files.referencePages) journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            if (numberOfReferencesBelongingToAGEC > 0 && req.files.referencePages) {
+                journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            } else {
+                journal.referencePages = null;
+            }
             if (req.files.completeJournal) journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
         }
 
@@ -356,6 +433,15 @@ exports.updateJournal = async (req, res) => {
             }
         }
 
+        // ISSN / eISSN Format Validation
+        const ISSN_REGEX = /^\d{4}-\d{3}[\dX]$/;
+        if (data.issn && data.issn.trim() && !ISSN_REGEX.test(data.issn.trim())) {
+            return res.status(400).json({ success: false, message: "Invalid ISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 0028-0836)" });
+        }
+        if (data.eissn && data.eissn.trim() && !ISSN_REGEX.test(data.eissn.trim())) {
+            return res.status(400).json({ success: false, message: "Invalid eISSN format. Expected format: 1234-5679 or 1234-567X (e.g. 2049-3630)" });
+        }
+
         // Validate completeJournal type strictly to PDF (no images or docx allowed)
         if (req.files && req.files.completeJournal) {
             const path = require('path');
@@ -368,15 +454,37 @@ exports.updateJournal = async (req, res) => {
             }
         }
 
-        // Check other file sizes (200KB limit)
+        // Calculate numberOfReferencesBelongingToAGEC
+        let numberOfReferencesBelongingToAGEC = journal.numberOfReferencesBelongingToAGEC || 0;
+        if (data.agecReferencingNumbers !== undefined) {
+            if (data.agecReferencingNumbers.trim()) {
+                if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
+                    return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
+                }
+                numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
+            } else {
+                numberOfReferencesBelongingToAGEC = 0;
+            }
+        } else if (data.numberOfReferencesBelongingToAGEC !== undefined && !isNaN(Number(data.numberOfReferencesBelongingToAGEC))) {
+            numberOfReferencesBelongingToAGEC = Number(data.numberOfReferencesBelongingToAGEC);
+        }
+
+        if (numberOfReferencesBelongingToAGEC > 0 && !req.files?.referencePages && !journal.referencePages) {
+            return res.status(400).json({ success: false, message: "Reference Pages document is mandatory when AGEC references are greater than 0." });
+        }
+
+        // Check other file sizes (500KB limit)
         if (req.files) {
-            const filesToCheck = ['publishedPaper', 'referencePages'];
+            const filesToCheck = ['publishedPaper'];
+            if (numberOfReferencesBelongingToAGEC > 0) {
+                filesToCheck.push('referencePages');
+            }
             for (const field of filesToCheck) {
-                if (req.files[field] && req.files[field][0].size > 200 * 1024) {
+                if (req.files[field] && req.files[field][0].size > 500 * 1024) {
                     const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
                     return res.status(400).json({
                         success: false,
-                        message: `${label} is too large. Maximum allowed size is 200KB.`
+                        message: `${label} is too large. Maximum allowed size is 500KB.`
                     });
                 }
             }
@@ -400,28 +508,57 @@ exports.updateJournal = async (req, res) => {
         const { resolvedAuthors, hasOtherAusAuthors } = await resolveCoAuthorsAndClaims(parsedCoAuthors, req.user.userId);
         const appraisalClaimant = await getDefaultClaimant(hasOtherAusAuthors, req.user.userId, data.appraisalEligible || null);
 
-        let numberOfReferencesBelongingToAGEC = journal.numberOfReferencesBelongingToAGEC;
-        if (data.agecReferencingNumbers !== undefined) {
-            if (data.agecReferencingNumbers.trim()) {
-                if (/[^0-9,]/.test(data.agecReferencingNumbers)) {
-                    return res.status(400).json({ success: false, message: "AGEC Referencing Numbers must only contain numbers and commas." });
-                }
-                numberOfReferencesBelongingToAGEC = data.agecReferencingNumbers.split(',').map(s => s.trim()).filter(Boolean).length;
-            } else {
-                numberOfReferencesBelongingToAGEC = 0;
-            }
-        }
-
-        // Fetch JCR Impact Factor if journalName changed
-        let jcrImpactFactor = journal.jcrImpactFactor;
+        // Fetch JCR Impact Factor if journalName, issn, or eissn changed
+        let jcrImpactFactor = journal.jcrImpactFactor || "0";
         const currentJournalName = data.journalName !== undefined ? data.journalName : journal.journalName;
-        if (data.journalName) {
+        if (data.journalName !== undefined || data.issn !== undefined || data.eissn !== undefined) {
             const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
-            const searchName = data.journalName.trim().toUpperCase();
-            const jifRecord = await JournalImpactFactor.findOne({
-                journalName: new RegExp(`^${escapeRegex(searchName)}$`)
+            const searchName = (data.journalName !== undefined ? data.journalName : journal.journalName || '').trim().toUpperCase();
+            const checkIssn = data.issn !== undefined ? data.issn : journal.issn;
+            const checkEissn = data.eissn !== undefined ? data.eissn : journal.eissn;
+            let jifRecord = null;
+            if (checkIssn || checkEissn) {
+                const orConds = [];
+                if (checkIssn) {
+                    getIssnVariants(checkIssn).forEach(v => {
+                        orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    });
+                }
+                if (checkEissn) {
+                    getIssnVariants(checkEissn).forEach(v => {
+                        orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                    });
+                }
+                if (orConds.length > 0) {
+                    jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+                }
+            }
+            if (!jifRecord && searchName) {
+                jifRecord = await JournalImpactFactor.findOne({
+                    journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                });
+            }
+
+            const activeRole = (req.headers['active-role'] || req.user?.role || '').toUpperCase().trim();
+            const userRoles = (req.user?.roles || []).flatMap(r => {
+                const roleName = (r.role?.name || '').toUpperCase().trim();
+                const roleKey = (r.role?.key || '').toUpperCase().trim();
+                const roleDirect = (typeof r === 'string' ? r : (typeof r.role === 'string' ? r.role : '')).toUpperCase().trim();
+                return [roleName, roleKey, roleDirect].filter(Boolean);
             });
-            jcrImpactFactor = jifRecord ? jifRecord.jif.toString() : (data.jcrImpactFactor !== undefined ? data.jcrImpactFactor : journal.jcrImpactFactor);
+            const isRndAdmin = activeRole === 'RESEARCH_DEAN' || activeRole === 'RESEARCH_COORDINATOR' ||
+                               userRoles.includes('RESEARCH_DEAN') || userRoles.includes('RESEARCH_COORDINATOR') ||
+                               userRoles.includes('RESEARCH DEAN') || userRoles.includes('ADMIN');
+
+            if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
+                jcrImpactFactor = jifRecord.jif.toString();
+            } else if (isRndAdmin && data.jcrImpactFactor !== undefined && data.jcrImpactFactor !== null && String(data.jcrImpactFactor).trim() !== '') {
+                jcrImpactFactor = String(data.jcrImpactFactor).trim();
+            } else {
+                jcrImpactFactor = "0";
+            }
         }
 
         // Resolve Journal Category (journalCategory)
@@ -513,14 +650,24 @@ exports.updateJournal = async (req, res) => {
                 deleteOldFile(journal.publishedPaper);
                 journal.publishedPaper = `/uploads/journals/${req.files.publishedPaper[0].filename}`;
             }
-            if (req.files.referencePages) {
-                deleteOldFile(journal.referencePages);
-                journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+            if (numberOfReferencesBelongingToAGEC > 0) {
+                if (req.files.referencePages) {
+                    deleteOldFile(journal.referencePages);
+                    journal.referencePages = `/uploads/journals/${req.files.referencePages[0].filename}`;
+                }
+            } else {
+                if (journal.referencePages) {
+                    deleteOldFile(journal.referencePages);
+                    journal.referencePages = null;
+                }
             }
             if (req.files.completeJournal) {
                 deleteOldFile(journal.completeJournal);
                 journal.completeJournal = `/uploads/journals/${req.files.completeJournal[0].filename}`;
             }
+        } else if (numberOfReferencesBelongingToAGEC === 0 && journal.referencePages) {
+            deleteOldFile(journal.referencePages);
+            journal.referencePages = null;
         }
 
         // Handle case where user wants to remove an existing file without replacing it?
@@ -1311,13 +1458,34 @@ exports.fetchDoiDetails = async (req, res) => {
         }
 
         // Step 4: Lookup JCR Impact Factor from JournalImpactFactor collection
-        if (metadata.journalName) {
+        if (metadata.journalName || metadata.issn || metadata.eissn) {
             try {
                 const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
-                const searchName = metadata.journalName.trim();
-                const jifRecord = await JournalImpactFactor.findOne({
-                    journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
-                });
+                let jifRecord = null;
+                if (metadata.issn || metadata.eissn) {
+                    const orConds = [];
+                    if (metadata.issn) {
+                        getIssnVariants(metadata.issn).forEach(v => {
+                            orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                            orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        });
+                    }
+                    if (metadata.eissn) {
+                        getIssnVariants(metadata.eissn).forEach(v => {
+                            orConds.push({ issn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                            orConds.push({ eissn: new RegExp(`^${escapeRegex(v)}$`, 'i') });
+                        });
+                    }
+                    if (orConds.length > 0) {
+                        jifRecord = await JournalImpactFactor.findOne({ $or: orConds });
+                    }
+                }
+                if (!jifRecord && metadata.journalName) {
+                    const searchName = (metadata.journalName || '').trim();
+                    jifRecord = await JournalImpactFactor.findOne({
+                        journalName: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+                    });
+                }
                 if (jifRecord && jifRecord.jif !== undefined && jifRecord.jif !== null) {
                     metadata.jcrImpactFactor = String(jifRecord.jif);
                 } else {
@@ -1348,20 +1516,34 @@ exports.fetchDoiDetails = async (req, res) => {
 
 exports.fetchDetailsByName = async (req, res) => {
     try {
-        const { journalName } = req.body;
-        if (!journalName) return res.status(400).json({ success: false, message: 'Journal name is required' });
+        const { journalName, issn, eissn } = req.body;
+        if (!journalName && !issn && !eissn) return res.status(400).json({ success: false, message: 'Journal name or ISSN is required' });
         
-        const metadata = { journalName, journalCategory: 'OTHERS', jcrImpactFactor: '0' };
+        const metadata = { journalName: journalName || '', journalCategory: 'OTHERS', jcrImpactFactor: '0' };
         const JournalMaster = require('../JournalMaster/JournalMaster.model');
         const escapeRegex = require('../../utils/escapeRegex');
-        const searchName = journalName.trim().toUpperCase();
+        const searchName = (journalName || '').trim().toUpperCase();
         
-        const match = await JournalMaster.findOne({
-            journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
-        });
+        let match = null;
+        if (searchName) {
+            match = await JournalMaster.findOne({
+                journalTitle: new RegExp(`^${escapeRegex(searchName)}$`, 'i')
+            });
+        }
+        if (!match && (issn || eissn)) {
+            const jmOr = [];
+            if (issn) jmOr.push({ issn: issn.trim() }, { eissn: issn.trim() });
+            if (eissn) jmOr.push({ issn: eissn.trim() }, { eissn: eissn.trim() });
+            if (jmOr.length > 0) {
+                match = await JournalMaster.findOne({ $or: jmOr });
+            }
+        }
         
         if (match && match.type) {
             metadata.journalCategory = match.type;
+            if (!metadata.journalName && match.journalTitle) {
+                metadata.journalName = match.journalTitle;
+            }
         }
         
         const JournalImpactFactor = require('../JournalImpactFactor/JournalImpactFactor.model');
