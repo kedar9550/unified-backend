@@ -66,14 +66,14 @@ app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), req
 
 // Conditionally apply body parser limits: 50mb for PDF generation, 10kb for everything else
 app.use((req, res, next) => {
-    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools') || req.path === '/api/payslips/send-email') {
+    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools') || req.path === '/api/payslips/send-email' || req.path.startsWith('/api/forms') || req.path.startsWith('/api/public/forms')) {
         express.json({ limit: '50mb' })(req, res, next);
     } else {
         express.json({ limit: '10kb' })(req, res, next);
     }
 });
 app.use((req, res, next) => {
-    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools') || req.path === '/api/payslips/send-email') {
+    if (req.path === '/api/appraisal/generate-pdf' || req.path.startsWith('/api/event-schools') || req.path === '/api/payslips/send-email' || req.path.startsWith('/api/forms') || req.path.startsWith('/api/public/forms')) {
         express.urlencoded({ extended: false, limit: '50mb' })(req, res, next);
     } else {
         express.urlencoded({ extended: false, limit: '10kb' })(req, res, next);
@@ -123,6 +123,11 @@ app.use('/api/employees', require('./modules/employee/employee.route'));
 
 // Central Events Module Routes
 app.use('/api', require('./modules/CentralEvents/centralEvents.route'));
+
+// Dynamic Forms Module (Form Builder & Public Forms)
+const { adminRouter: dynamicFormsAdminRoutes, publicRouter: dynamicFormsPublicRoutes } = require('./modules/DynamicForms/dynamicForms.routes');
+app.use('/api/forms', dynamicFormsAdminRoutes);
+app.use('/api/public/forms', dynamicFormsPublicRoutes);
 
 // Start Central Events Payment Reconcile Cron (Disabled)
 // const { startPaymentReconcileCron } = require('./modules/CentralEvents/EventPayments/eventPayments.cron');

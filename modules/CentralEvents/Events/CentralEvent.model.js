@@ -63,6 +63,20 @@ const centralEventSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  subcategoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null
+  },
+  subcategoryCode: {
+    type: String,
+    trim: true,
+    default: null
+  },
+  subcategoryName: {
+    type: String,
+    trim: true,
+    default: null
+  },
   academicYear: {
     type: String,
     trim: true,
@@ -138,10 +152,15 @@ const centralEventSchema = new mongoose.Schema({
     amount: { type: Number, required: true, default: 0 },
     currency: { type: String, default: 'INR' }
   },
+  rounds: {
+    type: Number,
+    default: 1,
+    min: 1
+  },
   schedule: {
     fromDate: { type: Date, required: true },
-    toDate: { type: Date, required: true },
-    regDeadline: { type: Date, required: true }
+    toDate: { type: Date, default: function () { return this.schedule?.fromDate; } },
+    regDeadline: { type: Date, default: function () { return this.schedule?.fromDate; } }
   },
   eligibility: {
     years: [{ type: Number }],
