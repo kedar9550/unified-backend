@@ -40,7 +40,7 @@ const getOrganizers = async (req, res, next) => {
 const createCentralEvent = async (req, res, next) => {
   try {
     const {
-      typeCode, categoryId, level, activityType, organizer,
+      typeCode, categoryId, subcategoryId, rounds, level, activityType, organizer,
       title, description, inAssociationWith, outcomes, rules,
       mode, venue, participation, fee, schedule, eligibility,
       coordinators, resourcePersons, capacity
@@ -107,8 +107,8 @@ const createCentralEvent = async (req, res, next) => {
 
     // 4. Validate Dates
     const fromDate = new Date(schedule.fromDate);
-    const toDate = new Date(schedule.toDate);
-    const regDeadline = new Date(schedule.regDeadline);
+    const toDate = schedule.toDate ? new Date(schedule.toDate) : new Date(schedule.fromDate);
+    const regDeadline = schedule.regDeadline ? new Date(schedule.regDeadline) : new Date(schedule.fromDate);
 
     if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime()) || isNaN(regDeadline.getTime())) {
       res.status(400);
@@ -135,6 +135,13 @@ const createCentralEvent = async (req, res, next) => {
       slug = `${baseSlug}-${counter++}`;
     }
 
+    let subcatObj = null;
+    if (catObj && subcategoryId) {
+      subcatObj = (catObj.subcategories || []).find(
+        (s) => String(s._id) === String(subcategoryId) || s.code === String(subcategoryId).toUpperCase().trim()
+      );
+    }
+
     // 7. Create Central Event Document
     const newEvent = new CentralEvent({
       slug,
@@ -142,6 +149,9 @@ const createCentralEvent = async (req, res, next) => {
       typeCode: typeObj.code,
       categoryId: catObj ? catObj._id : null,
       categoryName: catObj ? catObj.name : null,
+      subcategoryId: subcatObj ? subcatObj._id : (subcategoryId || null),
+      subcategoryCode: subcatObj ? subcatObj.code : (req.body.subcategoryCode || null),
+      subcategoryName: subcatObj ? subcatObj.name : (req.body.subcategoryName || null),
       department: req.body.department || req.body.departments || [],
       academicYear: req.body.academicYear || catObj?.academicYear || null,
       level: typeObj.hasLevels ? level : null,
@@ -164,6 +174,7 @@ const createCentralEvent = async (req, res, next) => {
         amount: Math.max(0, parseInt(fee?.amount || 0, 10)),
         currency: fee?.currency || 'INR'
       },
+      rounds: Math.max(1, parseInt(rounds || 1, 10)),
       schedule: {
         fromDate,
         toDate,
@@ -215,13 +226,34 @@ const updateCentralEvent = async (req, res, next) => {
     }
     if (updates.schedule) {
       const fromDate = new Date(updates.schedule.fromDate || event.schedule.fromDate);
-      const toDate = new Date(updates.schedule.toDate || event.schedule.toDate);
-      const regDeadline = new Date(updates.schedule.regDeadline || event.schedule.regDeadline);
+      const toDate = updates.schedule.toDate ? new Date(updates.schedule.toDate) : new Date(updates.schedule.fromDate || event.schedule.toDate);
+      const regDeadline = updates.schedule.regDeadline ? new Date(updates.schedule.regDeadline) : new Date(updates.schedule.fromDate || event.schedule.regDeadline);
       if (toDate < fromDate) {
         res.status(400);
         return next(new Error('toDate must be after or equal to fromDate'));
       }
       updates.schedule = { fromDate, toDate, regDeadline };
+    }
+
+    if (updates.categoryId && updates.subcategoryId) {
+      const catDoc = await CentralEventCategory.findById(updates.categoryId);
+      if (catDoc) {
+        const subDoc = (catDoc.subcategories || []).find(
+          (s) => String(s._id) === String(updates.subcategoryId) || s.code === String(updates.subcategoryId).toUpperCase().trim()
+        );
+        if (subDoc) {
+          updates.subcategoryCode = subDoc.code;
+          updates.subcategoryName = subDoc.name;
+        }
+      }
+    } else if (updates.categoryId && updates.subcategoryId === null) {
+      updates.subcategoryId = null;
+      updates.subcategoryCode = null;
+      updates.subcategoryName = null;
+    }
+
+    if (updates.rounds !== undefined) {
+      updates.rounds = Math.max(1, parseInt(updates.rounds || 1, 10));
     }
 
     updates.updatedBy = req.user?.userId;
@@ -283,13 +315,14 @@ const cancelCentralEvent = async (req, res, next) => {
 const getCentralEvents = async (req, res, next) => {
   try {
     const {
-      typeCode, categoryId, level, activityType, status, mode, academicYear,
+      typeCode, categoryId, subcategoryId, level, activityType, status, mode, academicYear,
       fromDate, toDate, search, cursor, limit = 20
     } = req.query;
 
     const filter = {};
     if (typeCode) filter.typeCode = typeCode.toUpperCase();
     if (categoryId) filter.categoryId = new mongoose.Types.ObjectId(categoryId);
+    if (subcategoryId) filter.subcategoryId = new mongoose.Types.ObjectId(subcategoryId);
     if (level) filter.level = level.toUpperCase();
     if (activityType) filter.activityType = activityType.toUpperCase();
     if (status && status.toUpperCase() !== 'ALL') {
@@ -334,6 +367,9 @@ const getCentralEvents = async (req, res, next) => {
       typeCode: 1,
       categoryId: 1,
       categoryName: 1,
+      subcategoryId: 1,
+      subcategoryCode: 1,
+      subcategoryName: 1,
       level: 1,
       activityType: 1,
       organizer: 1,
@@ -345,6 +381,7 @@ const getCentralEvents = async (req, res, next) => {
       venue: 1,
       participation: 1,
       fee: 1,
+      rounds: 1,
       schedule: 1,
       banner: 1,
       status: 1,
