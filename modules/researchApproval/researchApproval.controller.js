@@ -13,6 +13,8 @@ const NovelProduct = require('../NovelProduct/NovelProduct.model');
 const { getHODDepartments } = require('../../utils/hodHelper');
 const escapeRegex = require('../../utils/escapeRegex');
 const { calculateJournalIncentive } = require('../../utils/journalIncentiveCalculator');
+const AcademicYear = require('../academicYear/academicYear.model');
+const { resolveActiveAcademicYear } = require('../academicYear/academicYear.controller');
 
 // @desc    Get all research requests for HOD departments or Research Admin
 // @route   GET /api/research-approval
@@ -25,7 +27,8 @@ exports.getResearchRequests = async (req, res) => {
             duration,
             fromDate,
             toDate,
-            search
+            search,
+            academicYear
         } = req.query;
 
         // Check if user has research management roles
@@ -105,6 +108,53 @@ exports.getResearchRequests = async (req, res) => {
                 $gte: new Date(fromDate),
                 $lte: new Date(new Date(toDate).setHours(23, 59, 59, 999))
             };
+        }
+
+        // Academic Year Filter Logic
+        let targetAyDoc = null;
+        let targetAyId = null;
+        let targetAyYear = null;
+        const isAllYears = academicYear === 'ALL' || academicYear === 'all';
+
+        if (!isAllYears) {
+            if (academicYear) {
+                if (mongoose.isValidObjectId(academicYear)) {
+                    targetAyDoc = await AcademicYear.findById(academicYear);
+                }
+                if (!targetAyDoc) {
+                    targetAyDoc = await AcademicYear.findOne({ year: academicYear });
+                }
+                if (targetAyDoc) {
+                    targetAyId = targetAyDoc._id;
+                    targetAyYear = targetAyDoc.year;
+                } else {
+                    if (mongoose.isValidObjectId(academicYear)) {
+                        targetAyId = new mongoose.Types.ObjectId(academicYear);
+                    } else {
+                        targetAyYear = academicYear;
+                    }
+                }
+            } else {
+                // When first opening the page, fetch the current active year's data
+                targetAyDoc = await resolveActiveAcademicYear();
+                if (targetAyDoc) {
+                    targetAyId = targetAyDoc._id;
+                    targetAyYear = targetAyDoc.year;
+                }
+            }
+        }
+
+        let ayObjectId = null;
+        if (!isAllYears) {
+            if (targetAyId && mongoose.isValidObjectId(targetAyId)) {
+                ayObjectId = new mongoose.Types.ObjectId(targetAyId);
+            } else if (academicYear) {
+                ayObjectId = new mongoose.Types.ObjectId();
+            }
+        }
+
+        if (ayObjectId) {
+            query.academicYear = ayObjectId;
         }
 
         // Search Filter
@@ -248,16 +298,34 @@ exports.getResearchRequests = async (req, res) => {
         // Fetch Patents
         if (typesToFetch.includes('Patent')) {
             let patentQuery = { ...query };
+            delete patentQuery.academicYear;
 
+            const patentOrConditions = [];
             if (query.createdAt) {
                 const dateRange = query.createdAt;
                 delete patentQuery.createdAt;
-                patentQuery.$or = [
-                    { createdAt: dateRange },
-                    { statusUpdatedDate: dateRange },
-                    { 'granted.submittedDate': dateRange },
-                    { 'granted.grantedinsentiveappllieddate': dateRange }
-                ];
+                patentOrConditions.push({
+                    $or: [
+                        { createdAt: dateRange },
+                        { statusUpdatedDate: dateRange },
+                        { 'granted.submittedDate': dateRange },
+                        { 'granted.grantedinsentiveappllieddate': dateRange }
+                    ]
+                });
+            }
+
+            if (ayObjectId) {
+                patentOrConditions.push({
+                    $or: [
+                        { academicYear: ayObjectId },
+                        { 'published.academicYear': ayObjectId },
+                        { 'granted.academicYear': ayObjectId }
+                    ]
+                });
+            }
+
+            if (patentOrConditions.length > 0) {
+                patentQuery.$and = patentQuery.$and ? [...patentQuery.$and, ...patentOrConditions] : patentOrConditions;
             }
             
             if (searchRegex && !isResearchAdmin) {
@@ -271,6 +339,8 @@ exports.getResearchRequests = async (req, res) => {
             const patents = await Patent.find(patentQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
+                .populate('published.academicYear', 'year')
+                .populate('granted.academicYear', 'year')
                 .sort({ createdAt: -1 })
                 .lean();
 
@@ -299,7 +369,7 @@ exports.getResearchRequests = async (req, res) => {
                     createdAt: effectiveSubmittedDate,
                     submittedDate: effectiveSubmittedDate,
                     statusUpdatedToGranted: item.statusUpdatedToGranted,
-                    academicYear: item.academicYear,
+                    academicYear: item.academicYear || item.published?.academicYear || item.granted?.academicYear,
                     hodComment: item.hodComment,
                     rndComment: item.rndComment,
                     approvedAmount: item.approvedAmount
@@ -429,6 +499,18 @@ exports.getResearchRequests = async (req, res) => {
         // Fetch Ph.D. Scholar Applications
         if (typesToFetch.includes('Ph.D. Scholar')) {
             let phdQuery = { ...query };
+            delete phdQuery.academicYear;
+
+            if (ayObjectId) {
+                const phdAyCondition = {
+                    $or: [
+                        { academicYear: ayObjectId },
+                        { 'pursuingDetails.academicYear': ayObjectId },
+                        { 'awardedDetails.academicYear': ayObjectId }
+                    ]
+                };
+                phdQuery.$and = phdQuery.$and ? [...phdQuery.$and, phdAyCondition] : [phdAyCondition];
+            }
             
             if (searchRegex && !isResearchAdmin) {
                 phdQuery.$or = [{ studentName: searchRegex }, { rollNumber: searchRegex }];
@@ -437,6 +519,8 @@ exports.getResearchRequests = async (req, res) => {
             const phdApps = await PhdApplication.find(phdQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
+                .populate('pursuingDetails.academicYear', 'year')
+                .populate('awardedDetails.academicYear', 'year')
                 .sort({ createdAt: -1 })
                 .lean();
 
@@ -458,7 +542,7 @@ exports.getResearchRequests = async (req, res) => {
                     title: `${item.studentName} (${item.rollNumber})`,
                     status: item.status,
                     createdAt: item.createdAt,
-                    academicYear: item.academicYear,
+                    academicYear: item.academicYear || item.pursuingDetails?.academicYear || item.awardedDetails?.academicYear,
                     hodComment: item.hodComment,
                     rndComment: item.rndComment
                 });
@@ -510,7 +594,8 @@ exports.getResearchRequests = async (req, res) => {
 
         res.json({
             success: true,
-            data: allRequests
+            data: allRequests,
+            activeAcademicYear: targetAyDoc ? { _id: targetAyDoc._id, year: targetAyDoc.year } : null
         });
 
     } catch (error) {
