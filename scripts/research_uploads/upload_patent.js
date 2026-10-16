@@ -132,10 +132,11 @@ async function processCSV() {
                         college: row['college'] || '',
                         panNumber: row['panNumber'] || '',
                         title: row['title'] || `Patent ${row['filingNo'] || 'Unknown'}`,
-                        applicantName: 'Aditya University',
+                        applicantName: faculty.name || row['facultyName'] || 'Aditya University',
+                        applicantAffiliation: 'Aditya University',
                         patentName: row['patentName'] || `Patent ${row['filingNo'] || 'Unknown'}`,
                         area: row['area'] || 'Unknown Area',
-                        filingNo: row['filingNo'] || 'N/A',
+                        applicationNo: row['filingNo'] || 'N/A',
                         dateOfFiling: isNaN(dof) ? new Date() : dof,
                         patentFiledCountry: row['patentFiledCountry'] || 'India',
                         patentStatus: row['patentStatus'] || 'Filed',
@@ -144,6 +145,9 @@ async function processCSV() {
                         coInventors: coInventors,
                         
                         // Default fields
+                        isInstitutionRecord: 'No',
+                        isUtilityType: 'Yes',
+                        isStudentsInvolved: 'No',
                         applyIncentive: 'No',
                         applyingSeedGrant: 'No',
                         cbr: 'placeholder.pdf',
@@ -153,8 +157,14 @@ async function processCSV() {
                     };
 
                     // 5. Save to DB
-                    const existingPatent = await Patent.findOne({ filingNo: patentData.filingNo, facultyId: faculty._id });
-                    if (existingPatent && patentData.filingNo !== 'N/A') {
+                    const existingPatent = await Patent.findOne({
+                        $or: [
+                            { applicationNo: patentData.applicationNo },
+                            { filingNo: patentData.applicationNo }
+                        ],
+                        facultyId: faculty._id
+                    });
+                    if (existingPatent && patentData.applicationNo !== 'N/A') {
                         console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
                     } else {
                         await Patent.create(patentData);
