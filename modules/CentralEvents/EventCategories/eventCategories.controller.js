@@ -1,5 +1,6 @@
 const CentralEventCategory = require('./CentralEventCategory.model');
 const CentralEventType = require('../EventTypes/CentralEventType.model');
+const CentralEvent = require('../Events/CentralEvent.model');
 
 // In-Memory Cache
 const cachedCategoriesMap = new Map();
@@ -145,6 +146,10 @@ const updateCentralEventCategory = async (req, res, next) => {
 
     await category.save();
     cachedCategoriesMap.delete(category.typeCode); // clear cache
+
+    if (name) {
+      await CentralEvent.updateMany({ categoryId: category._id }, { $set: { categoryName: category.name } }).catch(() => {});
+    }
 
     res.json({ success: true, data: category });
   } catch (error) {
@@ -343,6 +348,11 @@ const updateCentralEventSubcategory = async (req, res, next) => {
 
     await category.save();
     cachedCategoriesMap.delete(category.typeCode);
+
+    await CentralEvent.updateMany(
+      { subcategoryId: subItem._id },
+      { $set: { subcategoryCode: subItem.code, subcategoryName: subItem.name } }
+    ).catch(() => {});
 
     res.json({ success: true, data: subItem });
   } catch (error) {
