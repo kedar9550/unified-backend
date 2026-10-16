@@ -149,7 +149,7 @@ const createCentralEvent = async (req, res, next) => {
       typeCode: typeObj.code,
       categoryId: catObj ? catObj._id : null,
       categoryName: catObj ? catObj.name : null,
-      subcategoryId: subcatObj ? subcatObj._id : (subcategoryId || null),
+      subcategoryId: subcatObj ? subcatObj._id : (mongoose.Types.ObjectId.isValid(subcategoryId) ? subcategoryId : null),
       subcategoryCode: subcatObj ? subcatObj.code : (req.body.subcategoryCode || null),
       subcategoryName: subcatObj ? subcatObj.name : (req.body.subcategoryName || null),
       department: req.body.department || req.body.departments || [],
@@ -188,7 +188,7 @@ const createCentralEvent = async (req, res, next) => {
       capacity: capacity || 100,
       registrationCount: 0,
       status: 'DRAFT',
-      createdBy: req.user?.userId || null
+      createdBy: (req.user?.userId && mongoose.Types.ObjectId.isValid(req.user.userId)) ? req.user.userId : null
     });
 
     await newEvent.save();
@@ -235,18 +235,37 @@ const updateCentralEvent = async (req, res, next) => {
       updates.schedule = { fromDate, toDate, regDeadline };
     }
 
-    if (updates.categoryId && updates.subcategoryId) {
-      const catDoc = await CentralEventCategory.findById(updates.categoryId);
+    const effectiveCatId = updates.categoryId !== undefined ? updates.categoryId : event.categoryId;
+    if (effectiveCatId) {
+      const catDoc = await CentralEventCategory.findById(effectiveCatId);
       if (catDoc) {
-        const subDoc = (catDoc.subcategories || []).find(
-          (s) => String(s._id) === String(updates.subcategoryId) || s.code === String(updates.subcategoryId).toUpperCase().trim()
-        );
-        if (subDoc) {
-          updates.subcategoryCode = subDoc.code;
-          updates.subcategoryName = subDoc.name;
+        if (updates.categoryId) {
+          updates.categoryName = catDoc.name;
+        }
+        if (updates.subcategoryId) {
+          const subDoc = (catDoc.subcategories || []).find(
+            (s) => String(s._id) === String(updates.subcategoryId) || s.code === String(updates.subcategoryId).toUpperCase().trim()
+          );
+          if (subDoc) {
+            updates.subcategoryId = subDoc._id;
+            updates.subcategoryCode = subDoc.code;
+            updates.subcategoryName = subDoc.name;
+          } else if (mongoose.Types.ObjectId.isValid(updates.subcategoryId)) {
+            updates.subcategoryId = new mongoose.Types.ObjectId(updates.subcategoryId);
+          } else {
+            updates.subcategoryId = null;
+            updates.subcategoryCode = null;
+            updates.subcategoryName = null;
+          }
+        } else if (updates.subcategoryId === null || updates.subcategoryId === '') {
+          updates.subcategoryId = null;
+          updates.subcategoryCode = null;
+          updates.subcategoryName = null;
         }
       }
-    } else if (updates.categoryId && updates.subcategoryId === null) {
+    } else if (updates.categoryId === null || updates.categoryId === '') {
+      updates.categoryId = null;
+      updates.categoryName = null;
       updates.subcategoryId = null;
       updates.subcategoryCode = null;
       updates.subcategoryName = null;
@@ -256,7 +275,11 @@ const updateCentralEvent = async (req, res, next) => {
       updates.rounds = Math.max(1, parseInt(updates.rounds || 1, 10));
     }
 
-    updates.updatedBy = req.user?.userId;
+    if (req.user?.userId && mongoose.Types.ObjectId.isValid(req.user.userId)) {
+      updates.updatedBy = req.user.userId;
+    } else {
+      delete updates.updatedBy;
+    }
 
     const updated = await CentralEvent.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
     res.json({ success: true, data: updated });
