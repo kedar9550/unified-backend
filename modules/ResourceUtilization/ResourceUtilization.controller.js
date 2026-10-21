@@ -92,6 +92,11 @@ exports.createResourceUtilization = async (req, res) => {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
+        // =========================================================================
+        // TEMPORARILY DISABLED (Delayed launch - allow uploading past activities):
+        // Re-enable this block when ready.
+        // =========================================================================
+        /*
         // 21 days validation
         if (data.eventEndDate && !isDirectEntry) {
             const end = new Date(data.eventEndDate);
@@ -106,6 +111,7 @@ exports.createResourceUtilization = async (req, res) => {
                 return res.status(400).json({ success: false, message: "You cannot add activities that ended more than 3 weeks ago." });
             }
         }
+        */
 
         const role = (data.activityType || '').toLowerCase();
         const isResourcePerson = role.includes("resource person") || role.includes("resourceperson");
@@ -160,6 +166,7 @@ exports.createResourceUtilization = async (req, res) => {
                 "Govt. University",
                 "NIRF Ranked Institute (Below 200)",
                 "NPTEL",
+                "Other",
                 "Other / Host Institute"
             ];
             if (!allowedCategories.includes(data.organizingInstitutionCategory)) {
@@ -310,7 +317,7 @@ exports.createResourceUtilization = async (req, res) => {
             location: isCourseParticipant(data.activityCategory, data.activityType) ? data.location : undefined,
             labName: isCourseParticipant(data.activityCategory, data.activityType) && data.organizingInstitutionCategory === "MHRD R&D Lab" ? data.labName : undefined,
             universityName: isCourseParticipant(data.activityCategory, data.activityType) && data.organizingInstitutionCategory === "Govt. University" ? data.universityName : undefined,
-            instituteName: isCourseParticipant(data.activityCategory, data.activityType) && (data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" || data.organizingInstitutionCategory === "Other / Host Institute") ? data.instituteName : undefined,
+            instituteName: isCourseParticipant(data.activityCategory, data.activityType) && (data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" || data.organizingInstitutionCategory === "Other" || data.organizingInstitutionCategory === "Other / Host Institute") ? data.instituteName : undefined,
             nirfRank: isCourseParticipant(data.activityCategory, data.activityType) && data.organizingInstitutionCategory === "NIRF Ranked Institute (Below 200)" ? parseInt(data.nirfRank) : undefined
         });
 
@@ -475,6 +482,7 @@ exports.updateResourceUtilization = async (req, res) => {
                 "Govt. University",
                 "NIRF Ranked Institute (Below 200)",
                 "NPTEL",
+                "Other",
                 "Other / Host Institute"
             ];
             if (!allowedCategories.includes(organizingInstitutionCategory)) {
@@ -596,7 +604,7 @@ exports.updateResourceUtilization = async (req, res) => {
                 record.instituteName = data.instituteName !== undefined ? data.instituteName : record.instituteName;
                 const finalNirfRank = data.nirfRank !== undefined ? data.nirfRank : record.nirfRank;
                 record.nirfRank = finalNirfRank ? parseInt(finalNirfRank) : undefined;
-            } else if (finalOrgCategory === "Other / Host Institute") {
+            } else if (finalOrgCategory === "Other" || finalOrgCategory === "Other / Host Institute") {
                 record.instituteName = data.instituteName !== undefined ? data.instituteName : record.instituteName;
                 record.nirfRank = undefined;
             } else {
