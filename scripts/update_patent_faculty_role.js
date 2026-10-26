@@ -17,81 +17,103 @@ async function updatePatentFacultyRole() {
         const db = mongoose.connection.db;
         const col = db.collection('patents');
 
-        // Pre-update inspection
-        const total = await col.countDocuments();
-        const existingCount = await col.countDocuments({ facultyRole: { $exists: true, $ne: null } });
-        
+        // Regex matching Aditya university, AUS, AEC, Aditya College of Pharmacy (case-insensitive, handling multiple spaces)
+        const institutionRegex = /^(aditya\s+university|aus|aec|aditya\s+college\s+of\s+pharmacy)$/i;
+
         const missingRoleFilter = {
             $or: [
                 { facultyRole: { $exists: false } },
-                { facultyRole: null }
+                { facultyRole: null },
+                { facultyRole: '' }
             ]
         };
-        const missingTotal = await col.countDocuments(missingRoleFilter);
 
-        const adityaFilter = {
-            ...missingRoleFilter,
-            patentName: /^aditya\s+university$/i
-        };
-        const adityaCount = await col.countDocuments(adityaFilter);
+        const totalRecords = await col.countDocuments();
+        const existingWithRole = await col.countDocuments({
+            facultyRole: { $exists: true, $ne: null, $ne: '' }
+        });
+        const missingCount = await col.countDocuments(missingRoleFilter);
 
-        const remainingFilter = {
-            ...missingRoleFilter,
-            patentName: { $not: /^aditya\s+university$/i }
-        };
-        const remainingCount = await col.countDocuments(remainingFilter);
+        console.log('\n--- Pre-Update Status ---');
+        console.log(`Total documents: ${totalRecords}`);
+        console.log(`Records already having facultyRole (will NOT be touched): ${existingWithRole}`);
+        console.log(`Records missing facultyRole to be updated: ${missingCount}`);
 
-        console.log('\n--- Pre-Update Stats ---');
-        console.log(`Total patents: ${total}`);
-        console.log(`Records already having facultyRole (will be untouched): ${existingCount}`);
-        console.log(`Records missing facultyRole: ${missingTotal}`);
-        console.log(`  - With patentName "Aditya university" -> to become "Inventor / Co-Inventor": ${adityaCount}`);
-        console.log(`  - Remaining cases -> to become "Applicant": ${remainingCount}`);
+        const recordsToUpdate = await col.find(missingRoleFilter).toArray();
 
-        // Step 1: Update missing facultyRole where patentName is Aditya university
-        const resAditya = await col.updateMany(
-            adityaFilter,
-            { $set: { facultyRole: 'Inventor / Co-Inventor' } }
-        );
-        console.log(`\nUpdated Aditya University records: ${resAditya.modifiedCount} modified.`);
+        let updatedInventorCount = 0;
+        let updatedApplicantCount = 0;
+        let unhandledCount = 0;
 
-        // Step 2: Update remaining records where facultyRole is missing
-        const resRemaining = await col.updateMany(
-            missingRoleFilter,
-            { $set: { facultyRole: 'Applicant' } }
-        );
-        console.log(`Updated remaining records: ${resRemaining.modifiedCount} modified.`);
+        for (const doc of recordsToUpdate) {
+            const pName = (doc.patentName || '').trim();
+            const aName = (doc.applicantName || '').trim();
 
-        // Verification
+            let targetRole = null;
+
+            if (institutionRegex.test(pName) || institutionRegex.test(aName)) {
+                targetRole = 'Inventor / Co-Inventor';
+            } else if (pName.toLowerCase() === aName.toLowerCase()) {
+                targetRole = 'Applicant';
+            }
+
+            if (targetRole) {
+                await col.updateOne(
+                    { _id: doc._id },
+                    { $set: { facultyRole: targetRole } }
+                );
+
+                if (targetRole === 'Inventor / Co-Inventor') {
+                    updatedInventorCount++;
+                } else {
+                    updatedApplicantCount++;
+                }
+            } else {
+                console.warn(`[WARN] Unhandled record ${doc._id} (patentName: "${pName}", applicantName: "${aName}")`);
+                unhandledCount++;
+            }
+        }
+
+        console.log('\n--- Update Results ---');
+        console.log(`Updated to "Inventor / Co-Inventor": ${updatedInventorCount}`);
+        console.log(`Updated to "Applicant": ${updatedApplicantCount}`);
+        console.log(`Unhandled / skipped: ${unhandledCount}`);
+
+        // Post-update verification
         const postMissing = await col.countDocuments(missingRoleFilter);
         const distinctRoles = await col.distinct('facultyRole');
-        const roleDistribution = {};
+        const roleCounts = {};
         for (const role of distinctRoles) {
-            roleDistribution[role] = await col.countDocuments({ facultyRole: role });
+            roleCounts[role] = await col.countDocuments({ facultyRole: role });
         }
 
         console.log('\n--- Post-Update Verification ---');
         console.log(`Records still missing facultyRole: ${postMissing}`);
-        console.log('Faculty role distribution:', roleDistribution);
+        console.log('Role distribution:', roleCounts);
 
-        const sampleInventor = await col.find({ patentName: /^aditya\s+university$/i })
-            .limit(2)
-            .project({ title: 1, patentName: 1, applicantName: 1, facultyRole: 1 })
-            .toArray();
+        // Samples
+        const inventorSample = await col.find({ facultyRole: 'Inventor / Co-Inventor' }).limit(3).project({
+            title: 1,
+            patentName: 1,
+            applicantName: 1,
+            facultyRole: 1
+        }).toArray();
 
-        const sampleApplicant = await col.find({ facultyRole: 'Applicant' })
-            .limit(2)
-            .project({ title: 1, patentName: 1, applicantName: 1, facultyRole: 1 })
-            .toArray();
+        const applicantSample = await col.find({ facultyRole: 'Applicant' }).limit(3).project({
+            title: 1,
+            patentName: 1,
+            applicantName: 1,
+            facultyRole: 1
+        }).toArray();
 
-        console.log('\nSample Inventor / Co-Inventor (Aditya University):');
-        console.log(JSON.stringify(sampleInventor, null, 2));
+        console.log('\nSample "Inventor / Co-Inventor" documents:');
+        console.log(JSON.stringify(inventorSample, null, 2));
 
-        console.log('\nSample Applicant:');
-        console.log(JSON.stringify(sampleApplicant, null, 2));
+        console.log('\nSample "Applicant" documents:');
+        console.log(JSON.stringify(applicantSample, null, 2));
 
     } catch (err) {
-        console.error('Error during update:', err);
+        console.error('Error updating facultyRole:', err);
     } finally {
         await mongoose.disconnect();
         console.log('\nDisconnected from MongoDB.');
