@@ -39,6 +39,8 @@ async function processCSV() {
         'conferenceName', 'location', 'presentationMode', 'conferenceType',
         'year', 'month', 'issnIsbn', 'publisher', 'scopusIndexed',
         'totalAuthors', 'facultyAuthorPosition', 'isStudentsInvolved', 'sdgs',
+        'applyingSeedGrant', 'applyIncentive', 'estimatedIncentiveAmount',
+        'approvedAmount', 'appraisalEligible',
         'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
@@ -129,6 +131,41 @@ async function processCSV() {
                     const rawStudents = (row['isStudentsInvolved'] || '').trim().toLowerCase();
                     const isStudentsInvolved = rawStudents === 'yes' ? 'Yes' : 'No';
 
+                    // Applying Seed Grant
+                    const rawSeedGrant = (row['applyingSeedGrant'] || '').trim().toLowerCase();
+                    const applyingSeedGrant = rawSeedGrant === 'yes' ? 'Yes' : 'No';
+
+                    // Apply Incentive
+                    const rawIncentive = (row['applyIncentive'] || '').trim().toLowerCase();
+                    const applyIncentive = rawIncentive === 'yes' ? 'Yes' : 'No';
+
+                    // Estimated Incentive Amount
+                    let estimatedIncentiveAmount = 0;
+                    if (row['estimatedIncentiveAmount'] !== undefined && row['estimatedIncentiveAmount'] !== null && String(row['estimatedIncentiveAmount']).trim() !== '') {
+                        const parsedEst = Number(row['estimatedIncentiveAmount']);
+                        if (!isNaN(parsedEst)) {
+                            estimatedIncentiveAmount = parsedEst;
+                        }
+                    }
+
+                    // Approved Amount
+                    let approvedAmount = undefined;
+                    if (row['approvedAmount'] !== undefined && row['approvedAmount'] !== null && String(row['approvedAmount']).trim() !== '') {
+                        const parsedApp = Number(row['approvedAmount']);
+                        if (!isNaN(parsedApp)) {
+                            approvedAmount = parsedApp;
+                        }
+                    }
+
+                    // Appraisal Eligible
+                    const rawAppraisal = (row['appraisalEligible'] || '').trim().toLowerCase();
+                    const appraisalEligible = rawAppraisal === 'no' ? 'No' : 'Yes';
+
+                    // Appraisal Claimant & Incentive Claimant rules
+                    const hasOtherAusAuthors = coAuthors.length > 0;
+                    const appraisalClaimant = (appraisalEligible === 'No' || hasOtherAusAuthors) ? null : faculty.institutionId;
+                    const incentiveClaimant = applyIncentive === 'Yes' ? faculty.institutionId : null;
+
                     let rawDoi = (row['doi'] || '').trim();
                     if (!rawDoi || rawDoi.toLowerCase() === 'n/a' || rawDoi.toLowerCase() === 'no doi') {
                         rawDoi = null;
@@ -154,19 +191,21 @@ async function processCSV() {
                         userAuthorPosition: Number(row['facultyAuthorPosition']) || 1,
                         isStudentsInvolved: isStudentsInvolved,
                         sdgs: row['sdgs'] ? row['sdgs'].trim() : null,
+                        applyingSeedGrant: applyingSeedGrant,
+                        applyIncentive: applyIncentive,
+                        estimatedIncentiveAmount: estimatedIncentiveAmount,
+                        approvedAmount: approvedAmount,
+                        appraisalEligible: appraisalEligible,
+                        appraisalClaimant: appraisalClaimant,
+                        incentiveClaimant: incentiveClaimant,
                         coAuthors: coAuthors,
                         
                         // Default fields
                         scopusSubtype: 'cp',
-                        applyIncentive: 'No',
-                        applyingSeedGrant: 'No',
                         firstPage: 'placeholder.pdf',
                         certificate: 'placeholder.pdf',
                         completeDocument: 'placeholder.pdf',
                         status: 'Approved',
-                        appraisalEligible: 'Yes',
-                        appraisalClaimant: coAuthors.length > 0 ? null : faculty.institutionId,
-                        incentiveClaimant: null,
                         entryType: 'Admin'
                     };
 
