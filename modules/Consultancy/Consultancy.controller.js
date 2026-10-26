@@ -128,9 +128,24 @@ exports.createConsultancy = async (req, res) => {
             if (req.files.mou && req.files.mou.length > 0) mou = `/uploads/consultancy/${req.files.mou[0].filename}`;
         }
 
+        let estimatedIncentiveAmount = 0;
+        const applyIncentiveVal = data.applyIncentive || 'No';
+        if (applyIncentiveVal === 'Yes' || applyIncentiveVal === 'yes') {
+            const recAmt = Number(data.receivedAmount) || 0;
+            const type = (data.typeOfConsultancy || '').toLowerCase().trim();
+            if (type === 'testing') {
+                estimatedIncentiveAmount = Math.round(recAmt * 0.50);
+            } else if (type === 'design') {
+                estimatedIncentiveAmount = Math.round(recAmt * 0.60);
+            } else if (type === 'training' || type === 'individual') {
+                estimatedIncentiveAmount = Math.round(recAmt * 0.80);
+            }
+        }
+
         const consultancy = new Consultancy({
             ...data,
-            applyIncentive: data.applyIncentive || 'No',
+            applyIncentive: applyIncentiveVal,
+            estimatedIncentiveAmount,
             title: trimmedTitle,
             sanctionLetter,
             mou,
@@ -285,6 +300,21 @@ exports.updateConsultancy = async (req, res) => {
         consultancy.coInvestigators = resolvedAuthors;
         consultancy.appraisalClaimants = appraisalClaimants;
         if (data.applyIncentive) consultancy.applyIncentive = data.applyIncentive;
+        if (consultancy.applyIncentive === 'Yes' || consultancy.applyIncentive === 'yes') {
+            const recAmt = Number(consultancy.receivedAmount) || 0;
+            const type = (consultancy.typeOfConsultancy || '').toLowerCase().trim();
+            if (type === 'testing') {
+                consultancy.estimatedIncentiveAmount = Math.round(recAmt * 0.50);
+            } else if (type === 'design') {
+                consultancy.estimatedIncentiveAmount = Math.round(recAmt * 0.60);
+            } else if (type === 'training' || type === 'individual') {
+                consultancy.estimatedIncentiveAmount = Math.round(recAmt * 0.80);
+            } else {
+                consultancy.estimatedIncentiveAmount = 0;
+            }
+        } else {
+            consultancy.estimatedIncentiveAmount = 0;
+        }
         consultancy.incentiveClaimant = null;
         consultancy.status = 'Pending'; // Resubmit
         consultancy.hodComment = '';
