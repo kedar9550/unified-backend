@@ -8,6 +8,7 @@ const adminRoles = ['GLOBAL_EVENT_ADMIN', 'SUPER_ADMIN'];
 
 // Public Catalog APIs
 router.get('/organizers', controller.getOrganizers);
+router.get('/central-events/ala-registrations', controller.getAlaRegistrations);
 router.get('/central-events', controller.getCentralEvents);
 router.get('/central-events/:slug', controller.getCentralEventBySlug);
 
