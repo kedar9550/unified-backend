@@ -75,12 +75,16 @@ exports.handleResearchUpload = async (req, res, next) => {
                         if (reason.includes('E11000 duplicate key error')) {
                             if (reason.includes('isbn')) {
                                 reason = 'Duplicate ISBN found';
+                            } else if (reason.includes('chapterTitle')) {
+                                reason = 'Duplicate Chapter Title found';
+                            } else if (reason.includes('paperTitle')) {
+                                reason = 'Duplicate Paper Title found';
                             } else if (reason.includes('title')) {
                                 reason = 'Duplicate Title found';
                             } else if (reason.includes('doi')) {
                                 reason = 'Duplicate DOI found';
-                            } else if (reason.includes('filingNo')) {
-                                reason = 'Duplicate Filing Number found';
+                            } else if (reason.includes('applicationNo') || reason.includes('filingNo')) {
+                                reason = 'Duplicate Application Number found';
                             } else {
                                 const fieldMatch = reason.match(/index:\s*([a-zA-Z0-9_]+)_1\s+dup key/);
                                 if (fieldMatch) {

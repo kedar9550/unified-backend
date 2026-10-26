@@ -36,8 +36,9 @@ async function processCSV() {
 
     const headers = [
         'empId', 'facultyName', 'academicYear', 'college', 'title', 'doi',
-        'conferenceName', 'level', 'yearOfPublication', 'month', 'issnIsbn',
-        'publisher', 'indexing', 'totalAuthors', 'facultyAuthorPosition',
+        'conferenceName', 'location', 'presentationMode', 'conferenceType',
+        'year', 'month', 'issnIsbn', 'publisher', 'scopusIndexed',
+        'totalAuthors', 'facultyAuthorPosition', 'isStudentsInvolved', 'sdgs',
         'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
@@ -99,53 +100,96 @@ async function processCSV() {
                             coAuthors.push({
                                 name: empName,
                                 affiliation: affiliation,
-                                employeeId: coAuthorEmpId
+                                employeeId: coAuthorEmpId,
+                                authorPosition: pos,
+                                CoAuthorType: 'faculty'
                             });
                         }
                     }
 
                     // 4. Prepare Conference Object
-                    let rawScope = (row['level'] || 'National').trim();
-                    if (rawScope.toLowerCase() === 'abroad') rawScope = 'Abroad';
-                    else if (rawScope.toLowerCase() === 'india') rawScope = 'India';
+                    const rawLocation = (row['location'] || '').trim().toLowerCase();
+                    const location = rawLocation.includes('abroad') ? 'Abroad' : 'India';
+
+                    const rawMode = (row['presentationMode'] || '').trim().toLowerCase();
+                    const presentationMode = rawMode === 'online' ? 'Online' : 'Offline';
+
+                    const rawCType = (row['conferenceType'] || '').trim();
+                    const validTypes = ['IEEE', 'IITs/IISc/NITs/IIMs', 'IIT', 'IISc', 'NIT', 'IIM', 'Other'];
+                    let conferenceType = validTypes.find(t => t.toLowerCase() === rawCType.toLowerCase());
+                    if (!conferenceType) {
+                        if (/ieee/i.test(rawCType)) conferenceType = 'IEEE';
+                        else if (/iit|iisc|nit|iim/i.test(rawCType)) conferenceType = 'IITs/IISc/NITs/IIMs';
+                        else conferenceType = 'Other';
+                    }
+
+                    const rawScopus = (row['scopusIndexed'] || '').trim().toLowerCase();
+                    const scopusIndexed = rawScopus === 'no' ? 'No' : 'Yes';
+
+                    const rawStudents = (row['isStudentsInvolved'] || '').trim().toLowerCase();
+                    const isStudentsInvolved = rawStudents === 'yes' ? 'Yes' : 'No';
+
+                    let rawDoi = (row['doi'] || '').trim();
+                    if (!rawDoi || rawDoi.toLowerCase() === 'n/a' || rawDoi.toLowerCase() === 'no doi') {
+                        rawDoi = null;
+                    }
 
                     const conferenceData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
-                        college: row['college'] || '',
-                        title: row['title'] || 'Unknown Title',
-                        doi: row['doi'] || 'N/A',
-                        conferenceName: row['conferenceName'] || 'Unknown Conference',
-                        location: rawScope,
-                        year: row['yearOfPublication'] || yearStr.split('-')[0],
-                        month: row['month'] || 'JAN',
-                        issnIsbn: row['issnIsbn'] || '',
-                        publisher: row['publisher'] || '',
-                        scopusIndexed: row['indexing'] || '',
+                        college: row['college'] || faculty.college || '',
+                        panNumber: row['panNumber'] || '',
+                        title: (row['title'] || 'Unknown Title').trim(),
+                        doi: rawDoi,
+                        conferenceName: (row['conferenceName'] || 'Unknown Conference').trim(),
+                        location: location,
+                        presentationMode: presentationMode,
+                        conferenceType: conferenceType,
+                        year: (row['year'] || yearStr.split('-')[0]).trim(),
+                        month: (row['month'] || 'JAN').trim().toUpperCase(),
+                        issnIsbn: (row['issnIsbn'] || '').trim(),
+                        publisher: (row['publisher'] || '').trim(),
+                        scopusIndexed: scopusIndexed,
                         totalAuthors: Number(row['totalAuthors']) || 1,
                         userAuthorPosition: Number(row['facultyAuthorPosition']) || 1,
+                        isStudentsInvolved: isStudentsInvolved,
+                        sdgs: row['sdgs'] ? row['sdgs'].trim() : null,
                         coAuthors: coAuthors,
                         
                         // Default fields
+                        scopusSubtype: 'cp',
                         applyIncentive: 'No',
                         applyingSeedGrant: 'No',
+                        firstPage: 'placeholder.pdf',
                         certificate: 'placeholder.pdf',
-                        proceedings: 'placeholder.pdf',
+                        completeDocument: 'placeholder.pdf',
                         status: 'Approved',
-                        appraisalEligible: 'Yes'
+                        appraisalEligible: 'Yes',
+                        appraisalClaimant: coAuthors.length > 0 ? null : faculty.institutionId,
+                        incentiveClaimant: null,
+                        entryType: 'Admin'
                     };
 
                     // 5. Save to DB
-                    const existingConference = await Conference.findOne({ title: conferenceData.title, facultyId: faculty._id });
-                    if (existingConference && conferenceData.title !== 'Unknown Title') {
-                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
+                    const query = {
+                        $or: [
+                            { title: conferenceData.title }
+                        ]
+                    };
+                    if (conferenceData.doi) {
+                        query.$or.push({ doi: conferenceData.doi });
+                    }
+
+                    const existingConference = await Conference.findOne(query);
+                    if (existingConference) {
+                        console.log(`Skipping row ${i + 1}: Already exists (Duplicate title or DOI)`);
                     } else {
                         await Conference.create(conferenceData);
                         console.log(`Created new Conference entry for ${faculty.name}`);
                     }
 
                 } catch (err) {
-                    console.error(`Error processing row ${i + 1}:`, err);
+                    console.error(`Error processing row ${i + 1}: ${err.message || err}`);
                 }
             }
             

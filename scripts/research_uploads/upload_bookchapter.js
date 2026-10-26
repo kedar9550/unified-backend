@@ -36,8 +36,10 @@ async function processCSV() {
 
     const headers = [
         'empId', 'facultyName', 'academicYear', 'college', 'panNumber', 'chapterTitle',
-        'doi', 'textBookName', 'isbnNumber', 'yearOfPublication', 'month', 'publisher',
-        'totalAuthors', 'facultyAuthorPosition', 'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
+        'textBookName', 'publisher', 'isbnNumber', 'doi', 'totalBookChapter',
+        'servingAsEditor', 'scopusIndexed', 'publicationScope', 'yearOfPublication',
+        'month', 'numberOfPages', 'totalAuthors', 'facultyAuthorPosition',
+        'isStudentsInvolved', 'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
     fs.createReadStream(csvFilePath)
@@ -78,7 +80,6 @@ async function processCSV() {
 
                     // 3. Process Co-authors
                     const coAuthors = [];
-                    // Positions 1 to 8 based on template
                     for (let pos = 1; pos <= 8; pos++) {
                         const coAuthorEmpId = row[`co${pos}`] ? row[`co${pos}`].trim() : null;
                         if (coAuthorEmpId) {
@@ -100,52 +101,94 @@ async function processCSV() {
                                 name: empName,
                                 affiliation: affiliation,
                                 employeeId: coAuthorEmpId,
-                                authorPosition: pos.toString()
+                                authorPosition: pos.toString(),
+                                CoAuthorType: 'faculty'
                             });
                         }
                     }
 
                     // 4. Prepare BookChapter Object
+                    let rawDoi = (row['doi'] || '').trim();
+                    if (!rawDoi || rawDoi.toLowerCase() === 'n/a' || rawDoi.toLowerCase() === 'no doi') {
+                        rawDoi = undefined;
+                    }
+
+                    const rawScopus = (row['scopusIndexed'] || '').trim().toLowerCase();
+                    let scopusIndexed = 'Not Available';
+                    if (rawScopus === 'yes') scopusIndexed = 'Yes';
+                    else if (rawScopus === 'no') scopusIndexed = 'No';
+
+                    const rawEditor = (row['servingAsEditor'] || '').trim().toLowerCase();
+                    const servingAsEditor = rawEditor === 'yes' ? 'Yes' : 'No';
+
+                    const rawScope = (row['publicationScope'] || '').trim().toLowerCase();
+                    const publicationScope = rawScope.includes('international') ? 'International' : 'National';
+
+                    const rawStudents = (row['isStudentsInvolved'] || '').trim().toLowerCase();
+                    const isStudentsInvolved = rawStudents === 'yes' ? 'Yes' : 'No';
+
+                    const rawPages = parseInt(row['numberOfPages'], 10);
+                    const numberOfPages = isNaN(rawPages) ? null : rawPages;
+
+                    const totalBookChapter = (row['totalBookChapter'] ? String(row['totalBookChapter']).trim() : '1') || '1';
+
                     const bookChapterData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
-                        college: row['college'] || '',
+                        college: row['college'] || faculty.college || '',
                         panNumber: row['panNumber'] || '',
-                        chapterTitle: row['chapterTitle'] || 'Unknown Title',
-                        doi: row['doi'] || 'N/A',
-                        textBookName: row['textBookName'] || 'Unknown Textbook',
-                        isbnNumber: row['isbnNumber'] || 'N/A',
-                        yearOfPublication: row['yearOfPublication'] || yearStr.split('-')[0],
-                        month: row['month'] || 'JAN',
-                        year: row['yearOfPublication'] || yearStr.split('-')[0],
-                        publisher: row['publisher'] || 'Unknown Publisher',
-                        totalAuthors: row['totalAuthors'] || '1',
-                        userAuthorPosition: row['facultyAuthorPosition'] || '1',
+                        chapterTitle: (row['chapterTitle'] || 'Unknown Title').trim(),
+                        doi: rawDoi,
+                        textBookName: (row['textBookName'] || 'Unknown Textbook').trim(),
+                        isbnNumber: (row['isbnNumber'] || '').trim(),
+                        totalBookChapter: totalBookChapter,
+                        servingAsEditor: servingAsEditor,
+                        scopusIndexed: scopusIndexed,
+                        publicationScope: publicationScope,
+                        yearOfPublication: (row['yearOfPublication'] || yearStr.split('-')[0]).trim(),
+                        month: (row['month'] || 'JAN').trim().toUpperCase(),
+                        year: (row['yearOfPublication'] || yearStr.split('-')[0]).trim(),
+                        publisher: (row['publisher'] || 'Unknown Publisher').trim(),
+                        numberOfPages: numberOfPages,
+                        totalAuthors: (row['totalAuthors'] ? String(row['totalAuthors']).trim() : '1'),
+                        userAuthorPosition: (row['facultyAuthorPosition'] ? String(row['facultyAuthorPosition']).trim() : '1'),
+                        isStudentsInvolved: isStudentsInvolved,
                         coAuthors: coAuthors,
                         
-                        // Default fields required by DB but not in this specific CSV template
-                        publicationScope: 'National',
-                        applyingSeedGrant: 'No',
+                        // Default fields required by DB
                         applyIncentive: 'No',
+                        applyingSeedGrant: 'No',
                         coverPage: 'placeholder.pdf',
                         authorAffiliation: 'placeholder.pdf',
                         index: 'placeholder.pdf',
                         softCopy: 'placeholder.pdf',
-                        status: 'Approved'
+                        status: 'Approved',
+                        appraisalEligible: 'Yes',
+                        appraisalClaimant: coAuthors.length > 0 ? null : faculty.institutionId,
+                        incentiveClaimant: null,
+                        entryType: 'Admin'
                     };
 
                     // 5. Save to DB
-                    // Check if exists to avoid duplicates (optional, checking by DOI/Chapter Title)
-                    const existingChapter = await BookChapter.findOne({ chapterTitle: bookChapterData.chapterTitle, facultyId: faculty._id });
-                    if (existingChapter && bookChapterData.chapterTitle !== 'Unknown Title') {
-                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
+                    const query = {
+                        $or: [
+                            { chapterTitle: bookChapterData.chapterTitle }
+                        ]
+                    };
+                    if (bookChapterData.doi) {
+                        query.$or.push({ doi: bookChapterData.doi });
+                    }
+
+                    const existingChapter = await BookChapter.findOne(query);
+                    if (existingChapter) {
+                        console.log(`Skipping row ${i + 1}: Already exists (Duplicate Chapter Title or DOI)`);
                     } else {
                         await BookChapter.create(bookChapterData);
                         console.log(`Created new Book Chapter entry for ${faculty.name}`);
                     }
 
                 } catch (err) {
-                    console.error(`Error processing row ${i + 1}:`, err);
+                    console.error(`Error processing row ${i + 1}: ${err.message || err}`);
                 }
             }
             
