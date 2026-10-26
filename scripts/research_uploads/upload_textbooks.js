@@ -36,8 +36,10 @@ async function processCSV() {
 
     const headers = [
         'empId', 'facultyName', 'academicYear', 'college', 'title', 'publisher',
-        'isbn', 'publicationScope', 'yearOfPublication', 'month', 'totalAuthors',
-        'facultyAuthorPosition', 'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
+        'isbn', 'publicationScope', 'edition', 'yearOfPublication', 'month',
+        'cost', 'currencySymbol', 'numberOfPages', 'scopusIndexed',
+        'totalAuthors', 'facultyAuthorPosition', 'isStudentsInvolved',
+        'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
     fs.createReadStream(csvFilePath)
@@ -78,7 +80,6 @@ async function processCSV() {
 
                     // 3. Process Co-authors
                     const authors = [];
-                    // Positions 1 to 8 based on template
                     for (let pos = 1; pos <= 8; pos++) {
                         const coAuthorEmpId = row[`co${pos}`] ? row[`co${pos}`].trim() : null;
                         if (coAuthorEmpId) {
@@ -103,47 +104,81 @@ async function processCSV() {
                                 employeeId: coAuthorEmpId,
                                 affiliationName: affiliation,
                                 isIncentiveApplicant: false,
-                                contributorOnly: true
+                                contributorOnly: true,
+                                CoAuthorType: 'faculty'
                             });
                         }
                     }
 
                     // 4. Prepare Textbook Object
+                    let editionNum = parseInt(row['edition'], 10);
+                    if (isNaN(editionNum) || editionNum < 1) {
+                        editionNum = 1;
+                    }
+
+                    const rawScope = (row['publicationScope'] || '').trim().toLowerCase();
+                    const publicationScope = rawScope.includes('international') ? 'International' : 'National';
+
+                    const rawScopus = (row['scopusIndexed'] || '').trim().toLowerCase();
+                    const scopusIndexed = rawScopus === 'yes' ? 'Yes' : 'No';
+
+                    const rawStudents = (row['isStudentsInvolved'] || '').trim().toLowerCase();
+                    const isStudentsInvolved = rawStudents === 'yes' ? 'Yes' : 'No';
+
+                    const rawPages = parseInt(row['numberOfPages'], 10);
+                    const numberOfPages = isNaN(rawPages) ? null : rawPages;
+
                     const textbookData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
-                        college: row['college'] || '',
-                        title: row['title'] || 'Unknown Title',
-                        publisher: row['publisher'] || 'Unknown Publisher',
-                        isbn: row['isbn'] || 'N/A',
-                        publicationScope: row['publicationScope'] || 'National',
-                        yearOfPublication: row['yearOfPublication'] || yearStr.split('-')[0],
-                        month: row['month'] || 'JAN',
-                        year: row['yearOfPublication'] || yearStr.split('-')[0],
+                        college: row['college'] || faculty.college || 'AUS',
+                        title: (row['title'] || 'Unknown Title').trim(),
+                        publisher: (row['publisher'] || 'Unknown Publisher').trim(),
+                        isbn: (row['isbn'] || `ISBN-${Date.now()}-${i}`).trim(),
+                        publicationScope: publicationScope,
+                        edition: editionNum,
+                        yearOfPublication: (row['yearOfPublication'] || yearStr.split('-')[0]).trim(),
+                        month: (row['month'] || 'JAN').trim().toUpperCase(),
+                        year: (row['yearOfPublication'] || yearStr.split('-')[0]).trim(),
+                        cost: row['cost'] ? String(row['cost']).trim() : '',
+                        currencySymbol: (row['currencySymbol'] || '₹').trim(),
+                        numberOfPages: numberOfPages,
+                        scopusIndexed: scopusIndexed,
                         totalAuthors: Number(row['totalAuthors']) || 1,
                         userAuthorPosition: Number(row['facultyAuthorPosition']) || 1,
+                        isStudentsInvolved: isStudentsInvolved,
                         authors: authors,
                         
-                        // Default fields required by DB but not in this specific CSV template
-                        edition: '1st Edition',
+                        // Default fields required by DB
                         applyIncentive: 'No',
                         coverPage: 'placeholder.pdf',
                         authorAffiliation: 'placeholder.pdf',
                         index: 'placeholder.pdf',
-                        status: 'Approved'
+                        status: 'Approved',
+                        appraisalEligible: 'Yes',
+                        appraisalClaimant: authors.length > 0 ? null : faculty.institutionId,
+                        incentiveClaimant: null,
+                        entryType: 'Admin'
                     };
 
                     // 5. Save to DB
-                    const existingTextbook = await Textbook.findOne({ isbn: textbookData.isbn, facultyId: faculty._id });
-                    if (existingTextbook && textbookData.isbn !== 'N/A') {
-                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
+                    const query = {
+                        $or: [
+                            { isbn: textbookData.isbn },
+                            { title: textbookData.title }
+                        ]
+                    };
+
+                    const existingTextbook = await Textbook.findOne(query);
+                    if (existingTextbook) {
+                        console.log(`Skipping row ${i + 1}: Already exists (Duplicate title or ISBN)`);
                     } else {
                         await Textbook.create(textbookData);
                         console.log(`Created new Textbook entry for ${faculty.name}`);
                     }
 
                 } catch (err) {
-                    console.error(`Error processing row ${i + 1}:`, err);
+                    console.error(`Error processing row ${i + 1}: ${err.message || err}`);
                 }
             }
             
