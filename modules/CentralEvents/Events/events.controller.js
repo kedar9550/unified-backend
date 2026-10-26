@@ -410,6 +410,7 @@ const getCentralEvents = async (req, res, next) => {
       status: 1,
       capacity: 1,
       registrationCount: 1,
+      coordinators: 1,
       createdAt: 1
     };
 
