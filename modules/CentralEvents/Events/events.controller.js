@@ -333,6 +333,102 @@ const cancelCentralEvent = async (req, res, next) => {
 };
 
 /**
+ * GET /central-events/ala-registrations
+ * Retrieve registrations from central_event_ala_registrations
+ * Filtered by academicYear (via createdAtDate DD-MM-YYYY), level (Student vs Faculty/Professors), and search
+ */
+const getAlaRegistrations = async (req, res, next) => {
+  try {
+    const { academicYear, level, search, limit, page } = req.query;
+    const db = mongoose.connection.db;
+    const collection = db.collection('central_event_ala_registrations');
+
+    const filter = {};
+
+    // 1. Filter by Academic Year using createdAtDate (DD-MM-YYYY)
+    if (academicYear && academicYear.toUpperCase() !== 'ALL') {
+      const parts = academicYear.trim().split('-');
+      if (parts.length === 2) {
+        let startYear = parseInt(parts[0], 10);
+        let endYear = parseInt(parts[1], 10);
+        if (endYear < 100) {
+          endYear = parseInt(String(startYear).substring(0, 2) + String(endYear), 10);
+        }
+        if (!isNaN(startYear) && !isNaN(endYear)) {
+          // June-Dec of startYear (06-12), Jan-May of endYear (01-05)
+          filter.createdAtDate = {
+            $regex: new RegExp(`-((0[6-9]|1[0-2])-${startYear}|(0[1-5])-${endYear})$`)
+          };
+        }
+      }
+    }
+
+    // 2. Filter by Level
+    if (level) {
+      const lvl = level.toUpperCase();
+      if (lvl === 'STUDENT') {
+        filter.designation = { $regex: /student/i };
+      } else if (lvl === 'FACULTY') {
+        // "If Faculty clicked then remaining all should display whether it is Assistant Professor or Associate Professor or Professor, so these 3 should display"
+        filter.$and = [
+          { designation: { $not: /student/i } },
+          { designation: { $exists: true, $nin: ['', null] } }
+        ];
+      }
+    }
+
+    // 3. Search filter
+    if (search && search.trim()) {
+      const s = search.trim();
+      const sRegex = new RegExp(s.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'i');
+      const searchCondition = {
+        $or: [
+          { participantName: sRegex },
+          { applicationId: sRegex },
+          { event_name: sRegex },
+          { email: sRegex },
+          { contactNo: sRegex },
+          { whatsappNo: sRegex },
+          { collegeName: sRegex },
+          { department: sRegex },
+          { designation: sRegex },
+          { utr: sRegex },
+          { payment_id: sRegex },
+          { order_id: sRegex }
+        ]
+      };
+
+      if (filter.$and) {
+        filter.$and.push(searchCondition);
+      } else {
+        filter.$and = [searchCondition];
+      }
+    }
+
+    const sort = { createdAt: -1, _id: -1 };
+    let query = collection.find(filter).sort(sort);
+
+    if (limit && parseInt(limit, 10) > 0) {
+      const p = Math.max(0, parseInt(page, 10) || 0);
+      const l = parseInt(limit, 10);
+      query = query.skip(p * l).limit(l);
+    }
+
+    const records = await query.toArray();
+    const total = await collection.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: records,
+      total,
+      count: records.length
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
  * GET /central-events (Filtered list with cursor pagination and projection)
  */
 const getCentralEvents = async (req, res, next) => {
@@ -341,6 +437,10 @@ const getCentralEvents = async (req, res, next) => {
       typeCode, categoryId, subcategoryId, level, activityType, status, mode, academicYear,
       fromDate, toDate, search, cursor, limit = 20
     } = req.query;
+
+    if (typeCode && typeCode.toUpperCase() === 'ALA') {
+      return getAlaRegistrations(req, res, next);
+    }
 
     const filter = {};
     if (typeCode) filter.typeCode = typeCode.toUpperCase();
@@ -498,5 +598,6 @@ module.exports = {
   cancelCentralEvent,
   getCentralEvents,
   getCentralEventBySlug,
+  getAlaRegistrations,
   uploadCentralEventFile
 };
