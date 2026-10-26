@@ -14,12 +14,18 @@ exports.registerStudent = async (req, res) => {
     const escapedEmail = cleanEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const existing = await EventStudent.findOne({
       $or: [
+        { roll: (roll || '').trim().toUpperCase() },
         { email: cleanEmail.toLowerCase() },
         { email: { $regex: new RegExp(`^${escapedEmail}$`, 'i') } }
       ]
     });
     if (existing) {
-      return res.status(400).json({ error: 'Email already registered. Please login instead.' });
+      if (name && (!existing.name || existing.name === 'Student')) existing.name = name.trim();
+      if (mobile && !existing.mobile) existing.mobile = mobile.trim();
+      if (college) existing.college = college;
+      if (gender) existing.gender = gender;
+      await existing.save();
+      return res.status(200).json({ success: true, exists: true, message: 'Student account ready', student: existing });
     }
 
     const plainPassword = password || '123456';
