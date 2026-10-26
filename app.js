@@ -129,6 +129,9 @@ const { adminRouter: dynamicFormsAdminRoutes, publicRouter: dynamicFormsPublicRo
 app.use('/api/forms', dynamicFormsAdminRoutes);
 app.use('/api/public/forms', dynamicFormsPublicRoutes);
 
+// Activity Hub Module (Isolated from legacy Central Events & Activities)
+app.use('/api/activity-hub', require('./modules/ActivityHub/activityHub.route'));
+
 // Start Central Events Payment Reconcile Cron (Disabled)
 // const { startPaymentReconcileCron } = require('./modules/CentralEvents/EventPayments/eventPayments.cron');
 // startPaymentReconcileCron();
