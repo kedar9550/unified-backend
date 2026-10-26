@@ -212,7 +212,7 @@ exports.createPatent = async (req, res) => {
             entryType: finalEntryType,
             published: {
                 academicYear: data.status === 'Published' ? data.academicYear : (data.publishedAcademicYear || (data.publisheddate ? data.academicYear : undefined)),
-                publishedstatus: data.publishedstatus || (data.status === 'Published' ? 'yes' : 'no'),
+                publishedstatus: data.status === 'Granted' ? null : (data.publishedstatus || (data.status === 'Published' ? 'yes' : 'no')),
                 publisheddate: data.publisheddate || undefined,
                 publishedexpectedamount: calculatedPubExpected,
                 publishedincentiveamount: (data.status === 'Published' && data.isDirectEntry === 'true' && (data.applyIncentive === 'Yes' || data.applyIncentive === 'yes')) ? (data.approvedAmount ? Number(data.approvedAmount) : 0) : undefined,
@@ -581,7 +581,7 @@ exports.updatePatent = async (req, res) => {
 
         patent.published = {
             academicYear: isPublishedNow ? (data.academicYear || patent.published?.academicYear || patent.academicYear) : (patent.published?.academicYear || patent.academicYear),
-            publishedstatus: data.publishedstatus || patent.published?.publishedstatus || 'no',
+            publishedstatus: isGrantedNow ? (patent.published?.publishedstatus === 'yes' ? 'yes' : null) : (data.publishedstatus || patent.published?.publishedstatus || (isPublishedNow ? 'yes' : 'no')),
             publishedexpectedamount: data.publishedexpectedamount ? Number(data.publishedexpectedamount) : (isPublishedNow ? 5000 : patent.published?.publishedexpectedamount),
             publishedincentiveamount: isPublishedNow ? null : patent.published?.publishedincentiveamount,
             publisheddate: data.publisheddate || patent.published?.publisheddate,

@@ -38,7 +38,7 @@ const PatentSchema = new mongoose.Schema({
     
     published: {
         academicYear: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademicYear' },
-        publishedstatus: { type: String, enum: ['yes', 'no'], default: 'no' },
+        publishedstatus: { type: String, enum: ['yes', 'no', null], default: null },
         publishedexpectedamount: { type: Number },
         publishedincentiveamount: { type: Number },
         publisheddate: { type: Date },

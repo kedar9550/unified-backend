@@ -7,6 +7,7 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const Journal = require('../../modules/Journal/Journal.model');
 const Employee = require('../../modules/employee/employee.model');
 const AcademicYear = require('../../modules/academicYear/academicYear.model');
+const JournalMaster = require('../../modules/JournalMaster/JournalMaster.model');
 
 // Connect to MongoDB
 mongoose.connect(process.env.UnifiedDb || 'mongodb://localhost:27017/unified').then(() => {
@@ -35,10 +36,13 @@ async function processCSV() {
     }
 
     const headers = [
-        'empId', 'facultyName', 'academicYear', 'college', 'panNumber', 'doi',
-        'publicationScope', 'journalQuartile', 'journalType', 'paperTitle', 'journalName',
-        'volume', 'issue', 'publishedMonth', 'publishedYear', 'hIndex', 'jcrImpactFactor',
-        'totalAuthors', 'facultyAuthorPosition', 'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
+        'empId', 'facultyName', 'academicYear', 'college', 'panNumber', 'paperTitle', 'doi',
+        'journalName', 'issn', 'eissn', 'isScopus', 'journalQuartile', 'journalType',
+        'journalCategory', 'volume', 'issue', 'pageNos', 'publishedMonth', 'publishedYear',
+        'hIndex', 'citations', 'jcrImpactFactor', 'sdgs', 'totalAuthors', 'facultyAuthorPosition',
+        'correspondingAuthor', 'isStudentsInvolved', 'applyingSeedGrant', 'applyIncentive',
+        'estimatedIncentiveAmount', 'approvedAmount', 'appraisalEligible',
+        'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
     fs.createReadStream(csvFilePath)
@@ -79,7 +83,6 @@ async function processCSV() {
 
                     // 3. Process Co-authors
                     const coAuthors = [];
-                    // Positions 1 to 8 based on template
                     for (let pos = 1; pos <= 8; pos++) {
                         const coAuthorEmpId = row[`co${pos}`] ? row[`co${pos}`].trim() : null;
                         if (coAuthorEmpId) {
@@ -101,7 +104,8 @@ async function processCSV() {
                                 name: empName,
                                 affiliation: affiliation,
                                 employeeId: coAuthorEmpId,
-                                authorPosition: pos
+                                authorPosition: pos,
+                                CoAuthorType: 'faculty'
                             });
                         }
                     }
@@ -112,49 +116,143 @@ async function processCSV() {
                     const cleanJType = validJTypes.find(t => rawJType.includes(t)) || (rawJType === 'NONE' ? 'None' : 'None');
                     const isWos = cleanJType !== 'None' ? 'Yes' : 'No';
 
+                    const rawQuartile = (row['journalQuartile'] || '').toUpperCase().trim();
+                    const validQuartiles = ['Q1', 'Q2', 'Q3', 'Q4'];
+                    const cleanQuartile = validQuartiles.find(q => rawQuartile.includes(q)) || (rawQuartile === 'NONE' ? 'None' : 'None');
+
+                    const rawScopus = (row['isScopus'] || '').trim().toLowerCase();
+                    const isScopus = rawScopus === 'no' ? 'No' : 'Yes';
+
+                    const rawCorresponding = (row['correspondingAuthor'] || '').trim().toLowerCase();
+                    const correspondingAuthor = rawCorresponding === 'yes' ? 'Yes' : 'No';
+
+                    const rawStudents = (row['isStudentsInvolved'] || '').trim().toLowerCase();
+                    const isStudentsInvolved = rawStudents === 'yes' ? 'Yes' : 'No';
+
+                    // Journal Category (from CSV, or lookup JournalMaster, or fallback)
+                    let rawCategory = (row['journalCategory'] || '').trim().toUpperCase();
+                    const validCategories = ['IEEE', 'ASME', 'ASCE', 'ACM', 'OTHERS'];
+                    let journalCategory = validCategories.find(c => c === rawCategory);
+                    if (!journalCategory) {
+                        const cleanIssn = (row['issn'] || '').trim();
+                        const cleanEissn = (row['eissn'] || '').trim();
+                        let jmMatch = null;
+                        if (cleanIssn || cleanEissn) {
+                            const jmOrConds = [];
+                            if (cleanIssn) jmOrConds.push({ issn: cleanIssn }, { eissn: cleanIssn });
+                            if (cleanEissn) jmOrConds.push({ issn: cleanEissn }, { eissn: cleanEissn });
+                            jmMatch = await JournalMaster.findOne({ $or: jmOrConds });
+                        }
+                        if (!jmMatch && row['journalName']) {
+                            jmMatch = await JournalMaster.findOne({ journalTitle: new RegExp(`^${row['journalName'].trim()}$`, 'i') });
+                        }
+                        journalCategory = (jmMatch && jmMatch.type) ? jmMatch.type : (rawCategory || 'OTHERS');
+                    }
+
+                    // Applying Seed Grant
+                    const rawSeedGrant = (row['applyingSeedGrant'] || '').trim().toLowerCase();
+                    const applyingSeedGrant = rawSeedGrant === 'yes' ? 'Yes' : 'No';
+
+                    // Apply Incentive
+                    const rawIncentive = (row['applyIncentive'] || '').trim().toLowerCase();
+                    const applyIncentive = rawIncentive === 'yes' ? 'Yes' : 'No';
+
+                    // Estimated Incentive Amount
+                    let estimatedIncentiveAmount = 0;
+                    if (row['estimatedIncentiveAmount'] !== undefined && row['estimatedIncentiveAmount'] !== null && String(row['estimatedIncentiveAmount']).trim() !== '') {
+                        const parsedEst = Number(row['estimatedIncentiveAmount']);
+                        if (!isNaN(parsedEst)) {
+                            estimatedIncentiveAmount = parsedEst;
+                        }
+                    }
+
+                    // Approved Amount
+                    let approvedAmount = undefined;
+                    if (row['approvedAmount'] !== undefined && row['approvedAmount'] !== null && String(row['approvedAmount']).trim() !== '') {
+                        const parsedApp = Number(row['approvedAmount']);
+                        if (!isNaN(parsedApp)) {
+                            approvedAmount = parsedApp;
+                        }
+                    }
+
+                    // Appraisal Eligible
+                    const rawAppraisal = (row['appraisalEligible'] || '').trim().toLowerCase();
+                    const appraisalEligible = rawAppraisal === 'no' ? 'No' : 'Yes';
+
+                    let rawDoi = (row['doi'] || '').trim();
+                    let isNoDoi = 'No';
+                    if (!rawDoi || rawDoi.toLowerCase() === 'no doi' || rawDoi.toLowerCase() === 'n/a') {
+                        rawDoi = `NoDOI-${empId}-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+                        isNoDoi = 'Yes';
+                    }
+
                     const journalData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
-                        college: row['college'] || '',
+                        college: row['college'] || faculty.college || '',
                         panNumber: row['panNumber'] || '',
-                        doi: row['doi'] || 'N/A',
-                        publicationScope: row['publicationScope'] || 'National/International',
-                        journalQuartile: row['journalQuartile'] || 'Q1',
-                        journalType: cleanJType,
+                        doi: rawDoi,
+                        isNoDoi: isNoDoi,
+                        issn: (row['issn'] || '').trim(),
+                        eissn: (row['eissn'] || '').trim(),
+                        isScopus: isScopus,
                         isWos: isWos,
-                        paperTitle: row['paperTitle'] || 'Unknown Title',
-                        journalName: row['journalName'] || 'Unknown Journal',
-                        vol: row['volume'] || '',
-                        issue: row['issue'] || '',
-                        publishedMonth: row['publishedMonth'] || 'JAN',
-                        publishedYear: row['publishedYear'] || yearStr.split('-')[0],
-                        hIndex: row['hIndex'] || '',
-                        jcrImpactFactor: row['jcrImpactFactor'] || '',
+                        journalQuartile: cleanQuartile,
+                        journalType: cleanJType,
+                        journalCategory: journalCategory,
+                        paperTitle: (row['paperTitle'] || 'Unknown Title').trim(),
+                        journalName: (row['journalName'] || 'Unknown Journal').trim(),
+                        vol: (row['volume'] || '').trim(),
+                        issue: (row['issue'] || '').trim(),
+                        pageNos: (row['pageNos'] || '').trim(),
+                        publishedMonth: (row['publishedMonth'] || 'JAN').trim().toUpperCase(),
+                        publishedYear: (row['publishedYear'] || yearStr.split('-')[0]).trim(),
+                        hIndex: (row['hIndex'] || '').trim(),
+                        citations: (row['citations'] || '').trim(),
+                        jcrImpactFactor: (row['jcrImpactFactor'] || '').trim(),
+                        sdgs: (row['sdgs'] || '').trim(),
                         totalAuthors: Number(row['totalAuthors']) || 1,
                         userAuthorPosition: Number(row['facultyAuthorPosition']) || 1,
+                        correspondingAuthor: correspondingAuthor,
+                        isStudentsInvolved: isStudentsInvolved,
+                        applyingSeedGrant: applyingSeedGrant,
+                        applyIncentive: applyIncentive,
+                        estimatedIncentiveAmount: estimatedIncentiveAmount,
+                        approvedAmount: approvedAmount,
+                        appraisalEligible: appraisalEligible,
+                        appraisalClaimant: (appraisalEligible === 'No' || coAuthors.length > 0) ? null : faculty.institutionId,
+                        incentiveClaimant: applyIncentive === 'Yes' ? faculty.institutionId : null,
                         coAuthors: coAuthors,
                         
-                        // Default fields required by DB but not in this specific CSV template
-                        applyingSeedGrant: 'No',
-                        applyIncentive: 'No',
-                        publishedPaper: 'placeholder.pdf',
-                        referencePages: 'placeholder.pdf',
+                        // Default fields required by DB
+                        isInstitutionRecord: 'No',
+                        entryType: 'Admin',
                         status: 'Approved',
-                        appraisalEligible: 'Yes'
+                        publishedPaper: 'placeholder.pdf',
+                        completeJournal: 'placeholder.pdf',
+                        referencePages: null
                     };
 
                     // 5. Save to DB
-                    // Check if exists to avoid duplicates (optional, checking by DOI or just inserting)
-                    const existingJournal = await Journal.findOne({ doi: journalData.doi, facultyId: faculty._id });
-                    if (existingJournal && journalData.doi !== 'N/A') {
-                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
+                    const query = {
+                        $or: [
+                            { paperTitle: journalData.paperTitle }
+                        ]
+                    };
+                    if (isNoDoi === 'No') {
+                        query.$or.push({ doi: journalData.doi });
+                    }
+
+                    const existingJournal = await Journal.findOne(query);
+                    if (existingJournal) {
+                        console.log(`Skipping row ${i + 1}: Already exists (Duplicate title or DOI)`);
                     } else {
                         await Journal.create(journalData);
                         console.log(`Created new Journal entry for ${faculty.name}`);
                     }
 
                 } catch (err) {
-                    console.error(`Error processing row ${i + 1}:`, err);
+                    console.error(`Error processing row ${i + 1}: ${err.message || err}`);
                 }
             }
             

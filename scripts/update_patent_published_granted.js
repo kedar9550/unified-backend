@@ -78,7 +78,7 @@ async function updatePatentPublishedGranted() {
 
                 publishedObj = {
                     academicYear: doc.academicYear || undefined,
-                    publishedstatus: 'no',
+                    publishedstatus: null,
                     applyIncentive: 'No',
                     applyingSeedGrant: 'No',
                     status: '',
@@ -188,6 +188,7 @@ async function updatePatentPublishedGranted() {
         const distinctStatuses = await col.distinct('patentStatus');
         const pubYesCount = await col.countDocuments({ 'published.publishedstatus': 'yes' });
         const pubNoCount = await col.countDocuments({ 'published.publishedstatus': 'no' });
+        const pubNullCount = await col.countDocuments({ 'published.publishedstatus': null });
         const grantedYesCount = await col.countDocuments({ 'granted.grantedstatus': 'yes' });
         const grantedNoCount = await col.countDocuments({ 'granted.grantedstatus': 'no' });
 
@@ -201,6 +202,7 @@ async function updatePatentPublishedGranted() {
         console.log('\nSubdocument statuses:');
         console.log(`  published.publishedstatus = "yes": ${pubYesCount}`);
         console.log(`  published.publishedstatus = "no": ${pubNoCount}`);
+        console.log(`  published.publishedstatus = null: ${pubNullCount}`);
         console.log(`  granted.grantedstatus = "yes": ${grantedYesCount}`);
         console.log(`  granted.grantedstatus = "no": ${grantedNoCount}`);
 

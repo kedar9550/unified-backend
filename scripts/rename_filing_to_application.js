@@ -17,6 +17,15 @@ async function renameFilingNoToApplicationNo() {
         const db = mongoose.connection.db;
         const col = db.collection('patents');
 
+        // Drop the legacy non-sparse unique index on filingNo if it exists
+        const indexes = await col.indexes();
+        const hasFilingIndex = indexes.some(idx => idx.name === 'filingNo_1');
+        if (hasFilingIndex) {
+            console.log('Dropping legacy filingNo_1 index...');
+            await col.dropIndex('filingNo_1');
+            console.log('Dropped filingNo_1 index successfully.');
+        }
+
         const filter = {
             $or: [
                 { applicationNo: { $exists: false } },
@@ -37,6 +46,11 @@ async function renameFilingNoToApplicationNo() {
         console.log('\n--- Update Summary ---');
         console.log(`Matched Count: ${result.matchedCount}`);
         console.log(`Modified Count: ${result.modifiedCount}`);
+
+        // Ensure unique sparse index on applicationNo
+        console.log('Creating unique sparse index on applicationNo...');
+        await col.createIndex({ applicationNo: 1 }, { unique: true, sparse: true });
+        console.log('Created applicationNo_1 index.');
 
         // Verify remaining documents
         const remainingWithFilingNo = await col.countDocuments({ filingNo: { $exists: true } });

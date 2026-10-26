@@ -17,6 +17,35 @@ mongoose.connect(process.env.UnifiedDb || 'mongodb://localhost:27017/unified').t
     process.exit(1);
 });
 
+function parseDate(dateStr) {
+    if (!dateStr || typeof dateStr !== 'string') return null;
+    const trimmed = dateStr.trim();
+    if (!trimmed) return null;
+    
+    // Check DD-MM-YYYY or DD/MM/YYYY
+    const dmyMatch = trimmed.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+    if (dmyMatch) {
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10) - 1;
+        const year = parseInt(dmyMatch[3], 10);
+        const date = new Date(year, month, day);
+        if (!isNaN(date.getTime())) return date;
+    }
+
+    // Check YYYY-MM-DD
+    const ymdMatch = trimmed.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+    if (ymdMatch) {
+        const year = parseInt(ymdMatch[1], 10);
+        const month = parseInt(ymdMatch[2], 10) - 1;
+        const day = parseInt(ymdMatch[3], 10);
+        const date = new Date(year, month, day);
+        if (!isNaN(date.getTime())) return date;
+    }
+
+    const d = new Date(trimmed);
+    return isNaN(d.getTime()) ? null : d;
+}
+
 async function processCSV() {
     const results = [];
     const csvFilePath = path.join(__dirname, 'patents.csv');
@@ -28,7 +57,7 @@ async function processCSV() {
 
     // Validate Template
     const fileContent = fs.readFileSync(csvFilePath, 'utf8').toLowerCase();
-    if (!fileContent.includes('patent name')) {
+    if (!fileContent.includes('application number') && !fileContent.includes('patent title') && !fileContent.includes('patent name')) {
         console.log('Parsed 0 rows');
         console.log('Error processing row 0: Invalid Template Format! Please upload the correct CSV template for Patents.');
         process.exit(0);
@@ -36,8 +65,11 @@ async function processCSV() {
 
     const headers = [
         'empId', 'facultyName', 'academicYear', 'college', 'panNumber', 'title',
-        'patentName', 'area', 'filingNo', 'dateOfFiling', 'patentFiledCountry', 'patentStatus',
-        'year', 'month', 'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
+        'applicationNo', 'patentStatus', 'facultyRole', 'applicantName', 'area',
+        'dateOfFiling', 'publishedDate', 'grantedDate', 'patentFiledCountry',
+        'patentFiledInInstitution', 'isUtilityType', 'eligibleForTechTransfer',
+        'isStudentsInvolved', 'month', 'year',
+        'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
     fs.createReadStream(csvFilePath)
@@ -78,101 +110,126 @@ async function processCSV() {
 
                     // 3. Process Co-inventors
                     const coInventors = [];
-                    const appraisalClaimants = [faculty._id.toString()];
                     for (let pos = 1; pos <= 8; pos++) {
                         const coInventorEmpId = row[`co${pos}`] ? row[`co${pos}`].trim() : null;
                         if (coInventorEmpId) {
                             let empName = `Employee ${coInventorEmpId}`;
                             let affiliation = 'Aditya University';
-                            let validEmployeeId = null;
                             
-                            const coEmp = await Employee.findOne({ institutionId: coInventorEmpId });
-                            if (coEmp) {
-                                empName = coEmp.name;
-                                affiliation = coEmp.college || 'Aditya University';
-                                validEmployeeId = coEmp._id;
-                                appraisalClaimants.push(coEmp._id.toString());
-                            } else {
-                                try {
-                                    const { fetchStaffFromEcap } = require('../../utils/ecapService');
-                                    const staffData = await fetchStaffFromEcap(coInventorEmpId);
-                                    if (staffData && (staffData.employeename || staffData.EmployeeName)) {
-                                        empName = staffData.employeename || staffData.EmployeeName;
-                                        affiliation = staffData.college || 'Aditya University';
-                                    }
-                                } catch (apiErr) {
-                                    console.log(`API lookup failed for ${coInventorEmpId}`);
+                            try {
+                                const { fetchStaffFromEcap } = require('../../utils/ecapService');
+                                const staffData = await fetchStaffFromEcap(coInventorEmpId);
+                                if (staffData && (staffData.employeename || staffData.EmployeeName)) {
+                                    empName = staffData.employeename || staffData.EmployeeName;
+                                    affiliation = staffData.college || 'Aditya University';
                                 }
+                            } catch (apiErr) {
+                                console.log(`API lookup failed for ${coInventorEmpId}`);
                             }
 
                             coInventors.push({
                                 name: empName,
                                 affiliation: affiliation,
-                                employeeId: validEmployeeId || null
+                                employeeId: coInventorEmpId,
+                                CoInventorType: 'faculty'
                             });
                         }
                     }
-                    
-                    // Parse Date Of Filing (assuming DD-MM-YYYY or similar)
-                    let dof = new Date();
-                    if (row['dateOfFiling']) {
-                        const parts = row['dateOfFiling'].split('-');
-                        if (parts.length === 3) {
-                            // Convert DD-MM-YYYY to YYYY-MM-DD
-                            dof = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-                        } else {
-                            dof = new Date(row['dateOfFiling']);
-                        }
-                    }
 
-                    // 4. Prepare Patent Object
+                    // 4. Determine status and parse dates
+                    const rawStatus = (row['patentStatus'] || '').trim().toLowerCase();
+                    const isGranted = rawStatus === 'granted';
+                    const patentStatus = isGranted ? 'Granted' : 'Published';
+
+                    const parsedFilingDate = parseDate(row['dateOfFiling']) || new Date();
+                    const parsedPubDate = parseDate(row['publishedDate']) || parsedFilingDate;
+                    const parsedGrantDate = isGranted ? (parseDate(row['grantedDate']) || parsedPubDate) : null;
+
+                    const rawRole = (row['facultyRole'] || '').trim().toLowerCase();
+                    const facultyRole = rawRole.includes('inventor') ? 'Inventor / Co-Inventor' : 'Applicant';
+
+                    const hasOtherAusInventors = coInventors.length > 0;
+                    const defaultClaimant = hasOtherAusInventors ? null : faculty.institutionId;
+
+                    const publishedSubDoc = {
+                        academicYear: academicYear._id,
+                        publishedstatus: 'yes',
+                        publisheddate: parsedPubDate,
+                        applyIncentive: 'No',
+                        applyingSeedGrant: 'No',
+                        status: 'Approved',
+                        appraisalEligible: 'Yes',
+                        appraisalClaimant: defaultClaimant
+                    };
+
+                    const grantedSubDoc = {
+                        academicYear: isGranted ? academicYear._id : undefined,
+                        grantedstatus: isGranted ? 'yes' : 'no',
+                        granteddate: parsedGrantDate || undefined,
+                        applyIncentive: 'No',
+                        applyingSeedGrant: 'No',
+                        status: isGranted ? 'Approved' : undefined,
+                        appraisalEligible: isGranted ? 'Yes' : null,
+                        appraisalClaimant: isGranted ? defaultClaimant : null
+                    };
+
                     const patentData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
-                        college: row['college'] || '',
+                        college: row['college'] || faculty.college || '',
                         panNumber: row['panNumber'] || '',
-                        title: row['title'] || `Patent ${row['filingNo'] || 'Unknown'}`,
-                        applicantName: faculty.name || row['facultyName'] || 'Aditya University',
+                        title: (row['title'] || `Patent ${row['applicationNo'] || 'Unknown'}`).trim(),
+                        facultyRole: facultyRole,
+                        applicantName: (row['applicantName'] || 'Aditya University').trim(),
                         applicantAffiliation: 'Aditya University',
-                        patentName: row['patentName'] || `Patent ${row['filingNo'] || 'Unknown'}`,
-                        area: row['area'] || 'Unknown Area',
-                        applicationNo: row['filingNo'] || 'N/A',
-                        dateOfFiling: isNaN(dof) ? new Date() : dof,
-                        patentFiledCountry: row['patentFiledCountry'] || 'India',
-                        patentStatus: row['patentStatus'] || 'Filed',
-                        month: row['month'] || 'JAN',
-                        year: row['year'] || yearStr.split('-')[0],
-                        coInventors: coInventors,
-                        
-                        // Default fields
+                        patentName: (row['applicantName'] || 'Aditya University').trim(),
+                        area: (row['area'] || 'General Engineering').trim(),
+                        applicationNo: (row['applicationNo'] || `APP-${Date.now()}-${i}`).trim(),
+                        dateOfFiling: parsedFilingDate,
+                        patentFiledCountry: (row['patentFiledCountry'] || 'India').trim(),
+                        patentFiledInInstitution: (row['patentFiledInInstitution'] && row['patentFiledInInstitution'].trim().toLowerCase() === 'no') ? 'No' : 'Yes',
+                        isUtilityType: (row['isUtilityType'] && row['isUtilityType'].trim().toLowerCase() === 'no') ? 'No' : 'Yes',
                         isInstitutionRecord: 'No',
-                        isUtilityType: 'Yes',
-                        isStudentsInvolved: 'No',
+                        patentStatus: patentStatus,
+                        eligibleForTechTransfer: (row['eligibleForTechTransfer'] && row['eligibleForTechTransfer'].trim().toLowerCase() === 'yes') ? 'Yes' : 'No',
+                        isStudentsInvolved: (row['isStudentsInvolved'] && row['isStudentsInvolved'].trim().toLowerCase() === 'yes') ? 'Yes' : 'No',
+                        month: (row['month'] || 'JAN').trim().toUpperCase(),
+                        year: (row['year'] || yearStr.split('-')[0]).trim(),
                         applyIncentive: 'No',
                         applyingSeedGrant: 'No',
+                        entryType: 'Admin',
+                        status: 'Approved',
+                        appraisalEligible: 'Yes',
+                        appraisalClaimant: defaultClaimant,
+                        incentiveClaimant: null,
+                        statusUpdatedToGranted: isGranted,
+                        statusUpdatedDate: isGranted ? parsedGrantDate : null,
+                        coInventors: coInventors,
+                        published: publishedSubDoc,
+                        granted: grantedSubDoc,
                         cbr: 'placeholder.pdf',
                         form1: 'placeholder.pdf',
-                        status: 'Approved',
-                        appraisalClaimants: appraisalClaimants
+                        grantedCertificate: isGranted ? 'placeholder.pdf' : undefined
                     };
 
                     // 5. Save to DB
-                    const existingPatent = await Patent.findOne({
+                    const query = {
                         $or: [
                             { applicationNo: patentData.applicationNo },
-                            { filingNo: patentData.applicationNo }
-                        ],
-                        facultyId: faculty._id
-                    });
-                    if (existingPatent && patentData.applicationNo !== 'N/A') {
-                        console.log(`Skipping row ${i + 1}: Already exists for this faculty`);
+                            { title: patentData.title }
+                        ]
+                    };
+
+                    const existingPatent = await Patent.findOne(query);
+                    if (existingPatent) {
+                        console.log(`Skipping row ${i + 1}: Already exists (Duplicate Application No or Title)`);
                     } else {
                         await Patent.create(patentData);
                         console.log(`Created new Patent entry for ${faculty.name}`);
                     }
 
                 } catch (err) {
-                    console.error(`Error processing row ${i + 1}:`, err);
+                    console.error(`Error processing row ${i + 1}: ${err.message || err}`);
                 }
             }
             
