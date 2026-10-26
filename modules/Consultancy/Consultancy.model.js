@@ -27,7 +27,7 @@ const ConsultancySchema = new mongoose.Schema({
     panNumber: { type: String },
 
     title: { type: String, required: true, unique: true },
-    typeOfConsultancy: { type: String, enum: ['testing', 'design'] },
+    typeOfConsultancy: { type: String, enum: ['testing', 'design', 'training', 'individual'] },
     fundingIndustry: { type: String },
     amount: { type: String },
     receivedAmount: { type: String },
@@ -50,6 +50,10 @@ const ConsultancySchema = new mongoose.Schema({
         type: String,
         enum: ['Yes', 'No'],
         default: 'No'
+    },
+    estimatedIncentiveAmount: {
+        type: Number,
+        default: 0
     },
     appraisalClaimants: [{ type: String }],
     incentiveClaimant: {
