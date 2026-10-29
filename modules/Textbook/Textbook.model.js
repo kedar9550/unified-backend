@@ -136,6 +136,12 @@ const TextbookSchema = new mongoose.Schema({
         enum: ['Yes', 'No'],
         required: true
     },
+    applyingSeedGrant: {
+        type: String,
+        enum: ['Yes', 'No'],
+        default: 'No'
+    },
+
 
     
     // Files
