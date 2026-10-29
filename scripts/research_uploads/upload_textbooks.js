@@ -39,6 +39,8 @@ async function processCSV() {
         'isbn', 'publicationScope', 'edition', 'yearOfPublication', 'month',
         'cost', 'currencySymbol', 'numberOfPages', 'scopusIndexed',
         'totalAuthors', 'facultyAuthorPosition', 'isStudentsInvolved',
+        'applyingSeedGrant', 'applyIncentive', 'estimatedIncentiveAmount',
+        'approvedAmount', 'appraisalEligible',
         'co1', 'co2', 'co3', 'co4', 'co5', 'co6', 'co7', 'co8'
     ];
 
@@ -128,6 +130,41 @@ async function processCSV() {
                     const rawPages = parseInt(row['numberOfPages'], 10);
                     const numberOfPages = isNaN(rawPages) ? null : rawPages;
 
+                    // Applying Seed Grant
+                    const rawSeedGrant = (row['applyingSeedGrant'] || '').trim().toLowerCase();
+                    const applyingSeedGrant = rawSeedGrant === 'yes' ? 'Yes' : 'No';
+
+                    // Apply Incentive
+                    const rawIncentive = (row['applyIncentive'] || '').trim().toLowerCase();
+                    const applyIncentive = rawIncentive === 'yes' ? 'Yes' : 'No';
+
+                    // Estimated Incentive Amount
+                    let estimatedIncentiveAmount = 0;
+                    if (row['estimatedIncentiveAmount'] !== undefined && row['estimatedIncentiveAmount'] !== null && String(row['estimatedIncentiveAmount']).trim() !== '') {
+                        const parsedEst = Number(row['estimatedIncentiveAmount']);
+                        if (!isNaN(parsedEst)) {
+                            estimatedIncentiveAmount = parsedEst;
+                        }
+                    }
+
+                    // Approved Amount
+                    let approvedAmount = undefined;
+                    if (row['approvedAmount'] !== undefined && row['approvedAmount'] !== null && String(row['approvedAmount']).trim() !== '') {
+                        const parsedApp = Number(row['approvedAmount']);
+                        if (!isNaN(parsedApp)) {
+                            approvedAmount = parsedApp;
+                        }
+                    }
+
+                    // Appraisal Eligible
+                    const rawAppraisal = (row['appraisalEligible'] || '').trim().toLowerCase();
+                    const appraisalEligible = rawAppraisal === 'no' ? 'No' : 'Yes';
+
+                    // Appraisal Claimant & Incentive Claimant rules
+                    const hasOtherAusAuthors = authors.length > 0;
+                    const appraisalClaimant = (appraisalEligible === 'No' || hasOtherAusAuthors) ? null : faculty.institutionId;
+                    const incentiveClaimant = applyIncentive === 'Yes' ? faculty.institutionId : null;
+
                     const textbookData = {
                         facultyId: faculty._id,
                         academicYear: academicYear._id,
@@ -149,15 +186,20 @@ async function processCSV() {
                         isStudentsInvolved: isStudentsInvolved,
                         authors: authors,
                         
+                        // Seed Grant, Incentive & Appraisal fields
+                        applyingSeedGrant: applyingSeedGrant,
+                        applyIncentive: applyIncentive,
+                        estimatedIncentiveAmount: estimatedIncentiveAmount,
+                        approvedAmount: approvedAmount,
+                        appraisalEligible: appraisalEligible,
+                        appraisalClaimant: appraisalClaimant,
+                        incentiveClaimant: incentiveClaimant,
+
                         // Default fields required by DB
-                        applyIncentive: 'No',
                         coverPage: 'placeholder.pdf',
                         authorAffiliation: 'placeholder.pdf',
                         index: 'placeholder.pdf',
                         status: 'Approved',
-                        appraisalEligible: 'Yes',
-                        appraisalClaimant: authors.length > 0 ? null : faculty.institutionId,
-                        incentiveClaimant: null,
                         entryType: 'Admin'
                     };
 
