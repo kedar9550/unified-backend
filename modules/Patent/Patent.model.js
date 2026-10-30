@@ -21,12 +21,12 @@ const PatentSchema = new mongoose.Schema({
     },
     college: { type: String },
     panNumber: { type: String },
-    
+
     title: { type: String, required: true, unique: true },
     facultyRole: { type: String, enum: ['Applicant', 'Inventor / Co-Inventor'], default: 'Applicant' },
     applicantName: { type: String, required: true },
-    applicantAffiliation: { type: String },
-    patentName: { type: String, required: true },
+    patentApplicantAffliation: { type: String },
+    patentApplicantName: { type: String, required: true },
     area: { type: String, required: true },
     applicationNo: { type: String, required: true, unique: true },
     dateOfFiling: { type: Date },
@@ -35,7 +35,7 @@ const PatentSchema = new mongoose.Schema({
     isUtilityType: { type: String, enum: ['Yes', 'No'], default: 'Yes' },
     isInstitutionRecord: { type: String, enum: ['Yes', 'No'], default: 'No' },
     patentStatus: { type: String, enum: ['Published', 'Granted'], required: true },
-    
+
     published: {
         academicYear: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademicYear' },
         publishedstatus: { type: String, enum: ['yes', 'no', null], default: null },
@@ -45,9 +45,9 @@ const PatentSchema = new mongoose.Schema({
         publishedinsentiveappllieddate: { type: Date },
         applyIncentive: { type: String, enum: ['Yes', 'No'] },
         applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
-        status: { 
-            type: String, 
-            enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'] 
+        status: {
+            type: String,
+            enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D']
         },
         hodComment: { type: String },
         rndComment: { type: String },
@@ -65,9 +65,9 @@ const PatentSchema = new mongoose.Schema({
         submittedDate: { type: Date },
         applyIncentive: { type: String, enum: ['Yes', 'No'] },
         applyingSeedGrant: { type: String, enum: ['Yes', 'No'] },
-        status: { 
-            type: String, 
-            enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'] 
+        status: {
+            type: String,
+            enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D']
         },
         hodComment: { type: String },
         rndComment: { type: String },
@@ -81,12 +81,12 @@ const PatentSchema = new mongoose.Schema({
     applyIncentive: { type: String, enum: ['Yes', 'No'], required: true },
     applyingSeedGrant: { type: String, enum: ['Yes', 'No'], required: true },
     eligibleForTechTransfer: { type: String, enum: ['Yes', 'No'], default: 'No' },
-    
+
     // Files
     cbr: { type: String, required: true },
     form1: { type: String, required: true },
     grantedCertificate: { type: String },
-    
+
     status: {
         type: String,
         enum: ['Pending', 'Rejected', 'Pending at R&D', 'Approved', 'Rejected by R&D'],
@@ -95,7 +95,7 @@ const PatentSchema = new mongoose.Schema({
     hodComment: { type: String },
     rndComment: { type: String },
     approvedAmount: { type: Number },
-    
+
     appraisalClaimant: {
         type: String,
         default: null
@@ -122,7 +122,7 @@ const PatentSchema = new mongoose.Schema({
         type: Date,
         default: null
     },
-    
+
     createdAt: {
         type: Date,
         default: Date.now

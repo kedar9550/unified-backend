@@ -38,7 +38,7 @@ exports.getResearchRequests = async (req, res) => {
         console.log(`[DEBUG] Research Approval Access - User: ${req.user.userId}, isResearchAdmin: ${isResearchAdmin}`);
 
         const { getFacultyIdsForApprover } = require('../hierarchy/reportingBoss.helper');
-        
+
         let facultyIds = [];
         let facultyMap = {};
 
@@ -59,7 +59,7 @@ exports.getResearchRequests = async (req, res) => {
             const facultyDocs = await Employee.find({
                 _id: { $in: facultyIds }
             }).select('_id name institutionId department coreDepartment profileImage');
-            
+
             facultyMap = facultyDocs.reduce((acc, f) => {
                 acc[f._id.toString()] = f;
                 return acc;
@@ -327,7 +327,7 @@ exports.getResearchRequests = async (req, res) => {
             if (patentOrConditions.length > 0) {
                 patentQuery.$and = patentQuery.$and ? [...patentQuery.$and, ...patentOrConditions] : patentOrConditions;
             }
-            
+
             if (searchRegex && !isResearchAdmin) {
                 patentQuery.$or = [
                     { title: searchRegex },
@@ -335,7 +335,7 @@ exports.getResearchRequests = async (req, res) => {
                     { filingNo: searchRegex }
                 ];
             }
-            
+
             const patents = await Patent.find(patentQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
@@ -359,7 +359,7 @@ exports.getResearchRequests = async (req, res) => {
                 const effectiveSubmittedDate = isGrantedUpdate
                     ? (item.statusUpdatedDate || item.granted?.submittedDate || item.granted?.grantedinsentiveappllieddate || item.createdAt)
                     : (item.published?.publishedinsentiveappllieddate || item.createdAt);
-                
+
                 allRequests.push({
                     _id: item._id,
                     type: 'Patent',
@@ -380,11 +380,11 @@ exports.getResearchRequests = async (req, res) => {
         // Fetch Funded Projects
         if (typesToFetch.includes('Funded Project')) {
             let projectQuery = { ...query };
-            
+
             if (searchRegex && !isResearchAdmin) {
                 projectQuery.$or = [{ title: searchRegex }, { fundingAgency: searchRegex }];
             }
-            
+
             const projects = await FundedProject.find(projectQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
@@ -401,7 +401,7 @@ exports.getResearchRequests = async (req, res) => {
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
                 }
-                
+
                 allRequests.push({
                     _id: item._id,
                     type: 'Funded Project',
@@ -419,11 +419,11 @@ exports.getResearchRequests = async (req, res) => {
         // Fetch Consultancies
         if (typesToFetch.includes('Consultancy')) {
             let consultancyQuery = { ...query };
-            
+
             if (searchRegex && !isResearchAdmin) {
                 consultancyQuery.$or = [{ title: searchRegex }, { fundingAgency: searchRegex }];
             }
-            
+
             const consultancies = await Consultancy.find(consultancyQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
@@ -440,7 +440,7 @@ exports.getResearchRequests = async (req, res) => {
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
                 }
-                
+
                 allRequests.push({
                     _id: item._id,
                     type: 'Consultancy',
@@ -459,11 +459,11 @@ exports.getResearchRequests = async (req, res) => {
         // Fetch Conferences
         if (typesToFetch.includes('Conference')) {
             let conferenceQuery = { ...query };
-            
+
             if (searchRegex && !isResearchAdmin) {
                 conferenceQuery.$or = [{ title: searchRegex }, { conferenceName: searchRegex }];
             }
-            
+
             const conferences = await Conference.find(conferenceQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
@@ -480,7 +480,7 @@ exports.getResearchRequests = async (req, res) => {
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
                 }
-                
+
                 allRequests.push({
                     _id: item._id,
                     type: 'Conference',
@@ -511,11 +511,11 @@ exports.getResearchRequests = async (req, res) => {
                 };
                 phdQuery.$and = phdQuery.$and ? [...phdQuery.$and, phdAyCondition] : [phdAyCondition];
             }
-            
+
             if (searchRegex && !isResearchAdmin) {
                 phdQuery.$or = [{ studentName: searchRegex }, { rollNumber: searchRegex }];
             }
-            
+
             const phdApps = await PhdApplication.find(phdQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
@@ -553,11 +553,11 @@ exports.getResearchRequests = async (req, res) => {
         // Fetch Novel Products
         if (typesToFetch.includes('Novel Product')) {
             let productQuery = { ...query };
-            
+
             if (searchRegex && !isResearchAdmin) {
                 productQuery.$or = [{ productName: searchRegex }, { description: searchRegex }];
             }
-            
+
             const products = await NovelProduct.find(productQuery)
                 .populate('facultyId', 'name institutionId department coreDepartment profileImage')
                 .populate('academicYear', 'year')
@@ -574,7 +574,7 @@ exports.getResearchRequests = async (req, res) => {
                     const matchesId = searchRegex.test(fac.institutionId);
                     if (!matchesTitle && !matchesName && !matchesId) continue;
                 }
-                
+
                 allRequests.push({
                     _id: item._id,
                     type: 'Novel Product',
@@ -609,8 +609,8 @@ exports.getResearchRequests = async (req, res) => {
 exports.getResearchReports = async (req, res) => {
     try {
         const { academicYear, type, startDate, endDate } = req.query;
-        
-        const query = {}; 
+
+        const query = {};
         if (academicYear && academicYear !== 'All') {
             query.academicYear = academicYear;
         }
@@ -669,7 +669,7 @@ exports.getResearchReports = async (req, res) => {
                     { 'pursuingDetails.academicYear': academicYear },
                     { 'awardedDetails.academicYear': academicYear }
                 ]
-              }
+            }
             : {};
 
         // Parallelize database queries across all requested categories
@@ -1052,6 +1052,17 @@ exports.editResearchDetails = async (req, res) => {
         // Update document fields
         Object.assign(doc, data);
 
+        if (type.toLowerCase() === 'patent') {
+            const pName = data.patentApplicantName || data.patentName;
+            if (pName) {
+                doc.patentApplicantName = pName;
+            }
+            const aff = data.patentApplicantAffliation || data.applicantAffiliation;
+            if (aff) {
+                doc.patentApplicantAffliation = aff;
+            }
+        }
+
         if (type.toLowerCase() === 'journal') {
             if (doc.applyIncentive === 'Yes' || doc.applyIncentive === 'yes') {
                 console.log(`[editResearchDetails] Recalculating incentive for journal ${doc._id}. userAuthorPosition: ${doc.userAuthorPosition}, totalAuthors: ${doc.totalAuthors}, isStudentsInvolved: ${doc.isStudentsInvolved}, applyingSeedGrant: ${doc.applyingSeedGrant}`);
@@ -1059,7 +1070,7 @@ exports.editResearchDetails = async (req, res) => {
                 if (incentiveCalc.success) {
                     console.log(`[editResearchDetails] Calculation successful. Old Amount: ${doc.estimatedIncentiveAmount}, New Amount: ${incentiveCalc.estimatedIncentiveAmount}`);
                     doc.estimatedIncentiveAmount = incentiveCalc.estimatedIncentiveAmount || 0;
-                    
+
                     if (doc.status === 'Approved' && (providedApprovedAmount === undefined || providedApprovedAmount === oldApprovedAmount)) {
                         doc.approvedAmount = doc.estimatedIncentiveAmount;
                     }
@@ -1162,9 +1173,9 @@ exports.editResearchDetails = async (req, res) => {
         if (error.code === 11000) {
             const field = Object.keys(error.keyPattern || {})[0] || 'field';
             const fieldLabel = field === 'titleOfPhdWork' ? 'Title of the Ph.D Work' : field;
-            return res.status(400).json({ 
-                success: false, 
-                message: `Duplicate entry: A record with this ${fieldLabel} already exists.` 
+            return res.status(400).json({
+                success: false,
+                message: `Duplicate entry: A record with this ${fieldLabel} already exists.`
             });
         }
         res.status(500).json({ success: false, message: error.message });

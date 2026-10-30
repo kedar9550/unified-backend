@@ -2027,7 +2027,7 @@ exports.getPendingHODAppraisals = async (req, res) => {
     try {
         const Employee = require("../employee/employee.model");
         const { syncAppraisalTotals } = require("../../utils/appraisalPointSync");
-const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
+        const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const { getHODDepartments } = require("../../utils/hodHelper");
 
         const potentialInstId = req.user.institutionId || req.user.userId || req.user.id;
@@ -2640,8 +2640,8 @@ exports.getUnresolvedClaims = async (req, res) => {
             const uniqueClaimants = claimants.filter((v, i, a) => a.findIndex(t => t.institutionId === v.institutionId) === i);
 
             // Check Published Stage
-            const isPubYear = (p.published?.academicYear?.toString() === academicYearId.toString()) || 
-                              (!p.published?.academicYear && p.academicYear?.toString() === academicYearId.toString());
+            const isPubYear = (p.published?.academicYear?.toString() === academicYearId.toString()) ||
+                (!p.published?.academicYear && p.academicYear?.toString() === academicYearId.toString());
             const isPubApproved = p.published?.status === 'Approved' || (p.patentStatus === 'Published' && p.status === 'Approved');
             const isPubEligible = p.published?.appraisalEligible === 'Yes' || (!p.published?.appraisalEligible && p.appraisalEligible === 'Yes');
             const hasPubClaimant = Boolean(p.published?.appraisalClaimant || (p.patentStatus === 'Published' && p.appraisalClaimant));
@@ -2660,8 +2660,8 @@ exports.getUnresolvedClaims = async (req, res) => {
             }
 
             // Check Granted Stage
-            const isGrantedYear = (p.granted?.academicYear?.toString() === academicYearId.toString()) || 
-                                  (!p.granted?.academicYear && p.patentStatus === 'Granted' && p.academicYear?.toString() === academicYearId.toString());
+            const isGrantedYear = (p.granted?.academicYear?.toString() === academicYearId.toString()) ||
+                (!p.granted?.academicYear && p.patentStatus === 'Granted' && p.academicYear?.toString() === academicYearId.toString());
             const isGrantedApproved = p.granted?.status === 'Approved' || (p.patentStatus === 'Granted' && p.status === 'Approved');
             const isGrantedEligible = p.granted?.appraisalEligible === 'Yes' || (!p.granted?.appraisalEligible && p.patentStatus === 'Granted' && p.appraisalEligible === 'Yes');
             const hasGrantedClaimant = Boolean(p.granted?.appraisalClaimant || (p.patentStatus === 'Granted' && p.appraisalClaimant));
@@ -3624,7 +3624,7 @@ exports.getPendingManagementAppraisals = async (req, res) => {
         // Check if they are a regular School Dean
         // Checking via roles catalog if available, or designation fallback
         const { syncAppraisalTotals } = require("../../utils/appraisalPointSync");
-const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
+        const { ADMIN_ROLE_CATALOG } = require("../FacultyAdministration/adminRoleCatalog");
         const userRoles = (req.user.roles || []).map(r => r.role?.toUpperCase() || r.role || r);
         const isSchoolDean = userRoles.includes("SCHOOL_DEAN") || userRoles.includes("SCHOOL DEAN") || designation.includes("Dean") || designation.includes("Associate Dean") || designation.includes("Principal") || designation.includes("PRINCIPAL");
 
