@@ -11,7 +11,8 @@ exports.createPatent = async (req, res) => {
         const data = req.body;
 
         // 1. Mandatory Fields Validation
-        if (!data.title || !data.patentName || !data.applyingSeedGrant || !data.applicationNo || !data.patentFiledCountry) {
+        const patentApplicantName = data.patentApplicantName || data.patentName;
+        if (!data.title || !patentApplicantName || !data.applyingSeedGrant || !data.applicationNo || !data.patentFiledCountry) {
             return res.status(400).json({ success: false, message: "Please fill all required fields." });
         }
 
@@ -197,8 +198,14 @@ exports.createPatent = async (req, res) => {
             if (data.isUtilityType === 'No' || (data.applyIncentive !== 'Yes' && data.applyIncentive !== 'yes')) calculatedGrantedExpected = 0;
         }
 
+        const cleanData = { ...data };
+        delete cleanData.patentName;
+        delete cleanData.applicantAffiliation;
+
         const patent = new Patent({
-            ...data,
+            ...cleanData,
+            patentApplicantName: patentApplicantName,
+            patentApplicantAffliation: data.patentApplicantAffliation || data.applicantAffiliation || '',
             title: trimmedTitle,
             facultyId: finalFacultyId,
             coInventors: resolvedAuthors,
@@ -303,7 +310,7 @@ exports.createPatent = async (req, res) => {
                         message: "This patent has already been submitted under the 'Published' category. If your patent has now been granted, you can update its status from your existing patent records."
                     });
                 }
-            } catch (e) {}
+            } catch (e) { }
             const message = `Duplicate entry: A patent with ${field} '${value}' already exists.`;
             return res.status(400).json({ success: false, message });
         }
@@ -349,7 +356,7 @@ exports.updatePatent = async (req, res) => {
 
         // If patent was previously published and updated to Granted, allow editing ONLY grant update details
         const isStatusUpdatedToGranted = Boolean(
-            patent.statusUpdatedToGranted || 
+            patent.statusUpdatedToGranted ||
             (patent.patentStatus === 'Granted' && (patent.published?.publishedstatus === 'yes' || patent.published?.publisheddate))
         );
 
@@ -566,14 +573,14 @@ exports.updatePatent = async (req, res) => {
 
         // Update fields
         Object.keys(data).forEach(key => {
-            if (key !== 'coInventors' && key !== 'status' && key !== 'facultyId' && 
-                !key.startsWith('published') && !key.startsWith('granted') && 
+            if (key !== 'coInventors' && key !== 'status' && key !== 'facultyId' &&
+                !key.startsWith('published') && !key.startsWith('granted') &&
                 data[key] !== undefined) {
                 // patent.status stores the approval state, but frontend form has a 'status' field mapping to 'patentStatus'
                 patent[key] = data[key];
             }
         });
-        
+
         if (data.status) patent.patentStatus = data.status;
 
         const isPublishedNow = currentStatus === 'Published';
@@ -772,7 +779,7 @@ exports.updatePatentStatus = async (req, res) => {
                 const cleanPath = patent.grantedCertificate.replace(/^\//, '');
                 const fullPath = path.join(__dirname, '../..', cleanPath);
                 if (fs.existsSync(fullPath)) fs.unlinkSync(fullPath);
-            } catch (e) {}
+            } catch (e) { }
         }
         const grantedCertificatePath = `/uploads/patents/${req.files.grantedCertificate[0].filename}`;
 
@@ -799,10 +806,10 @@ exports.updatePatentStatus = async (req, res) => {
                 approvedAmount: 1
             }
         }, { new: true })
-        .populate('facultyId', 'name employeeId college')
-        .populate('academicYear', 'year')
-        .populate('published.academicYear', 'year')
-        .populate('granted.academicYear', 'year');
+            .populate('facultyId', 'name employeeId college')
+            .populate('academicYear', 'year')
+            .populate('published.academicYear', 'year')
+            .populate('granted.academicYear', 'year');
 
         res.json({ success: true, data: updatedPatent });
     } catch (err) {
@@ -898,10 +905,10 @@ exports.getPendingAtHOD = async (req, res) => {
             facultyId: { $in: facultyIds },
             status: 'Pending'
         })
-        .populate('facultyId', 'name institutionId department')
-        .populate('academicYear', 'year')
-        .populate('published.academicYear', 'year')
-        .populate('granted.academicYear', 'year');
+            .populate('facultyId', 'name institutionId department')
+            .populate('academicYear', 'year')
+            .populate('published.academicYear', 'year')
+            .populate('granted.academicYear', 'year');
 
         res.json({ success: true, data: patents });
     } catch (err) {
@@ -938,13 +945,13 @@ exports.hodAction = async (req, res) => {
 
         await patent.save();
 
-        
+
         try {
             const NotificationService = require('../../modules/notification/notification.service');
             const { getApproverRoleTitle } = require('../hierarchy/reportingBoss.helper');
             const targetFacultyId = patent.facultyId || patent.facultyId?._id;
             const approverRole = await getApproverRoleTitle(req, targetFacultyId);
-            
+
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
                     recipientId: targetFacultyId,
@@ -963,7 +970,7 @@ exports.hodAction = async (req, res) => {
                 const rndRoles = await Role.find({ key: { $in: ['RESEARCH_DEAN', 'RESEARCH_COORDINATOR'] } });
                 const rndRoleIds = rndRoles.map(r => r._id);
                 const rndAdmins = await UserAppRole.find({ role: { $in: rndRoleIds } }).distinct('userId');
-                
+
                 for (const adminId of rndAdmins) {
                     await NotificationService.sendNotification({
                         recipientId: adminId,
@@ -1115,11 +1122,11 @@ exports.rndAction = async (req, res) => {
         }
 
         await patent.save();
-        
+
         try {
             const NotificationService = require('../../modules/notification/notification.service');
             const targetFacultyId = patent.facultyId || patent.facultyId?._id;
-            
+
             if (targetFacultyId) {
                 await NotificationService.sendNotification({
                     recipientId: targetFacultyId,
