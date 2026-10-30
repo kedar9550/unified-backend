@@ -34,6 +34,10 @@ class NotificationService {
                 data.title = 'Notification';
             }
 
+            if (data.type === 'ERROR') {
+                data.type = 'REJECTED';
+            }
+
             // Auto-detect targetRole if not explicitly set
             if (!data.metadata) {
                 data.metadata = {};
