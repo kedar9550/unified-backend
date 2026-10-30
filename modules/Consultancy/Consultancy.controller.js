@@ -147,6 +147,7 @@ exports.createConsultancy = async (req, res) => {
             applyIncentive: applyIncentiveVal,
             estimatedIncentiveAmount,
             title: trimmedTitle,
+            totalInvestigators: data.totalInvestigators ? Number(data.totalInvestigators) : (resolvedAuthors.length + 1),
             sanctionLetter,
             mou,
             facultyId: finalFacultyId,
@@ -297,6 +298,7 @@ exports.updateConsultancy = async (req, res) => {
         });
 
         consultancy.title = data.title ? data.title.trim() : consultancy.title;
+        consultancy.totalInvestigators = data.totalInvestigators ? Number(data.totalInvestigators) : (resolvedAuthors.length + 1);
         consultancy.coInvestigators = resolvedAuthors;
         consultancy.appraisalClaimants = appraisalClaimants;
         if (data.applyIncentive) consultancy.applyIncentive = data.applyIncentive;
@@ -444,13 +446,14 @@ exports.hodAction = async (req, res) => {
             const approverRole = await getApproverRoleTitle(req, targetFacultyId);
             
             if (targetFacultyId) {
+                const actionVerb = action === 'Approve' ? 'Approved' : 'Rejected';
                 await NotificationService.sendNotification({
                     recipientId: targetFacultyId,
                     senderId: req.user.userId,
                     module: 'Research',
-                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Consultancy ${action}d by ${approverRole}`,
-                    message: `Your Consultancy has been ${action.toLowerCase()}d by ${approverRole}.`,
+                    type: action === 'Approve' ? 'SUCCESS' : 'REJECTED',
+                    title: `Consultancy ${actionVerb} by ${approverRole}`,
+                    message: `Your Consultancy has been ${actionVerb.toLowerCase()} by ${approverRole}.`,
                     link: '/research/consultancy-publication'
                 });
             }
@@ -516,13 +519,14 @@ exports.rndAction = async (req, res) => {
             const targetFacultyId = consultancy.facultyId || consultancy.facultyId?._id;
             
             if (targetFacultyId) {
+                const actionVerb = action === 'Approve' ? 'Approved' : 'Rejected';
                 await NotificationService.sendNotification({
                     recipientId: targetFacultyId,
                     senderId: req.user.userId,
                     module: 'Research',
-                    type: action === 'Approve' ? 'SUCCESS' : 'ERROR',
-                    title: `Consultancy ${action}d by R&D`,
-                    message: `Your Consultancy has been ${action.toLowerCase()}d by R&D.`,
+                    type: action === 'Approve' ? 'SUCCESS' : 'REJECTED',
+                    title: `Consultancy ${actionVerb} by R&D`,
+                    message: `Your Consultancy has been ${actionVerb.toLowerCase()} by R&D.`,
                     link: '/research/consultancy-publication'
                 });
             }

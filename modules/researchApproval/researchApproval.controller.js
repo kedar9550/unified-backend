@@ -1027,6 +1027,11 @@ exports.editResearchDetails = async (req, res) => {
         if (data.dateOfFiling) data.dateOfFiling = new Date(data.dateOfFiling);
         if (data.admissionOrAwardDate) data.admissionOrAwardDate = new Date(data.admissionOrAwardDate);
         if (data.sanctionDate) data.sanctionDate = new Date(data.sanctionDate);
+        if (data.receivedAmountDate) {
+            data.receivedAmountDate = new Date(data.receivedAmountDate);
+        } else if (data.receivedAmountDate === '') {
+            data.receivedAmountDate = null;
+        }
 
         // Auto-calculate number of references belonging to AGEC if modified
         if (data.agecReferencingNumbers !== undefined) {
@@ -1108,8 +1113,43 @@ exports.editResearchDetails = async (req, res) => {
             }
         }
 
+        if (type.toLowerCase() === 'consultancy') {
+            if (data.totalInvestigators !== undefined && data.totalInvestigators !== '') {
+                doc.totalInvestigators = Number(data.totalInvestigators);
+            }
+            if (data.investigatorType) {
+                doc.investigatorType = data.investigatorType;
+                const isPI = data.investigatorType === 'Principal Investigator (PI)' || data.investigatorType === 'Principal Investigator';
+                doc.principalInvestigator = isPI ? 'Yes' : 'No';
+                doc.coPrincipalInvestigator = isPI ? 'No' : 'Yes';
+            } else if (data.principalInvestigator) {
+                doc.principalInvestigator = data.principalInvestigator;
+                doc.coPrincipalInvestigator = data.principalInvestigator === 'Yes' ? 'No' : 'Yes';
+                doc.investigatorType = data.principalInvestigator === 'Yes' ? 'Principal Investigator (PI)' : 'Co-Principal Investigator (Co-PI)';
+            }
+            if (doc.applyIncentive === 'Yes' || doc.applyIncentive === 'yes') {
+                const recAmt = Number(doc.receivedAmount) || 0;
+                const cType = (doc.typeOfConsultancy || '').toLowerCase().trim();
+                let est = 0;
+                if (cType === 'testing') {
+                    est = Math.round(recAmt * 0.50);
+                } else if (cType === 'design') {
+                    est = Math.round(recAmt * 0.60);
+                } else if (cType === 'training' || cType === 'individual') {
+                    est = Math.round(recAmt * 0.80);
+                }
+                doc.estimatedIncentiveAmount = est;
+            } else {
+                doc.estimatedIncentiveAmount = 0;
+            }
+        }
+
         // Save updated document
         const savedDoc = await doc.save();
+        await savedDoc.populate([
+            { path: 'facultyId', select: 'name institutionId department coreDepartment profileImage panNumber college designation phone' },
+            { path: 'academicYear', select: 'year' }
+        ]);
 
         res.json({
             success: true,

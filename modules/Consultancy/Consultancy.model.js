@@ -29,6 +29,7 @@ const ConsultancySchema = new mongoose.Schema({
     title: { type: String, required: true, unique: true },
     typeOfConsultancy: { type: String, enum: ['testing', 'design', 'training', 'individual'] },
     fundingIndustry: { type: String },
+    fundingAdityaUniversity: { type: String, enum: ['Yes', 'No'], default: 'No' },
     amount: { type: String },
     receivedAmount: { type: String },
     receivedAmountDate: { type: Date },
@@ -37,6 +38,7 @@ const ConsultancySchema = new mongoose.Schema({
     year: { type: String },
     organization: { type: String }, // Legacy field fallback
     investigatorType: { type: String, enum: ['Principal Investigator (PI)', 'Co-Principal Investigator (Co-PI)'] },
+    totalInvestigators: { type: Number, default: 1 },
     principalInvestigator: {
         type: String,
         enum: ['Yes', 'No']
@@ -90,6 +92,26 @@ const ConsultancySchema = new mongoose.Schema({
 ConsultancySchema.pre('save', function () {
     if (!this.fundingIndustry && this.organization) {
         this.fundingIndustry = this.organization;
+    }
+    if (!this.totalInvestigators || this.totalInvestigators < 1) {
+        this.totalInvestigators = (this.coInvestigators && this.coInvestigators.length > 0) ? (this.coInvestigators.length + 1) : 1;
+    }
+    if (this.investigatorType) {
+        if (this.investigatorType === 'Principal Investigator (PI)' || this.investigatorType === 'Principal Investigator') {
+            this.principalInvestigator = 'Yes';
+            this.coPrincipalInvestigator = 'No';
+        } else if (this.investigatorType === 'Co-Principal Investigator (Co-PI)' || this.investigatorType === 'Co-Principal Investigator') {
+            this.principalInvestigator = 'No';
+            this.coPrincipalInvestigator = 'Yes';
+        }
+    } else if (this.principalInvestigator) {
+        if (this.principalInvestigator === 'Yes') {
+            this.investigatorType = 'Principal Investigator (PI)';
+            this.coPrincipalInvestigator = 'No';
+        } else if (this.principalInvestigator === 'No') {
+            this.investigatorType = 'Co-Principal Investigator (Co-PI)';
+            this.coPrincipalInvestigator = 'Yes';
+        }
     }
 });
 
