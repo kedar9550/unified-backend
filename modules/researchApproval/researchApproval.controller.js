@@ -1125,6 +1125,26 @@ exports.editResearchDetails = async (req, res) => {
         }
 
         if (type.toLowerCase() === 'consultancy') {
+            if (data.coInvestigators && Array.isArray(data.coInvestigators)) {
+                doc.coInvestigators = data.coInvestigators.map(ci => {
+                    const staffCode = ci.employeeId || ci.empId;
+                    const isAus = ci.affiliationType === 'Aditya University' || ci.affiliationType === 'AUS' || (ci.affiliation && ci.affiliation.toLowerCase().includes('aditya'));
+                    return {
+                        ...ci,
+                        affiliationType: isAus ? 'Aditya University' : (ci.affiliationType || 'Others'),
+                        affiliation: isAus ? 'Aditya University' : (ci.affiliation || ''),
+                        employeeId: (isAus && staffCode) ? String(staffCode).trim() : null
+                    };
+                });
+                if (doc.appraisalEligible !== 'No' && doc.appraisalEligible !== 'no') {
+                    const applicantInstId = doc.facultyId?.institutionId;
+                    const coInvEmpIds = (doc.coInvestigators || []).map(ci => ci.employeeId).filter(Boolean);
+                    const combinedClaimants = [applicantInstId, ...coInvEmpIds].filter(Boolean);
+                    if (combinedClaimants.length > 0) {
+                        doc.appraisalClaimants = [...new Set(combinedClaimants)];
+                    }
+                }
+            }
             if (data.totalInvestigators !== undefined && data.totalInvestigators !== '') {
                 doc.totalInvestigators = Number(data.totalInvestigators);
             }
