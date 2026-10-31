@@ -96,6 +96,19 @@ ConsultancySchema.pre('save', function () {
     if (!this.totalInvestigators || this.totalInvestigators < 1) {
         this.totalInvestigators = (this.coInvestigators && this.coInvestigators.length > 0) ? (this.coInvestigators.length + 1) : 1;
     }
+    if (this.coInvestigators && Array.isArray(this.coInvestigators)) {
+        this.coInvestigators.forEach(ci => {
+            const staffCode = ci.employeeId || ci.empId;
+            const isAus = ci.affiliationType === 'Aditya University' || ci.affiliationType === 'AUS' || (ci.affiliation && ci.affiliation.toLowerCase().includes('aditya'));
+            if (isAus) {
+                ci.affiliationType = 'Aditya University';
+                ci.affiliation = 'Aditya University';
+                if (staffCode) {
+                    ci.employeeId = String(staffCode).trim();
+                }
+            }
+        });
+    }
     if (this.investigatorType) {
         if (this.investigatorType === 'Principal Investigator (PI)' || this.investigatorType === 'Principal Investigator') {
             this.principalInvestigator = 'Yes';

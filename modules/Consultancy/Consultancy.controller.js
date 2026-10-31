@@ -370,16 +370,17 @@ exports.updateConsultancy = async (req, res) => {
 // @access  Private (Faculty)
 exports.getMyConsultancies = async (req, res) => {
     try {
+        const user = await Employee.findById(req.user.userId).select('institutionId');
         const query = {
             $or: [
                 { facultyId: req.user.userId },
-                { 'coInvestigators.employeeId': req.user.userId }
+                { 'coInvestigators.employeeId': user ? user.institutionId : req.user.userId }
             ]
         };
         const consultancies = await Consultancy.find(query)
             .populate('academicYear', 'year')
             .populate('facultyId', 'name institutionId')
-            .populate('coInvestigators.employeeId', 'name institutionId')
+
             .sort({ createdAt: -1 });
 
         const consultanciesWithVisibility = consultancies.map(c => {
@@ -412,7 +413,7 @@ exports.getConsultancyById = async (req, res) => {
                     { path: 'coreDepartment', select: 'name' }
                 ]
             })
-            .populate('coInvestigators.employeeId', 'name institutionId')
+
             .populate('academicYear', 'year');
             
         if (!consultancy) {
@@ -510,7 +511,7 @@ exports.rndAction = async (req, res) => {
                 consultancy.appraisalClaimants = [];
             }
         }
-        if (approvedAmount !== undefined) consultancy.approvedAmount = approvedAmount;
+        if (approvedAmount !== undefined) consultancy.approvedAmount = (approvedAmount !== '' && approvedAmount !== null) ? Number(approvedAmount) : 0;
 
         await consultancy.save();
         
